@@ -1,0 +1,541 @@
+{
+    "common": {
+        "language": "Idioma",
+        "english": "Inglês",
+        "swahili": "Suaíli",
+        "logout": "Sair",
+        "cancel": "Cancelar",
+        "save": "Salvar",
+        "search": "Buscar",
+        "loading": "Carregando...",
+        "saving": "Salvando...",
+        "updating": "Atualizando...",
+        "creating": "Criando...",
+        "error": "Erro",
+        "success": "Sucesso",
+        "ok": "OK",
+        "permission_denied": "Permissão Negada",
+        "location_req": "Por favor, habilite as permissões de localização para usar este recurso.",
+        "location_fail": "Falha ao obter a localização atual",
+        "camera_req": "A permissão da câmera é necessária para tirar fotos.",
+        "camera_perm": "Permissão Necessária",
+        "back": "VOLTAR",
+        "continue": "CONTINUAR"
+    },
+    "home": {
+        "greeting": "Olá, {{name}}!",
+        "sub_greeting": "Como está seu companheiro hoje?",
+        "my_dogs": "Meus Cães",
+        "local_alerts": "Alertas Locais",
+        "health_wellness": "Saúde e Bem-Estar",
+        "health_status": "Tudo parece ótimo! Nenhuma vacinação programada para esta semana.",
+        "view_records": "Ver Registros",
+        "quick_actions": "Ações Rápidas",
+        "marketplace": "Mercado",
+        "shop_book": "Comprar e Reservar",
+        "lost_found": "Perdidos e Achados",
+        "scan_report": "Escanear ou Denunciar",
+        "identity": "Identidade",
+        "biometric_scan": "Varredura Biométrica",
+        "my_events": "Meus Eventos",
+        "dog_meetups": "Encontros de Cães",
+        "community_spotlight": "Destaque da Comunidade",
+        "see_all": "Ver Tudo",
+        "community_walk": "Caminhada Comunitária este domingo!",
+        "community_walk_desc": "Junte-se a outros pais de cães no Central Park para uma caminhada social.",
+        "attending": "{{count}} participando"
+    },
+    "login": {
+        "tagline": "A Melhor Plataforma para o Seu Cão",
+        "email": "E-mail",
+        "password": "Senha",
+        "login": "Login",
+        "no_account": "Não tem uma conta? ",
+        "register": "Registrar",
+        "skip": "Pular por Enquanto →",
+        "google_signin": "Google Signin",
+        "or": "OU"
+    },
+    "profile": {
+        "title": "Meu Perfil",
+        "edit_profile": "Editar Perfil",
+        "full_name": "Nome Completo",
+        "phone_number": "Número de Telefone",
+        "bio": "Biografia",
+        "add_dog": "Adicionar Cão",
+        "no_dogs": "Nenhum cão adicionado ainda."
+    },
+    "register": {
+        "title": "Criar Conta",
+        "subtitle": "Junte-se à comunidade que se importa",
+        "full_name_label": "Nome Completo",
+        "full_name_placeholder": "Digite seu nome completo",
+        "email_label": "Endereço de E-mail",
+        "email_placeholder": "Digite seu e-mail",
+        "phone_label": "Número de Telefone",
+        "phone_placeholder": "Digite seu número de telefone",
+        "bio_label": "Breve Biografia (Opcional)",
+        "bio_placeholder": "Conte-nos sobre você...",
+        "password_label": "Senha",
+        "password_placeholder": "Crie uma senha",
+        "join_as": "Quero entrar como:",
+        "pet_owner": "Dono de Pet",
+        "professional": "Profissional",
+        "pro_note": "* Profissionais também podem comprar serviços e produtos.",
+        "list_note": "* Você poderá listar serviços após o registro.",
+        "register": "Registrar",
+        "already_account": "Já tem uma conta? ",
+        "login": "Login",
+        "phone_description": "Este número de telefone será usado para receber pagamentos (ex: M-Pesa)",
+        "language_label": "Idioma Preferido",
+        "location_compulsory": "O acesso à localização é necessário para o mercado, notificações de proximidade e recursos de segurança.",
+        "location_denied_error": "Você deve permitir o acesso à localização para concluir o registro.",
+        "location_title": "Ativar Mercado Inteligente",
+        "location_benefit": "Necessário para habilitar compra/venda local, relatórios de segurança e alertas de proximidade.",
+        "country_code": "Código do País",
+        "step1_title": "Identidade e Segurança",
+        "step2_title": "Perfil Global",
+        "step3_title": "Acesso e Função",
+        "next_step": "Próxima Etapa",
+        "secure_access": "Acesso Seguro ao Mercado",
+        "location_success": "Sua localização foi registrada com sucesso.",
+        "allow_location": "PERMITIR LOCALIZAÇÃO"
+    },
+    "marketplace": {
+        "title": "Mercado",
+        "search_placeholder": "Buscar {{type}}...",
+        "services": "Serviços",
+        "products": "Produtos",
+        "book_service": "Reservar Serviço",
+        "buy_now": "Comprar Agora",
+        "price": "Preço",
+        "no_listings": "Nenhum anúncio encontrado nesta categoria.",
+        "category": "Categoria",
+        "location": "Localização",
+        "all_categories": "Tudo",
+        "distance_away": "km de distância",
+        "orders": {
+            "summary": "Resumo do Pedido",
+            "success": "Pagamento Realizado com Sucesso!",
+            "id": "Pedido #",
+            "item_price": "Preço do Item",
+            "fee": "Taxa da Plataforma (20%)",
+            "total": "Total Pago",
+            "download": "Baixar Recibo em PDF",
+            "downloading": "Baixando...",
+            "rating_title": "Como foi sua experiência?",
+            "rating_subtitle": "Avalie o prestador e seu serviço",
+            "submit_rating": "Enviar Avaliação",
+            "thanks": "Feedback enviado! Obrigado.",
+            "error_download": "Não foi possível baixar o recibo. Tente novamente.",
+            "error_download_failed": "Falha no download",
+            "error_star": "Por favor, selecione uma classificação em estrelas",
+            "error_rating": "Falha ao enviar avaliação",
+            "success_rating": "Obrigado pelo seu feedback!"
+        },
+        "tabs": {
+            "services": "SERVIÇOS",
+            "products": "PRODUTOS"
+        },
+        "categories": {
+            "all": "Tudo",
+            "health": "Saúde",
+            "therapy": "Terapia",
+            "training": "Treinamento",
+            "grooming": "Estética",
+            "boarding": "Hospedagem",
+            "events": "Eventos",
+            "safety": "Segurança",
+            "food": "Alimentação",
+            "equipment": "Equipamento",
+            "toys": "Brinquedos",
+            "travel": "Viagem",
+            "gear": "Acessórios"
+        },
+        "actions": {
+            "buy_now": "COMPRAR AGORA",
+            "book_now": "RESERVAR AGORA",
+            "add": "Adicionar"
+        },
+        "empty": {
+            "title": "Nenhum {{type}} encontrado",
+            "subtitle": "Tente ajustar sua busca ou filtros"
+        },
+        "featured": "Todos os {{type}}",
+        "featured_cat": "{{category}} {{type}}",
+        "results": "{{count}} resultados encontrados",
+        "create": {
+            "title_new": "Anunciar Novo Item",
+            "title_edit": "Editar Anúncio",
+            "question": "O que você está anunciando?",
+            "services": "Serviços",
+            "products": "Produtos",
+            "cover_image": "Imagem de Capa",
+            "upload_photo": "Fazer Upload de Foto",
+            "listing_price": "Preço do Anúncio: ${{price}} (inclui 20% de taxa da plataforma)",
+            "location": "Localização do Serviço",
+            "get_location": "Usar Minha Localização Atual",
+            "update_location": "Atualizar Minha Localização",
+            "fetching": "Obtendo localização...",
+            "error_update": "Falha ao atualizar item",
+            "error_create": "Falha ao criar item",
+            "publish": "Publicar Anúncio",
+            "publish_subtitle": "Tornar visível para compradores",
+            "price_label": "Seu Preço ($)",
+            "success_create": "{{type}} publicado com sucesso!",
+            "success_update": "Anúncio atualizado com sucesso!",
+            "error_fill": "Por favor, preencha todos os campos"
+        }
+    },
+    "events": {
+        "title": "Próximos Eventos",
+        "badge": "Evento",
+        "my_registrations": "Minhas Inscrições",
+        "save": "Save",
+        "saved": "Saved",
+        "unsave": "Unsave",
+        "saved_events": "Saved Events",
+        "form_builder": "Form Builder",
+        "add_field": "Add Field",
+        "share_phone": "Share Phone Number",
+        "registration_form": "Registration Form",
+        "view_responses": "View Responses",
+        "no_saved_events": "No saved events"
+    },
+    "report": {
+        "title": "Casos",
+        "subtitle": "Denunciar e Responder a Casos de Cães",
+        "toggles": {
+            "list": "Lista",
+            "map": "Mapa"
+        },
+        "types": {
+            "rabies_bite": "Mordida de Raiva",
+            "vehicle_hit": "Atropelamento",
+            "injured_stray": "Animal de Rua Ferido",
+            "found_dog": "Cão Encontrado",
+            "lost_dog": "Cão Perdido",
+            "abuse": "Denúncia de Maus-tratos",
+            "other": "Outros"
+        },
+        "empty": {
+            "title": "Nenhum Relato de Caso Ainda",
+            "subtitle": "Seja o primeiro a relatar um caso de cão em sua área"
+        },
+        "form": {
+            "title": "Relatar um Caso",
+            "question": "O que aconteceu?",
+            "labels": {
+                "title": "Título",
+                "description": "Descrição",
+                "location": "Localização",
+                "photo": "Evidência Fotográfica"
+            },
+            "placeholders": {
+                "title": "Título breve para o caso...",
+                "description": "Descreva a situação em detalhes...",
+                "location": "Onde isso aconteceu?"
+            },
+            "buttons": {
+                "camera": "Tirar Foto",
+                "gallery": "Galeria",
+                "submit": "Enviar Relato"
+            },
+            "alerts": {
+                "type_required": "Por favor, selecione um tipo de caso.",
+                "title_required": "Por favor, insira um título para o relato.",
+                "success": "Seu relato de caso foi postado. A comunidade responderá!",
+                "error": "Falha ao enviar relato. Tente novamente."
+            }
+        },
+        "map": {
+            "help": "Toque para ajudar"
+        },
+        "labels": {
+            "breed": "Raça Estimada",
+            "color": "Cor do Cão",
+            "custom_breed": "Digite o nome da raça..."
+        }
+    },
+    "lost_found": {
+        "title": "Perdidos e Achados",
+        "i_found": "Encontrei um Cão",
+        "i_lost": "Perdi um Cão",
+        "labels": {
+            "description": "Detalhes Adicionais",
+            "upload": "Tirar Foto / Selecionar Imagem",
+            "matching": "Buscando Identidade...",
+            "submit": "Enviar Caso"
+        },
+        "colors": {
+            "merle": "Merle (manchas marmorizadas)",
+            "brindle": "Tigrado (listras de tigre)"
+        },
+        "alerts": {
+            "camera_perm": "A permissão da câmera é necessária para tirar fotos.",
+            "photo_first": "Por favor, tire/selecione uma foto primeiro.",
+            "matches_found": "Encontramos {{count}} correspondências potenciais!",
+            "matches_none": "Nenhuma correspondência biométrica direta encontrada ainda.",
+            "success_matches": "Correspondências Potenciais Encontradas!",
+            "success_matches_desc": "Por favor, revise os cães correspondentes em sua área.",
+            "success_report": "Relato Publicado",
+            "success_report_desc": "Seu relato agora está visível para a comunidade.",
+            "error_process": "Não foi possível processar a identidade do cão."
+        }
+    },
+    "health": {
+        "title": "Adicionar Registro de Saúde",
+        "labels": {
+            "type": "Tipo de Registro",
+            "date": "Data (AAAA-MM-DD)",
+            "due_date": "Próxima Data Prevista (Opcional)",
+            "notes": "Notas",
+            "placeholder_notes": "Notas do médico, nome da clínica, etc."
+        },
+        "types": {
+            "vaccination": "Vacinação",
+            "deworming": "Vermifugação",
+            "grooming": "Higiene/Estética",
+            "checkup": "Check-up"
+        },
+        "alerts": {
+            "success": "Registro de saúde adicionado!",
+            "error": "Falha ao adicionar registro de saúde",
+            "date_required": "A data é obrigatória"
+        },
+        "reminder": "Lembrete de Saúde: {{name}}",
+        "reminder_body": "{{type}} programado para {{date}}"
+    },
+    "dog_registration": {
+        "title": "Registrar Novo Cão",
+        "section_info": "Informações do Cão",
+        "section_id": "Identificação (3 Fotos Obrigatórias)",
+        "labels": {
+            "name": "Nome do Cão",
+            "age": "Idade (Anos)",
+            "breed": "Raça",
+            "color": "Cor",
+            "size": "Tamanho",
+            "gender": "Gênero",
+            "nose_print": "1. Impressão Digital do Focinho",
+            "body_photo": "2. Foto do Corpo Inteiro",
+            "birth_marks": "3. Marcas de Nascença / Características Únicas"
+        },
+        "sizes": {
+            "small": "Pequeno",
+            "medium": "Médio",
+            "large": "Grande",
+            "giant": "Gigante"
+        },
+        "genders": {
+            "male": "Macho",
+            "female": "Fêmea"
+        },
+        "camera": {
+            "align_nose": "Alinhar Focinho",
+            "capture_body": "Capturar Corpo Inteiro",
+            "capture_marks": "Capturar Marca de Nascença"
+        },
+        "alerts": {
+            "missing_photos": "Por favor, forneça as 3 fotos obrigatórias: Focinho, Corpo Inteiro e Marca de Nascença.",
+            "success": "Cão {{name}} registrado com sucesso!",
+            "error": "Não foi possível registrar o cão"
+        },
+        "my_dogs": "Meus Cães Registrados"
+    },
+    "wellness": {
+        "title": "Central de Bem-Estar",
+        "weight_growth": "Crescimento de Peso (kg)",
+        "weight_advice": "Seu cão ganhou {{amount}}kg desde {{start}}. Crescimento saudável!",
+        "active_vaccinations": "Vacinações Ativas",
+        "upcoming_vets": "Próximas Consultas",
+        "track_wellness": "Acompanhar Bem-Estar",
+        "sections": {
+            "vaccination_title": "Registros de Vacinação",
+            "vaccination_desc": "Gerencie as doses e vacinas do seu pet",
+            "diet_title": "Dieta e Nutrição",
+            "diet_desc": "Registre as refeições e acompanhe as calorias",
+            "vet_notes_title": "Notas Veterinárias Digitais",
+            "vet_notes_desc": "Armazene prescrições e relatórios"
+        },
+        "pro_tip": "Dica de Especialista",
+        "pro_tip_text": "Check-ups regulares podem prolongar a vida do seu cão em até 2 anos!"
+    },
+    "onboarding": {
+        "skip": "Skip",
+        "next": "CONTINUE",
+        "start": "GET STARTED",
+        "slides": [
+            {
+                "title": "Welcome to Lovedogs 360",
+                "description": "The ultimate companion app for your dog's life. Swipe to learn how to navigate the platform."
+            },
+            {
+                "title": "🐾 Wellness Hub",
+                "description": "Keep track of vaccinations, weight growth, and vet notes. Manage your dog's digital health passport here."
+            },
+            {
+                "title": "🛒 Marketplace",
+                "description": "Buy and sell dog gear, or book professional grooming and training services right in your neighborhood."
+            },
+            {
+                "title": "📍 Cases & Map",
+                "description": "Report lost, found, injured stray, abuse, vehicle hit, rabies bite and keep the community alert."
+            },
+            {
+                "title": "💬 Community Hub",
+                "description": "Local and global chats and polls to build your digital pack and stay connected."
+            },
+            {
+                "title": "📅 Events",
+                "description": "Find Dog networking events and programs to keep your furry friend socialized."
+            }
+        ]
+    },
+    "admin": {
+        "title": "Painel do Admin",
+        "subtitle": "Gestão Lovedogs 360",
+        "tabs": {
+            "overview": "Visão Geral",
+            "users": "Usuários",
+            "services": "Serviços",
+            "orders": "Pedidos",
+            "export": "Exportar"
+        },
+        "stats": {
+            "total_users": "Total de Usuários",
+            "services": "Serviços",
+            "orders": "Pedidos",
+            "events": "Eventos",
+            "revenue": "Receita Total",
+            "commission": "Comissão"
+        },
+        "overview": {
+            "title": "Visão Geral do Painel"
+        },
+        "users": {
+            "title": "Todos os Usuários ({{count}})",
+            "empty": "Nenhum usuário encontrado"
+        },
+        "services": {
+            "title": "Todos os Serviços ({{count}})",
+            "add_new": "Adicionar Novo Serviço",
+            "empty": "Nenhum serviço ainda",
+            "by": "por {{name}}",
+            "published": "Publicado",
+            "draft": "Rascunho"
+        },
+        "orders": {
+            "title": "Todos os Pedidos ({{count}})",
+            "empty": "Nenhum pedido ainda",
+            "buyer": "Comprador: {{name}}",
+            "amount": "Valor",
+            "commission": "Comissão",
+            "payout": "Pagamento"
+        },
+        "export": {
+            "title": "Exportação de Dados",
+            "desc": "Baixe os dados como planilhas Excel para relatórios e análises.",
+            "registrations_title": "Exportar Inscrições",
+            "registrations_sub": "Inscrições em eventos (.xlsx)",
+            "events_title": "Exportar Eventos",
+            "events_sub": "Dados dos eventos (.xlsx)"
+        },
+        "actions": {
+            "delete_service_title": "Excluir Serviço",
+            "delete_service_confirm": "Tem certeza que deseja excluir \"{{title}}\"?",
+            "deleted_title": "Excluído",
+            "deleted_desc": "Serviço removido.",
+            "error_delete": "Não foi possível excluir o serviço.",
+            "error_load": "Falha ao carregar dados",
+            "error_export": "Falha na exportação.",
+            "error_download": "Falha no download. Verifique as permissões.",
+            "logout_title": "Sair",
+            "logout_confirm": "Tem certeza?"
+        }
+    },
+    "payouts": {
+        "title": "Transparência Financeira e Ganhos",
+        "empty": "Nenhum registro de transação ainda.",
+        "labels": {
+            "gross": "Valor Bruto",
+            "commission": "Comissão (20%)",
+            "net": "Pagamento Líquido",
+            "status": "Status",
+            "processed": "Processado em {{date}}"
+        }
+    },
+    "navigation": {
+        "home": "Home",
+        "marketplace": "Mercado",
+        "events": "Eventos",
+        "report": "Relatar",
+        "payouts": "Pagamentos",
+        "profile": "Perfil"
+    },
+    "community_hub": {
+        "title": "Community Hub",
+        "global_chat": "Global Chat",
+        "nearby": "Nearby",
+        "active_now": "Active Now",
+        "post_global": "Post to Global...",
+        "post_nearby": "Post to Nearby...",
+        "ask_question": "Ask a question...",
+        "create_poll": "Create a Poll",
+        "add_option": "+ Add Option",
+        "votes": "votes",
+        "reported": "Reported",
+        "reported_msg": "Thank you. This message has been flagged for review.",
+        "warning": "Warning",
+        "poll_min_options": "Poll must have at least 2 options",
+        "send_error": "Could not send message.",
+        "pts": "pts"
+    },
+    "profile_screen": {
+        "account_dashboard": "Account Dashboard",
+        "log_out": "Log Out",
+        "dogs_stat": "Dogs",
+        "activities_stat": "Activities",
+        "deals_stat": "Deals",
+        "rate_experience": "Rate Experience",
+        "based_on": "Based on {{count}} completions",
+        "my_pets": "My Registered Pets",
+        "register_pet": "Register a Pet",
+        "register_pet_desc": "Tap here to visit Wellness Hub and add your first pet!",
+        "register_another": "Register Another Pet",
+        "personal_info": "Personal Information",
+        "update": "Update",
+        "whatsapp_phone": "WhatsApp / Phone",
+        "biography": "Biography",
+        "no_bio": "No professional biography set.",
+        "digital_wallet": "Digital Wallet & Payouts",
+        "available_balance": "Available Balance",
+        "active_payout": "Active Payout Method",
+        "not_configured": "Not Configured",
+        "configured": "Configured",
+        "setup": "Setup",
+        "edit": "Edit",
+        "help_support": "Help & Support",
+        "contact_support": "Contact Support",
+        "language": "Language",
+        "update_profile": "Update Profile",
+        "full_name": "Full Name",
+        "region": "Region",
+        "preferred_language": "Preferred Language",
+        "professional_bio": "Professional Biography",
+        "tell_us": "Tell us about yourself...",
+        "back": "Back",
+        "apply_changes": "Apply Changes",
+        "payout_config": "Payout Configuration",
+        "mpesa_phone": "M-Pesa Phone Number",
+        "card_number": "Card Number",
+        "expiry": "Expiry (MM/YY)",
+        "secure_cvv": "Secure CVV",
+        "pci_compliant": "PCI-DSS Compliant Secure Entry",
+        "apply_payout": "Apply Payout Info",
+        "discard": "Discard",
+        "save_updates": "Save Profile Updates",
+        "success_msg": "Profile updated successfully!",
+        "error_msg": "Failed to update profile."
+    }
+}

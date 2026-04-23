@@ -1,0 +1,541 @@
+{
+    "common": {
+        "language": "言語",
+        "english": "英語",
+        "swahili": "スワヒリ語",
+        "logout": "ログアウト",
+        "cancel": "キャンセル",
+        "save": "保存",
+        "search": "検索",
+        "loading": "読み込み中...",
+        "saving": "保存中...",
+        "updating": "更新中...",
+        "creating": "作成中...",
+        "error": "エラー",
+        "success": "成功",
+        "ok": "OK",
+        "permission_denied": "許可が拒否されました",
+        "location_req": "この機能を使用するには、位置情報の許可を有効にしてください。",
+        "location_fail": "現在地の取得に失敗しました",
+        "camera_req": "写真を撮るにはカメラの許可が必要です。",
+        "camera_perm": "許可が必要です",
+        "back": "戻る",
+        "continue": "次へ"
+    },
+    "home": {
+        "greeting": "こんにちは、{{name}}さん！",
+        "sub_greeting": "今日のワンちゃんの調子はいかがですか？",
+        "my_dogs": "マイ・ドッグ",
+        "local_alerts": "地域の通知",
+        "health_wellness": "健康とウェルネス",
+        "health_status": "すべて順調です！今週、予定されている予防接種はありません。",
+        "view_records": "記録を見る",
+        "quick_actions": "クイックアクション",
+        "marketplace": "マーケットプレイス",
+        "shop_book": "ショップと予約",
+        "lost_found": "迷子・保護",
+        "scan_report": "スキャンまたは報告",
+        "identity": "身元確認",
+        "biometric_scan": "生体スキャン",
+        "my_events": "マイ・イベント",
+        "dog_meetups": "オフ会",
+        "community_spotlight": "コミュニティ・スポットライト",
+        "see_all": "すべて見る",
+        "community_walk": "今週の日曜日はコミュニティ・ウォーク！",
+        "community_walk_desc": "セントラルパークで他の飼い主さんと一緒に散歩しませんか？",
+        "attending": "{{count}} 人が参加予定"
+    },
+    "login": {
+        "tagline": "愛犬のための最高のプラットフォーム",
+        "email": "メールアドレス",
+        "password": "パスワード",
+        "login": "ログイン",
+        "no_account": "アカウントをお持ちでないですか？ ",
+        "register": "今すぐ登録",
+        "skip": "後で登録 →",
+        "google_signin": "Googleでサインイン",
+        "or": "または"
+    },
+    "profile": {
+        "title": "プロフィール",
+        "edit_profile": "プロフィールを編集",
+        "full_name": "氏名",
+        "phone_number": "電話番号",
+        "bio": "自己紹介",
+        "add_dog": "愛犬を追加",
+        "no_dogs": "愛犬がまだ登録されていません。"
+    },
+    "register": {
+        "title": "アカウント作成",
+        "subtitle": "愛犬を大切にするコミュニティに参加しましょう",
+        "full_name_label": "氏名",
+        "full_name_placeholder": "氏名を入力してください",
+        "email_label": "メールアドレス",
+        "email_placeholder": "メールアドレスを入力してください",
+        "phone_label": "電話番号",
+        "phone_placeholder": "電話番号を入力してください",
+        "bio_label": "自己紹介 (任意)",
+        "bio_placeholder": "あなたについて教えてください...",
+        "password_label": "パスワード",
+        "password_placeholder": "パスワードを作成",
+        "join_as": "登録種別：",
+        "pet_owner": "飼い主",
+        "professional": "プロフェッショナル",
+        "pro_note": "* プロフェッショナルはサービスや商品の購入も可能です。",
+        "list_note": "* 登録後にサービスを掲載できるようになります。",
+        "register": "登録する",
+        "already_account": "既にアカウントをお持ちですか？ ",
+        "login": "ログイン",
+        "phone_description": "この電話番号は決済（M-Pesaなど）の受け取りに使用されます",
+        "language_label": "希望の言語",
+        "location_compulsory": "マーケットプレイス、周辺通知、安全機能の利用には位置情報へのアクセスが必要です。",
+        "location_denied_error": "登録を完了するには、位置情報へのアクセスを許可する必要があります。",
+        "location_title": "スマート・マーケットプレイスを有効にする",
+        "location_benefit": "地域の売買、安全報告、周辺通知を有効にするために必要です。",
+        "country_code": "国番号",
+        "step1_title": "認証とセキュリティ",
+        "step2_title": "グローバルプロフィール",
+        "step3_title": "アクセスと役割",
+        "next_step": "次へ進む",
+        "secure_access": "安全なマーケットプレイスへのアクセス",
+        "location_success": "位置情報が正常に登録されました。",
+        "allow_location": "位置情報を許可する"
+    },
+    "marketplace": {
+        "title": "マーケットプレイス",
+        "search_placeholder": "{{type}} を検索...",
+        "services": "サービス",
+        "products": "商品",
+        "book_service": "サービスを予約",
+        "buy_now": "今すぐ購入",
+        "price": "価格",
+        "no_listings": "このカテゴリーに該当する出品はありません。",
+        "category": "カテゴリー",
+        "location": "場所",
+        "all_categories": "すべて",
+        "distance_away": "km 先",
+        "orders": {
+            "summary": "注文概要",
+            "success": "決済が完了しました！",
+            "id": "注文番号 #",
+            "item_price": "商品価格",
+            "fee": "プラットフォーム手数料 (20%)",
+            "total": "支払い合計",
+            "download": "PDF領収書をダウンロード",
+            "downloading": "ダウンロード中...",
+            "rating_title": "体験はいかがでしたか？",
+            "rating_subtitle": "提供者とそのサービスを評価してください",
+            "submit_rating": "評価を送信",
+            "thanks": "フィードバックを受け取りました！ありがとうございます。",
+            "error_download": "領収書をダウンロードできませんでした。もう一度お試しください。",
+            "error_download_failed": "ダウンロードに失敗しました",
+            "error_star": "星評価を選択してください",
+            "error_rating": "評価の送信に失敗しました",
+            "success_rating": "フィードバックありがとうございます！"
+        },
+        "tabs": {
+            "services": "サービス",
+            "products": "商品"
+        },
+        "categories": {
+            "all": "すべて",
+            "health": "健康",
+            "therapy": "セラピー",
+            "training": "トレーニング",
+            "grooming": "トリミング",
+            "boarding": "ペットホテル",
+            "events": "イベント",
+            "safety": "安全",
+            "food": "フード",
+            "equipment": "機材",
+            "toys": "おもちゃ",
+            "travel": "旅行",
+            "gear": "用品"
+        },
+        "actions": {
+            "buy_now": "今すぐ購入",
+            "book_now": "今すぐ予約",
+            "add": "追加"
+        },
+        "empty": {
+            "title": "{{type}} が見つかりません",
+            "subtitle": "検索条件やフィルターを変更してみてください"
+        },
+        "featured": "すべての {{type}}",
+        "featured_cat": "{{category}} の {{type}}",
+        "results": "{{count}} 件の結果が見つかりました",
+        "create": {
+            "title_new": "新しく出品する",
+            "title_edit": "出品を編集",
+            "question": "何を出品しますか？",
+            "services": "サービス",
+            "products": "商品",
+            "cover_image": "カバー画像",
+            "upload_photo": "写真をアップロード",
+            "listing_price": "出品価格：${{price}}（20%のシステム手数料を含む）",
+            "location": "サービスの場所",
+            "get_location": "現在地を使用する",
+            "update_location": "場所を更新する",
+            "fetching": "場所を取得中...",
+            "error_update": "アイテムの更新に失敗しました",
+            "error_create": "アイテムの作成に失敗しました",
+            "publish": "出品を公開する",
+            "publish_subtitle": "購入者に公開されます",
+            "price_label": "あなたの販売価格 ($)",
+            "success_create": "{{type}} の公開が完了しました！",
+            "success_update": "出品内容を更新しました！",
+            "error_fill": "すべての項目を入力してください"
+        }
+    },
+    "events": {
+        "title": "今後のイベント",
+        "badge": "イベント",
+        "my_registrations": "マイ・エントリー",
+        "save": "Save",
+        "saved": "Saved",
+        "unsave": "Unsave",
+        "saved_events": "Saved Events",
+        "form_builder": "Form Builder",
+        "add_field": "Add Field",
+        "share_phone": "Share Phone Number",
+        "registration_form": "Registration Form",
+        "view_responses": "View Responses",
+        "no_saved_events": "No saved events"
+    },
+    "report": {
+        "title": "ケース",
+        "subtitle": "ワンちゃんのトラブルを報告・対応",
+        "toggles": {
+            "list": "一覧",
+            "map": "マップ"
+        },
+        "types": {
+            "rabies_bite": "狂犬病の疑い（噛みつき）",
+            "vehicle_hit": "交通事故",
+            "injured_stray": "怪我をした野良犬",
+            "found_dog": "保護犬",
+            "lost_dog": "迷い犬",
+            "abuse": "虐待の報告",
+            "other": "その他"
+        },
+        "empty": {
+            "title": "報告されたケースはありません",
+            "subtitle": "あなたの地域のケースを最初に報告しましょう"
+        },
+        "form": {
+            "title": "ケースを報告する",
+            "question": "何が起きましたか？",
+            "labels": {
+                "title": "タイトル",
+                "description": "説明",
+                "location": "場所",
+                "photo": "証拠写真"
+            },
+            "placeholders": {
+                "title": "タイトルを短く入力...",
+                "description": "状況を詳しく説明してください...",
+                "location": "どこで起きましたか？"
+            },
+            "buttons": {
+                "camera": "写真を撮る",
+                "gallery": "ギャラリー",
+                "submit": "報告を送信"
+            },
+            "alerts": {
+                "type_required": "ケースの種類を選択してください。",
+                "title_required": "報告のタイトルを入力してください。",
+                "success": "報告が投稿されました。コミュニティで共有されます！",
+                "error": "報告の送信に失敗しました。もう一度お試しください。"
+            }
+        },
+        "map": {
+            "help": "タップして助ける"
+        },
+        "labels": {
+            "breed": "推定犬種",
+            "color": "毛色",
+            "custom_breed": "犬種名を入力..."
+        }
+    },
+    "lost_found": {
+        "title": "迷子・保護",
+        "i_found": "犬を保護した",
+        "i_lost": "愛犬がいなくなった",
+        "labels": {
+            "description": "詳細情報",
+            "upload": "写真を撮る / 画像を選択",
+            "matching": "照合中...",
+            "submit": "ケースを送信"
+        },
+        "colors": {
+            "merle": "マール（まだら模様）",
+            "brindle": "ブリンドル（虎毛）"
+        },
+        "alerts": {
+            "camera_perm": "写真を撮るにはカメラの許可が必要です。",
+            "photo_first": "先に写真を撮影または選択してください。",
+            "matches_found": "{{count}} 件の該当候補が見つかりました！",
+            "matches_none": "直接一致する生体データは見つかりませんでした。",
+            "success_matches": "該当候補が見つかりました！",
+            "success_matches_desc": "地域で一致するワンちゃんを確認してください。",
+            "success_report": "報告が公開されました",
+            "success_report_desc": "あなたの報告がコミュニティに公開されました。",
+            "error_process": "身元の照合ができませんでした。"
+        }
+    },
+    "health": {
+        "title": "健康記録を追加",
+        "labels": {
+            "type": "記録の種類",
+            "date": "日付 (YYYY-MM-DD)",
+            "due_date": "次回の予定 (任意)",
+            "notes": "メモ",
+            "placeholder_notes": "獣医さんの指示、クリニック名など"
+        },
+        "types": {
+            "vaccination": "予防接種",
+            "deworming": "駆虫",
+            "grooming": "トリミング",
+            "checkup": "定期検診"
+        },
+        "alerts": {
+            "success": "健康記録を追加しました！",
+            "error": "健康記録の追加に失敗しました",
+            "date_required": "日付は必須です"
+        },
+        "reminder": "健康リマインダー：{{name}}",
+        "reminder_body": "次回の {{type}} の予定日：{{date}}"
+    },
+    "dog_registration": {
+        "title": "新しい愛犬を登録",
+        "section_info": "愛犬の情報",
+        "section_id": "本人確認（必須写真3枚）",
+        "labels": {
+            "name": "愛犬の名前",
+            "age": "年齢",
+            "breed": "犬種",
+            "color": "毛色",
+            "size": "サイズ",
+            "gender": "性別",
+            "nose_print": "1. 鼻紋（鼻の模様）",
+            "body_photo": "2. 全身写真",
+            "birth_marks": "3. 身体的特徴 / 識別マーク"
+        },
+        "sizes": {
+            "small": "小型",
+            "medium": "中型",
+            "large": "大型",
+            "giant": "超大型"
+        },
+        "genders": {
+            "male": "オス",
+            "female": "メス"
+        },
+        "camera": {
+            "align_nose": "鼻紋を合わせる",
+            "capture_body": "全身を撮影",
+            "capture_marks": "特徴を撮影"
+        },
+        "alerts": {
+            "missing_photos": "必須の3枚（鼻紋、全身、特徴）すべてを撮影してください。",
+            "success": "愛犬 {{name}} の登録が完了しました！",
+            "error": "登録できませんでした"
+        },
+        "my_dogs": "登録済みのマイ・ドッグ"
+    },
+    "wellness": {
+        "title": "ウェルネス・ハブ",
+        "weight_growth": "体重の推移 (kg)",
+        "weight_advice": "{{start}} 以降、{{amount}}kg 増えました。順調な成長です！",
+        "active_vaccinations": "有効な予防接種",
+        "upcoming_vets": "次回の通院予定",
+        "track_wellness": "ウェルネスを記録",
+        "sections": {
+            "vaccination_title": "予防接種記録",
+            "vaccination_desc": "ワクチンの履歴を管理",
+            "diet_title": "食事と栄養",
+            "diet_desc": "食事内容と摂取カロリーを管理",
+            "vet_notes_title": "デジタル獣医ノート",
+            "vet_notes_desc": "処方箋や診断書を保存"
+        },
+        "pro_tip": "役立つヒント",
+        "pro_tip_text": "定期的な検診により、愛犬の寿命が最大2年延びる可能性があります！"
+    },
+    "onboarding": {
+        "skip": "Skip",
+        "next": "CONTINUE",
+        "start": "GET STARTED",
+        "slides": [
+            {
+                "title": "Welcome to Lovedogs 360",
+                "description": "The ultimate companion app for your dog's life. Swipe to learn how to navigate the platform."
+            },
+            {
+                "title": "🐾 Wellness Hub",
+                "description": "Keep track of vaccinations, weight growth, and vet notes. Manage your dog's digital health passport here."
+            },
+            {
+                "title": "🛒 Marketplace",
+                "description": "Buy and sell dog gear, or book professional grooming and training services right in your neighborhood."
+            },
+            {
+                "title": "📍 Cases & Map",
+                "description": "Report lost, found, injured stray, abuse, vehicle hit, rabies bite and keep the community alert."
+            },
+            {
+                "title": "💬 Community Hub",
+                "description": "Local and global chats and polls to build your digital pack and stay connected."
+            },
+            {
+                "title": "📅 Events",
+                "description": "Find Dog networking events and programs to keep your furry friend socialized."
+            }
+        ]
+    },
+    "admin": {
+        "title": "管理ダッシュボード",
+        "subtitle": "Lovedogs 360 管理",
+        "tabs": {
+            "overview": "概要",
+            "users": "ユーザー",
+            "services": "サービス",
+            "orders": "注文",
+            "export": "エクスポート"
+        },
+        "stats": {
+            "total_users": "総ユーザー数",
+            "services": "サービス数",
+            "orders": "注文数",
+            "events": "イベント数",
+            "revenue": "総売上",
+            "commission": "手数料"
+        },
+        "overview": {
+            "title": "ダッシュボード概要"
+        },
+        "users": {
+            "title": "すべてのユーザー ({{count}})",
+            "empty": "ユーザーが見つかりません"
+        },
+        "services": {
+            "title": "すべてのサービス ({{count}})",
+            "add_new": "サービスを追加",
+            "empty": "サービスがまだありません",
+            "by": "登録：{{name}}",
+            "published": "公開済み",
+            "draft": "下書き"
+        },
+        "orders": {
+            "title": "すべての注文 ({{count}})",
+            "empty": "注文がまだありません",
+            "buyer": "購入者：{{name}}",
+            "amount": "金額",
+            "commission": "手数料",
+            "payout": "支払い額"
+        },
+        "export": {
+            "title": "データ・エクスポート",
+            "desc": "レポートや分析のために、データをExcel形式でダウンロードできます。",
+            "registrations_title": "エントリー情報を出力",
+            "registrations_sub": "全イベントの参加登録データ (.xlsx)",
+            "events_title": "イベント情報を出力",
+            "events_sub": "全イベントデータ (.xlsx)"
+        },
+        "actions": {
+            "delete_service_title": "サービスを削除",
+            "delete_service_confirm": "「{{title}}」を削除してもよろしいですか？",
+            "deleted_title": "削除完了",
+            "deleted_desc": "サービスを削除しました。",
+            "error_delete": "サービスを削除できませんでした。",
+            "error_load": "データの読み込みに失敗しました",
+            "error_export": "エクスポートに失敗しました。",
+            "error_download": "ダウンロードに失敗しました。権限を確認してください。",
+            "logout_title": "ログアウト",
+            "logout_confirm": "ログアウトしますか？"
+        }
+    },
+    "payouts": {
+        "title": "収支と支払い明細",
+        "empty": "取引記録はまだありません。",
+        "labels": {
+            "gross": "総売上",
+            "commission": "手数料 (20%)",
+            "net": "振込予定額",
+            "status": "ステータス",
+            "processed": "処理日：{{date}}"
+        }
+    },
+    "navigation": {
+        "home": "ホーム",
+        "marketplace": "マーケット",
+        "events": "イベント",
+        "report": "ケース報告",
+        "payouts": "支払い",
+        "profile": "プロフィール"
+    },
+    "community_hub": {
+        "title": "Community Hub",
+        "global_chat": "Global Chat",
+        "nearby": "Nearby",
+        "active_now": "Active Now",
+        "post_global": "Post to Global...",
+        "post_nearby": "Post to Nearby...",
+        "ask_question": "Ask a question...",
+        "create_poll": "Create a Poll",
+        "add_option": "+ Add Option",
+        "votes": "votes",
+        "reported": "Reported",
+        "reported_msg": "Thank you. This message has been flagged for review.",
+        "warning": "Warning",
+        "poll_min_options": "Poll must have at least 2 options",
+        "send_error": "Could not send message.",
+        "pts": "pts"
+    },
+    "profile_screen": {
+        "account_dashboard": "Account Dashboard",
+        "log_out": "Log Out",
+        "dogs_stat": "Dogs",
+        "activities_stat": "Activities",
+        "deals_stat": "Deals",
+        "rate_experience": "Rate Experience",
+        "based_on": "Based on {{count}} completions",
+        "my_pets": "My Registered Pets",
+        "register_pet": "Register a Pet",
+        "register_pet_desc": "Tap here to visit Wellness Hub and add your first pet!",
+        "register_another": "Register Another Pet",
+        "personal_info": "Personal Information",
+        "update": "Update",
+        "whatsapp_phone": "WhatsApp / Phone",
+        "biography": "Biography",
+        "no_bio": "No professional biography set.",
+        "digital_wallet": "Digital Wallet & Payouts",
+        "available_balance": "Available Balance",
+        "active_payout": "Active Payout Method",
+        "not_configured": "Not Configured",
+        "configured": "Configured",
+        "setup": "Setup",
+        "edit": "Edit",
+        "help_support": "Help & Support",
+        "contact_support": "Contact Support",
+        "language": "Language",
+        "update_profile": "Update Profile",
+        "full_name": "Full Name",
+        "region": "Region",
+        "preferred_language": "Preferred Language",
+        "professional_bio": "Professional Biography",
+        "tell_us": "Tell us about yourself...",
+        "back": "Back",
+        "apply_changes": "Apply Changes",
+        "payout_config": "Payout Configuration",
+        "mpesa_phone": "M-Pesa Phone Number",
+        "card_number": "Card Number",
+        "expiry": "Expiry (MM/YY)",
+        "secure_cvv": "Secure CVV",
+        "pci_compliant": "PCI-DSS Compliant Secure Entry",
+        "apply_payout": "Apply Payout Info",
+        "discard": "Discard",
+        "save_updates": "Save Profile Updates",
+        "success_msg": "Profile updated successfully!",
+        "error_msg": "Failed to update profile."
+    }
+}
