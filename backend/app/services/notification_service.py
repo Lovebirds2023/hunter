@@ -22,20 +22,30 @@ def _init_firebase():
         return
     
     import os
+    import json
+    
+    cred_json = os.getenv("FIREBASE_CREDENTIALS_JSON")
     cred_path = os.getenv("FIREBASE_CREDENTIALS_PATH")
-    if cred_path and os.path.exists(cred_path):
-        try:
+    
+    try:
+        if cred_json:
+            cred_dict = json.loads(cred_json)
+            cred = credentials.Certificate(cred_dict)
+            firebase_admin.initialize_app(cred)
+            _firebase_initialized = True
+            logger.info("Firebase Admin SDK initialized successfully via JSON env var.")
+        elif cred_path and os.path.exists(cred_path):
             cred = credentials.Certificate(cred_path)
             firebase_admin.initialize_app(cred)
             _firebase_initialized = True
-            logger.info("Firebase Admin SDK initialized successfully.")
-        except Exception as e:
-            logger.error(f"Failed to initialize Firebase Admin SDK: {e}")
-    else:
-        logger.warning(
-            "FIREBASE_CREDENTIALS_PATH not set or file not found. "
-            "Push notifications will be logged only."
-        )
+            logger.info("Firebase Admin SDK initialized successfully via file path.")
+        else:
+            logger.warning(
+                "Neither FIREBASE_CREDENTIALS_JSON nor valid FIREBASE_CREDENTIALS_PATH was found. "
+                "Push notifications will be logged only."
+            )
+    except Exception as e:
+        logger.error(f"Failed to initialize Firebase Admin SDK: {e}")
 
 
 class NotificationService:
