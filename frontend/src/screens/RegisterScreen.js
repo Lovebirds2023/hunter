@@ -34,16 +34,27 @@ const RegisterScreen = ({ navigation }) => {
     };
 
     const requestLocation = async () => {
-        let { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-            Alert.alert(t('common.permission_denied'), t('register.location_denied_error'));
-            setLocationAllowed(false);
+        try {
+            let { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert(t('common.permission_denied'), t('register.location_denied_error') + " Please enable it in your phone settings.");
+                setLocationAllowed(false);
+                return false;
+            }
+            
+            let loc = await Location.getLastKnownPositionAsync({});
+            if (!loc) {
+                loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            }
+            
+            setLocation(loc.coords);
+            setLocationAllowed(true);
+            return true;
+        } catch (error) {
+            console.log("Location Error:", error);
+            Alert.alert("Location Error", "Could not fetch your location. Please check if your device GPS is turned on.");
             return false;
         }
-        let loc = await Location.getCurrentPositionAsync({});
-        setLocation(loc.coords);
-        setLocationAllowed(true);
-        return true;
     };
 
     const { register, isLoading } = useContext(AuthContext);
@@ -286,7 +297,7 @@ const RegisterScreen = ({ navigation }) => {
                                         }
                                         const success = await register(
                                             fullName,
-                                            email,
+                                            email.trim().toLowerCase(),
                                             password,
                                             role,
                                             phoneNumber,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, SafeAreaView, ScrollView, ActivityIndicator, Alert, TextInput, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, SafeAreaView, ScrollView, ActivityIndicator, Alert, TextInput, Dimensions, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,6 +10,15 @@ import * as SecureStore from 'expo-secure-store';
 import * as Location from 'expo-location';
 import MapView, { Marker, Callout } from '../components/MapComponent';
 import { useCurrency } from '../context/CurrencyContext';
+import { useAuth } from '../context/AuthContext';
+
+// Platform-aware storage helper
+const Storage = {
+    getItemAsync: async (key: string): Promise<string | null> => {
+        if (Platform.OS === 'web') return localStorage.getItem(key);
+        return SecureStore.getItemAsync(key);
+    }
+};
 
 const { width, height } = Dimensions.get('window');
 
@@ -37,11 +46,13 @@ const PRODUCT_CATEGORIES = [
 
 export const MarketplaceScreen = ({ navigation }: any) => {
     const { t } = useTranslation();
+    const { userInfo } = useAuth();
     const [activeTab, setActiveTab] = useState<'services' | 'products'>('services');
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [services, setServices] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [orderLoading, setOrderLoading] = useState<string | null>(null);
     const [userId, setUserId] = useState<string | null>(null);
     const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
     const [showMap, setShowMap] = useState(false);
@@ -76,7 +87,14 @@ export const MarketplaceScreen = ({ navigation }: any) => {
 
     const getUserId = async () => {
         try {
-            const userStr = await SecureStore.getItemAsync('user');
+            // Use userInfo from AuthContext if available (avoids SecureStore on web)
+            if (userInfo) {
+                setUserId(userInfo.id);
+                setPreferredCurrency(userInfo.preferred_currency || 'KES');
+                return;
+            }
+            // Fallback: read from platform-aware storage
+            const userStr = await Storage.getItemAsync('userInfo');
             if (userStr) {
                 const user = JSON.parse(userStr);
                 setUserId(user.id);
@@ -129,17 +147,34 @@ export const MarketplaceScreen = ({ navigation }: any) => {
             ? `${item.stock_count || 0} left` 
             : `${item.slots_available || 0} slots left`;
 
+        const handleBookPress = async () => {
+            if (isUnavailable) {
+                Alert.alert('Unavailable', 'This item is currently out of stock or the provider is busy.');
+                return;
+            }
+            setOrderLoading(item.id);
+            try {
+                const orderRes = await client.post('/orders', { service_id: item.id, share_phone: false });
+                navigation.navigate('OrderReceipt', { orderId: orderRes.data.id, service: item });
+            } catch (e: any) {
+                const detail = e?.response?.data?.detail || 'Failed to create order. Please try again.';
+                Alert.alert('Error', typeof detail === 'string' ? detail : JSON.stringify(detail));
+            } finally {
+                setOrderLoading(null);
+            }
+        };
+
         return (
             <TouchableOpacity
                 style={[styles.card, isClosest && styles.closestCard, isUnavailable && { opacity: 0.5 }]}
-                onPress={() => {
-                    if (isUnavailable) {
-                        Alert.alert('Unavailable', 'This item is currently out of stock or the provider is busy.');
-                        return;
-                    }
-                    navigation.navigate('OrderReceipt', { orderId: 'MOCK-' + item.id, service: item });
-                }}
+                onPress={handleBookPress}
+                disabled={orderLoading === item.id}
             >
+                {orderLoading === item.id && (
+                    <View style={styles.cardLoadingOverlay}>
+                        <ActivityIndicator color={COLORS.primary} />
+                    </View>
+                )}
                 <View style={styles.cardTop}>
                     {item.image_url ? (
                         <Image source={{ uri: item.image_url }} style={styles.cardImage} />
@@ -219,13 +254,8 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                         </View>
                         <TouchableOpacity
                             style={[styles.actionBtn, isUnavailable && { backgroundColor: '#ddd' }]}
-                            onPress={() => {
-                                if (isUnavailable) {
-                                    Alert.alert('Unavailable', 'This item is currently out of stock or the provider is busy.');
-                                    return;
-                                }
-                                navigation.navigate('OrderReceipt', { service: item });
-                            }}
+                            onPress={handleBookPress}
+                            disabled={orderLoading === item.id}
                         >
                             <Text style={[styles.actionBtnText, isUnavailable && { color: '#888' }]}>
                                 {isUnavailable ? 'Unavailable' : (item.item_type === 'products' ? t('marketplace.actions.buy_now') : t('marketplace.actions.book_now'))}
@@ -714,6 +744,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         borderWidth: 2,
         borderColor: COLORS.accent,
+    },
+    cardLoadingOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(255,255,255,0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 10,
+        borderRadius: 16,
     },
     emptyContainer: {
         alignItems: 'center',

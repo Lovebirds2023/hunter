@@ -59,7 +59,7 @@ const LoginScreen = ({ navigation }) => {
                             onChangeText={setPassword}
                             secureTextEntry
                         />
-                        <Button title={t('login.login')} onPress={() => login(email, password)} variant="gold" />
+                        <Button title={t('login.login')} onPress={() => login(email.trim().toLowerCase(), password)} variant="gold" />
                         
                         <View style={styles.divider}>
                             <View style={styles.line} />

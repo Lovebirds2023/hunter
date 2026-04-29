@@ -12,7 +12,7 @@ import { Switch, TextInput } from 'react-native';
 
 export const EventDetailScreen = ({ route, navigation }) => {
     const { eventId } = route.params;
-    const { user } = useAuth();
+    const { userInfo: user } = useAuth();
     const [event, setEvent] = useState(null);
     const [loading, setLoading] = useState(true);
     const [dogs, setDogs] = useState([]);

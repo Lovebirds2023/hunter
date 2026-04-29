@@ -37,7 +37,7 @@ const MANAGEMENT_GRID = [
 
 export default function AdminDashboardScreen() {
     const navigation = useNavigation();
-    const { user, logout } = useAuth();
+    const { userInfo, logout } = useAuth();
     const [activeTab, setActiveTab] = useState('home'); // 'home', 'overview', 'users', etc.
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);

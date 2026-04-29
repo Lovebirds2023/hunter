@@ -54,6 +54,53 @@ const EventStack = createNativeStackNavigator();
 const AdminStack = createNativeStackNavigator();
 const CaseStack = createNativeStackNavigator();
 
+// Web URL → Screen linking configuration
+const linking = {
+    prefixes: ['https://lovedogs360.com', 'http://localhost:19006', 'lovedogs360://'],
+    config: {
+        screens: {
+            Login: 'login',
+            Onboarding: 'onboarding',
+            Register: 'register',
+            Main: {
+                screens: {
+                    Home: 'home',
+                    Marketplace: 'marketplace',
+                    Events: {
+                        screens: {
+                            EventsList: 'events',
+                            EventDetail: 'events/:eventId',
+                            MyRegistrations: 'my-registrations',
+                        },
+                    },
+                    Report: {
+                        screens: {
+                            CaseFeed: 'cases',
+                            ReportCase: 'cases/report',
+                            CaseDetail: 'cases/:reportId',
+                        },
+                    },
+                    Community: 'community',
+                    Payouts: 'payouts',
+                    Profile: 'profile',
+                },
+            },
+            OrderReceipt: 'receipt/:orderId',
+            CreateService: 'create-service',
+            DogRegistration: 'dog-registration',
+            LostFound: 'lost-found',
+            WellnessHub: 'wellness',
+            Support: 'support',
+            Inbox: 'inbox',
+            AdminDashboard: {
+                screens: {
+                    AdminHome: 'admin',
+                },
+            },
+        },
+    },
+};
+
 function CaseStackScreen() {
     return (
         <CaseStack.Navigator screenOptions={{ headerShown: false }}>
@@ -171,7 +218,7 @@ export default function App() {
         <AuthProvider>
             <SyncProvider>
                 <CurrencyProvider>
-                    <NavigationContainer>
+                    <NavigationContainer linking={linking}>
                         <AppNavigator />
                     </NavigationContainer>
                 </CurrencyProvider>

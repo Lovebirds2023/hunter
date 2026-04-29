@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Image, Alert, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeBackground } from '../components/ThemeBackground';
@@ -8,6 +7,16 @@ import { COLORS, SPACING } from '../constants/theme';
 import { Button } from '../components/Button';
 import client from '../api/client';
 import { BREEDS, COLORS_DESC } from '../constants/data';
+
+// Only import CameraView for native platforms
+let CameraView: any = null;
+let useCameraPermissions: any = () => [{ granted: false }, async () => {}];
+if (Platform.OS !== 'web') {
+    // Dynamic require to avoid web bundler crash
+    const ExpoCamera = require('expo-camera');
+    CameraView = ExpoCamera.CameraView;
+    useCameraPermissions = ExpoCamera.useCameraPermissions;
+}
 
 export const DogIdentityScreen = ({ navigation }: any) => {
     const [permission, requestPermission] = useCameraPermissions();
@@ -41,18 +50,20 @@ export const DogIdentityScreen = ({ navigation }: any) => {
         { title: 'Unique Marks', instruction: 'Capture any birth marks or scars (Special ID)', icon: 'heart' }
     ];
 
-    if (!permission) return <View />;
-    if (!permission.granted && currentStep > 0) {
-        return (
-            <ThemeBackground>
-                <SafeAreaView style={styles.container}>
-                    <View style={styles.permissionContainer}>
-                        <Text style={styles.message}>We need your permission to show the camera</Text>
-                        <Button onPress={requestPermission} title="grant permission" />
-                    </View>
-                </SafeAreaView>
-            </ThemeBackground>
-        );
+    if (Platform.OS !== 'web') {
+        if (!permission) return <View />;
+        if (!permission.granted && currentStep > 0) {
+            return (
+                <ThemeBackground>
+                    <SafeAreaView style={styles.container}>
+                        <View style={styles.permissionContainer}>
+                            <Text style={styles.message}>We need your permission to show the camera</Text>
+                            <Button onPress={requestPermission} title="grant permission" />
+                        </View>
+                    </SafeAreaView>
+                </ThemeBackground>
+            );
+        }
     }
 
     const nextStep = () => {
@@ -268,37 +279,62 @@ export const DogIdentityScreen = ({ navigation }: any) => {
         </ScrollView>
     );
 
-    const renderCameraUI = () => (
-        <View style={{ flex: 1 }}>
-            <View style={styles.cameraContainer}>
-                <CameraView style={styles.camera} ref={(ref) => setCameraRef(ref)}>
-                    <View style={styles.scanTarget}>
-                        <View style={[styles.corner, styles.topLeft]} />
-                        <View style={[styles.corner, styles.topRight]} />
-                        <View style={[styles.corner, styles.bottomLeft]} />
-                        <View style={[styles.corner, styles.bottomRight]} />
-                        <Ionicons name={steps[currentStep].icon as any} size={40} color={COLORS.accent} style={{ opacity: 0.5 }} />
+    const renderCameraUI = () => {
+        // On web, only show image picker (no camera API)
+        if (Platform.OS === 'web') {
+            return (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+                    <View style={styles.webUploadBox}>
+                        <Ionicons name={steps[currentStep].icon as any} size={56} color={COLORS.accent} />
+                        <Text style={styles.webUploadTitle}>{steps[currentStep].title}</Text>
+                        <Text style={styles.webUploadSubtitle}>{steps[currentStep].instruction}</Text>
+                        <Text style={styles.webUploadNote}>Camera capture is available on mobile. On web, please upload from your gallery.</Text>
                     </View>
-                </CameraView>
-            </View>
+                    <View style={styles.actions}>
+                        <Button
+                            title="UPLOAD FROM GALLERY"
+                            onPress={pickImage}
+                            variant="gold"
+                            disabled={isSubmitting}
+                        />
+                    </View>
+                </View>
+            );
+        }
 
-            <View style={styles.actions}>
-                <Button
-                    title={`CAPTURE ${steps[currentStep].title.toUpperCase()}`}
-                    onPress={takePicture}
-                    style={styles.mainBtn}
-                    variant="gold"
-                    loading={isSubmitting}
-                />
-                <Button
-                    title="UPLOAD FROM GALLERY"
-                    onPress={pickImage}
-                    variant="outline"
-                    disabled={isSubmitting}
-                />
+        // Native camera UI
+        return (
+            <View style={{ flex: 1 }}>
+                <View style={styles.cameraContainer}>
+                    <CameraView style={styles.camera} ref={(ref: any) => setCameraRef(ref)}>
+                        <View style={styles.scanTarget}>
+                            <View style={[styles.corner, styles.topLeft]} />
+                            <View style={[styles.corner, styles.topRight]} />
+                            <View style={[styles.corner, styles.bottomLeft]} />
+                            <View style={[styles.corner, styles.bottomRight]} />
+                            <Ionicons name={steps[currentStep].icon as any} size={40} color={COLORS.accent} style={{ opacity: 0.5 }} />
+                        </View>
+                    </CameraView>
+                </View>
+
+                <View style={styles.actions}>
+                    <Button
+                        title={`CAPTURE ${steps[currentStep].title.toUpperCase()}`}
+                        onPress={takePicture}
+                        style={styles.mainBtn}
+                        variant="gold"
+                        loading={isSubmitting}
+                    />
+                    <Button
+                        title="UPLOAD FROM GALLERY"
+                        onPress={pickImage}
+                        variant="outline"
+                        disabled={isSubmitting}
+                    />
+                </View>
             </View>
-        </View>
-    );
+        );
+    };
 
     return (
         <ThemeBackground>
@@ -389,6 +425,19 @@ const styles = StyleSheet.create({
     colorChipActive: { backgroundColor: 'rgba(255,215,0,0.2)', borderWidth: 1, borderColor: COLORS.accent },
     colorChipText: { color: 'rgba(255,255,255,0.6)', fontSize: 11 },
     colorChipTextActive: { color: COLORS.accent, fontWeight: 'bold' },
+    webUploadBox: {
+        alignItems: 'center',
+        padding: 30,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255,255,255,0.06)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,215,0,0.2)',
+        marginBottom: 24,
+        width: '100%',
+    },
+    webUploadTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.white, marginTop: 16, marginBottom: 8 },
+    webUploadSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.6)', textAlign: 'center', marginBottom: 12 },
+    webUploadNote: { fontSize: 11, color: 'rgba(255,215,0,0.5)', textAlign: 'center', fontStyle: 'italic' },
     // Pet type selector styles
     petTypeBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 14, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 2, borderColor: 'rgba(255,255,255,0.1)' },
     petTypeBtnActive: { borderColor: COLORS.accent, backgroundColor: 'rgba(255,215,0,0.12)' },
