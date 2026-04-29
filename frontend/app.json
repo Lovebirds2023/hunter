@@ -40,12 +40,14 @@
       ],
       "config": {
         "googleMaps": {
-          "apiKey": "YOUR_GOOGLE_MAPS_API_KEY_HERE"
+          "apiKey": "REPLACE_WITH_YOUR_GOOGLE_MAPS_API_KEY"
         }
       }
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundleIdentifier": "com.lovedogs360.app",
+      "name": "Lovedogs 360"
     },
     "plugins": [
       "expo-secure-store",

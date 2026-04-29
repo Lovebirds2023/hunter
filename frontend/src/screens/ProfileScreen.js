@@ -58,7 +58,8 @@ export const ProfileScreen = ({ navigation }) => {
     // Payment States
     const [isPaymentEditing, setIsPaymentEditing] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState(userInfo?.payment_method || '');
-    const [paymentDetails, setPaymentDetails] = useState(userInfo?.payment_details || '');
+    // Cards are processed via Pesapal's secure hosted checkout — we never store card numbers or CVV.
+    const [mpesaPhone, setMpesaPhone] = useState(userInfo?.mpesa_phone_number || '');
 
     // Reset local state when userInfo changes (from backend sync)
     useEffect(() => {
@@ -70,7 +71,7 @@ export const ProfileScreen = ({ navigation }) => {
             setEditLanguage(userInfo?.language || 'en');
             setEditAvatar(userInfo?.profile_image || null);
             setPaymentMethod(userInfo?.payment_method || '');
-            setPaymentDetails(userInfo?.payment_details || '');
+            setMpesaPhone(userInfo?.mpesa_phone_number || '');
         }
     }, [userInfo, isEditing, isPaymentEditing]);
 
@@ -85,9 +86,9 @@ export const ProfileScreen = ({ navigation }) => {
             editLanguage !== (userInfo.language || 'en') ||
             editAvatar !== (userInfo.profile_image || null) ||
             paymentMethod !== (userInfo.payment_method || '') ||
-            paymentDetails !== (userInfo.payment_details || '')
+            mpesaPhone !== (userInfo.mpesa_phone_number || '')
         );
-    }, [editName, editPhone, editBio, editCountryCode, editLanguage, editAvatar, paymentMethod, paymentDetails, userInfo]);
+    }, [editName, editPhone, editBio, editCountryCode, editLanguage, editAvatar, paymentMethod, mpesaPhone, userInfo]);
 
     const fetchMyDogs = async () => {
         try {
@@ -128,8 +129,8 @@ export const ProfileScreen = ({ navigation }) => {
                 country: editCountryCode,
                 language: editLanguage,
                 profile_image: editAvatar,
-                payment_method: paymentMethod,
-                payment_details: paymentDetails
+                // Only store payout preference and M-Pesa phone (never card numbers/CVV)
+                mpesa_phone_number: paymentMethod === 'mpesa' ? mpesaPhone : (userInfo?.mpesa_phone_number || null),
             };
             await updateUser(payload);
             Alert.alert(t('common.success'), t('profile_screen.success_msg'));
@@ -328,7 +329,11 @@ export const ProfileScreen = ({ navigation }) => {
                             <View>
                                 <Text style={styles.payoutMethodLabel}>{t('profile_screen.active_payout')}</Text>
                                 <Text style={styles.payoutMethodValue}>
-                                    {paymentMethod ? `${paymentMethod.toUpperCase()} • ${paymentDetails ? paymentDetails : t('profile_screen.configured')}` : t('profile_screen.not_configured')}
+                                    {paymentMethod === 'mpesa' && mpesaPhone
+                                        ? `M-PESA • ${mpesaPhone}`
+                                        : paymentMethod === 'card'
+                                        ? 'Card • Paid via Pesapal'
+                                        : t('profile_screen.not_configured')}
                                 </Text>
                             </View>
                             <TouchableOpacity style={styles.configureBtn} onPress={() => setIsPaymentEditing(true)}>
@@ -373,8 +378,8 @@ export const ProfileScreen = ({ navigation }) => {
                         setEditCountryCode(userInfo.country);
                         setEditLanguage(userInfo.language);
                         setEditAvatar(userInfo.profile_image);
-                        setPaymentMethod(userInfo.payment_method);
-                        setPaymentDetails(userInfo.payment_details);
+                        setPaymentMethod(userInfo.payment_method || '');
+                        setMpesaPhone(userInfo.mpesa_phone_number || '');
                     }}>
                         <Text style={styles.discardText}>{t('profile_screen.discard')}</Text>
                     </TouchableOpacity>
@@ -474,8 +479,7 @@ export const ProfileScreen = ({ navigation }) => {
                         <View style={styles.paymentOptionsGrid}>
                             {[
                                 { id: 'mpesa', label: 'M-Pesa', icon: 'phone-portrait-outline' },
-                                { id: 'visa', label: 'Visa Card', icon: 'card-outline' },
-                                { id: 'mastercard', label: 'Mastercard', icon: 'card-outline' }
+                                { id: 'card', label: 'Card / Bank', icon: 'card-outline' },
                             ].map((opt) => (
                                 <TouchableOpacity 
                                     key={opt.id}
@@ -493,53 +497,30 @@ export const ProfileScreen = ({ navigation }) => {
                                 <Text style={styles.label}>{t('profile_screen.mpesa_phone')}</Text>
                                 <TextInput 
                                     style={styles.input} 
-                                    placeholder="e.g. +254..."
+                                    placeholder="e.g. +254712345678"
                                     keyboardType="phone-pad"
-                                    value={paymentDetails || ''}
-                                    onChangeText={setPaymentDetails}
+                                    value={mpesaPhone}
+                                    onChangeText={setMpesaPhone}
                                 />
-                            </>
-                        ) : paymentMethod === 'visa' || paymentMethod === 'mastercard' ? (
-                            <>
-                                <Text style={styles.label}>{t('profile_screen.card_number')}</Text>
-                                <TextInput 
-                                    style={styles.input} 
-                                    placeholder="0000 0000 0000 0000"
-                                    keyboardType="number-pad"
-                                    maxLength={19}
-                                    value={(paymentDetails || '').split('|')[0] || ''}
-                                    onChangeText={(val) => {
-                                        const parts = (paymentDetails || '').split('|');
-                                        setPaymentDetails(`${val}|${parts[1] || ''}|${parts[2] || ''}`);
-                                    }}
-                                />
-                                <View style={styles.row}>
-                                    <View style={{ flex: 1, marginRight: 10 }}>
-                                        <Text style={styles.label}>{t('profile_screen.expiry')}</Text>
-                                        <TextInput style={styles.input} placeholder="MM/YY" maxLength={5} 
-                                            value={(paymentDetails || '').split('|')[1] || ''}
-                                            onChangeText={(val) => {
-                                                const parts = (paymentDetails || '').split('|');
-                                                setPaymentDetails(`${parts[0] || ''}|${val}|${parts[2] || ''}`);
-                                            }}
-                                        />
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={styles.label}>{t('profile_screen.secure_cvv')}</Text>
-                                        <TextInput style={styles.input} placeholder="***" maxLength={4} keyboardType="number-pad" secureTextEntry={true} 
-                                            value={(paymentDetails || '').split('|')[2] || ''}
-                                            onChangeText={(val) => {
-                                                const parts = (paymentDetails || '').split('|');
-                                                setPaymentDetails(`${parts[0] || ''}|${parts[1] || ''}|${val}`);
-                                            }}
-                                        />
-                                    </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+                                    <Ionicons name="shield-checkmark" size={14} color="#2E7D32" />
+                                    <Text style={{ fontSize: 12, color: '#2E7D32', marginLeft: 6, fontWeight: '600' }}>Your phone number is stored securely.</Text>
                                 </View>
+                            </>
+                        ) : paymentMethod === 'card' ? (
+                            <View style={{ padding: 16, backgroundColor: '#f0f9ff', borderRadius: 14, marginTop: 8 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                    <Ionicons name="lock-closed" size={18} color={COLORS.primary} />
+                                    <Text style={{ marginLeft: 8, fontWeight: 'bold', color: COLORS.primaryDark, fontSize: 15 }}>Secure Card Payments</Text>
+                                </View>
+                                <Text style={{ color: COLORS.gray, fontSize: 13, lineHeight: 20 }}>
+                                    Card details are entered securely at checkout through Pesapal's encrypted payment page. We never store your card number, CVV, or expiry date on our servers.
+                                </Text>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12 }}>
-                                    <Ionicons name="lock-closed" size={14} color="#2E7D32" />
-                                    <Text style={{fontSize: 12, color: '#2E7D32', marginLeft: 4, fontWeight: 'bold'}}>{t('profile_screen.pci_compliant')}</Text>
+                                    <Ionicons name="checkmark-circle" size={14} color="#2E7D32" />
+                                    <Text style={{ fontSize: 12, color: '#2E7D32', marginLeft: 6, fontWeight: '600' }}>PCI-DSS Compliant via Pesapal</Text>
                                 </View>
-                            </>
+                            </View>
                         ) : null}
 
                         <View style={styles.modalButtons}>
