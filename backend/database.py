@@ -6,10 +6,17 @@ from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 
-# Ensure DATABASE_URL is present
+# Try to get DATABASE_URL
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
+
+# Fallback to individual variables if DATABASE_URL is missing (e.g. on Railway or local Docker)
 if not SQLALCHEMY_DATABASE_URL:
-    raise ValueError("DATABASE_URL not found in .env file. Please check your configuration.")
+    pg_user = os.getenv("PGUSER") or os.getenv("POSTGRES_USER", "postgres")
+    pg_password = os.getenv("PGPASSWORD") or os.getenv("POSTGRES_PASSWORD", "password")
+    pg_host = os.getenv("PGHOST") or os.getenv("POSTGRES_SERVER", "db")
+    pg_port = os.getenv("PGPORT") or os.getenv("POSTGRES_PORT", "5432")
+    pg_db = os.getenv("PGDATABASE") or os.getenv("POSTGRES_DB", "lovedogs")
+    SQLALCHEMY_DATABASE_URL = f"postgresql://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_db}"
 
 # Fix for SQLAlchemy 2.0+ with postgresql:// vs postgres://
 if SQLALCHEMY_DATABASE_URL and SQLALCHEMY_DATABASE_URL.startswith("postgres://"):

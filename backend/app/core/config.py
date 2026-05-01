@@ -20,3 +20,9 @@ class Settings(BaseSettings):
         case_sensitive = True
 
 settings = Settings()
+
+# Ensure that if DATABASE_URL was overridden by the environment (e.g. on Railway), it uses asyncpg
+if settings.DATABASE_URL and settings.DATABASE_URL.startswith("postgres://"):
+    settings.DATABASE_URL = settings.DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
+elif settings.DATABASE_URL and settings.DATABASE_URL.startswith("postgresql://"):
+    settings.DATABASE_URL = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
