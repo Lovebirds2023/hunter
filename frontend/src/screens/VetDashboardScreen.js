@@ -33,7 +33,7 @@ export const VetDashboardScreen = ({ route, navigation }) => {
                 <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingRight: 15 }}>
                     <Ionicons name="arrow-back" size={28} color={COLORS.primary} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Vet Authority Dashboard</Text>
+                <Text style={styles.headerTitle}>Professional Observer Dashboard</Text>
             </View>
 
             <View style={styles.infoBox}>
@@ -41,24 +41,24 @@ export const VetDashboardScreen = ({ route, navigation }) => {
                 <Text style={{ fontSize: 16, color: '#444', marginTop: 5 }}>Dog: Max (Golden Retriever)</Text>
             </View>
 
-            <Text style={styles.sectionHeader}>Pre-Session Screening</Text>
+            <Text style={styles.sectionHeader}>Pre-Session Welfare Check</Text>
             <View style={styles.actionRow}>
                 <TouchableOpacity style={[styles.btn, { backgroundColor: '#4CAF50' }]} onPress={() => handleAction('vet_approved')}>
                     <Ionicons name="checkmark-circle" size={20} color="white" />
-                    <Text style={styles.btnText}>Approve Dog</Text>
+                    <Text style={styles.btnText}>Clear for Session</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity style={[styles.btn, { backgroundColor: '#f44336' }]} onPress={() => handleAction('vet_rejected')}>
                     <Ionicons name="close-circle" size={20} color="white" />
-                    <Text style={styles.btnText}>Reject (Welfare)</Text>
+                    <Text style={styles.btnText}>Flag for Review</Text>
                 </TouchableOpacity>
             </View>
 
-            <Text style={styles.sectionHeader}>Live Welfare Note</Text>
+            <Text style={styles.sectionHeader}>Training Observation Notes</Text>
             <View style={styles.inputContainer}>
                 <TextInput 
                     style={styles.input}
-                    placeholder="Enter clinical observations, welfare concerns..."
+                    placeholder="Enter training observations and welfare notes..."
                     multiline
                     numberOfLines={4}
                     value={notes}
@@ -66,8 +66,8 @@ export const VetDashboardScreen = ({ route, navigation }) => {
                 />
             </View>
 
-            <TouchableOpacity style={styles.logBtn} onPress={() => handleAction('vet_clinical_note')}>
-                <Text style={styles.logBtnText}>Log Clinical Note (Offline-ready)</Text>
+            <TouchableOpacity style={styles.logBtn} onPress={() => handleAction('vet_observation_note')}>
+                <Text style={styles.logBtnText}>Log Observation Note (Offline-ready)</Text>
             </TouchableOpacity>
         </ScrollView>
     );

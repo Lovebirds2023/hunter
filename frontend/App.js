@@ -47,6 +47,7 @@ import ServiceResponsesScreen from './src/screens/ServiceResponsesScreen';
 import EventFormBuilderScreen from './src/screens/EventFormBuilderScreen';
 import EventResponsesScreen from './src/screens/EventResponsesScreen';
 import { COLORS } from './src/constants/theme';
+import { PlatformDisclaimerModal } from './src/components/PlatformDisclaimerModal';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -220,6 +221,7 @@ export default function App() {
                 <CurrencyProvider>
                     <NavigationContainer linking={linking}>
                         <AppNavigator />
+                        <PlatformDisclaimerModal />
                     </NavigationContainer>
                 </CurrencyProvider>
             </SyncProvider>

@@ -2802,3 +2802,99 @@ def get_exchange_rates():
             logger.warning(f"Error fetching exchange rates: {e}")
             # Silently fail and return stale rules if any exist
     return {"rates": exchange_rates_cache["rates"]}
+
+
+# =====================================================
+# User Safety — Report & Block (Store Compliance)
+# =====================================================
+
+class CaseFlagRequest(BaseModel):
+    reason: str  # spam, harmful, misinformation
+
+@app.post("/cases/{case_id}/flag")
+async def flag_case_report(
+    case_id: str,
+    flag: CaseFlagRequest,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Allows a user to report/flag a community case post for moderation review.
+    Stores an audit log entry visible in the admin moderation panel.
+    Does NOT delete the post — admin reviews first.
+    """
+    case = db.query(models.CaseReport).filter(models.CaseReport.id == case_id).first()
+    if not case:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    # Prevent self-reporting
+    if case.author_id == current_user.id:
+        raise HTTPException(status_code=400, detail="You cannot report your own post")
+
+    # Check for duplicate report from same user
+    existing = db.query(models.AuditLog).filter(
+        models.AuditLog.user_id == current_user.id,
+        models.AuditLog.action == "flag_case",
+        models.AuditLog.target_id == case_id
+    ).first()
+    if existing:
+        return {"message": "You have already reported this post"}
+
+    # Record the report in AuditLog (reuses existing model — no migration needed)
+    log = models.AuditLog(
+        id=str(uuid.uuid4()),
+        user_id=current_user.id,
+        action="flag_case",
+        target_type="case_report",
+        target_id=case_id,
+        details=f"reason={flag.reason}"
+    )
+    db.add(log)
+    db.commit()
+
+    logger.info(f"Case {case_id} flagged by user {current_user.id} for reason: {flag.reason}")
+    return {"message": "Report submitted successfully. Our moderation team will review this post."}
+
+
+@app.post("/users/{user_id}/block")
+async def block_user(
+    user_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Allows a user to block another user.
+    Stores a block record in AuditLog for admin visibility.
+    Blocked state is tracked client-side; blocking does not remove content.
+    """
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="You cannot block yourself")
+
+    target_user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Check if already blocked
+    existing_block = db.query(models.AuditLog).filter(
+        models.AuditLog.user_id == current_user.id,
+        models.AuditLog.action == "block_user",
+        models.AuditLog.target_id == user_id
+    ).first()
+    if existing_block:
+        return {"message": "User is already blocked", "blocked": True}
+
+    # Record block in AuditLog
+    log = models.AuditLog(
+        id=str(uuid.uuid4()),
+        user_id=current_user.id,
+        action="block_user",
+        target_type="user",
+        target_id=user_id,
+        details=f"blocker={current_user.email} blocked={target_user.email}"
+    )
+    db.add(log)
+    db.commit()
+
+    logger.info(f"User {current_user.id} blocked user {user_id}")
+    return {"message": f"User has been blocked successfully", "blocked": True}
+

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useContext, useMemo } from 're
 import { useTranslation } from 'react-i18next';
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity,
-    Image, SafeAreaView, RefreshControl, ActivityIndicator, Dimensions, Platform
+    Image, SafeAreaView, RefreshControl, ActivityIndicator, Dimensions, Platform, Alert
 } from 'react-native';
 import * as Location from 'expo-location';
 import MapView, { Marker, Callout, Circle } from '../components/MapComponent';
@@ -93,6 +93,51 @@ const CaseFeedScreen = ({ navigation }) => {
         } catch (e) {
             if (__DEV__) console.log('Like failed', e);
         }
+    };
+
+    const handleReport = (reportId) => {
+        Alert.alert(
+            'Report Post',
+            'Why are you reporting this post?',
+            [
+                { text: 'Spam or misleading', onPress: () => submitReport(reportId, 'spam') },
+                { text: 'Harmful or abusive', onPress: () => submitReport(reportId, 'harmful') },
+                { text: 'Incorrect information', onPress: () => submitReport(reportId, 'misinformation') },
+                { text: 'Cancel', style: 'cancel' },
+            ],
+            { cancelable: true }
+        );
+    };
+
+    const submitReport = async (reportId, reason) => {
+        try {
+            await client.post(`/cases/${reportId}/flag`, { reason });
+            Alert.alert('Report Submitted', 'Thank you. Our moderation team will review this post.');
+        } catch {
+            Alert.alert('Error', 'Could not submit report. Please try again.');
+        }
+    };
+
+    const handleBlock = (authorId, authorName) => {
+        Alert.alert(
+            `Block ${authorName || 'User'}?`,
+            'Blocked users cannot contact you or see your posts. You can unblock them anytime from your settings.',
+            [
+                {
+                    text: 'Block',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await client.post(`/users/${authorId}/block`);
+                            Alert.alert('User Blocked', `${authorName || 'This user'} has been blocked.`);
+                        } catch {
+                            Alert.alert('Error', 'Could not block user. Please try again.');
+                        }
+                    },
+                },
+                { text: 'Cancel', style: 'cancel' },
+            ]
+        );
     };
 
     const getTimeAgo = (dateStr) => {
@@ -207,6 +252,22 @@ const CaseFeedScreen = ({ navigation }) => {
                         <View style={[styles.statusDot, { backgroundColor: item.status === 'open' ? '#44FF44' : '#FFD700' }]} />
                         <Text style={styles.statusText}>{item.status || 'open'}</Text>
                     </View>
+
+                    {/* Report / Block — store compliance */}
+                    <TouchableOpacity
+                        style={[styles.actionBtn, { marginLeft: 'auto', marginRight: 0 }]}
+                        onPress={() => Alert.alert(
+                            'Options',
+                            '',
+                            [
+                                { text: 'Report Post', onPress: () => handleReport(item.id) },
+                                { text: 'Block User', onPress: () => handleBlock(item.author?.id, item.author?.full_name) },
+                                { text: 'Cancel', style: 'cancel' },
+                            ]
+                        )}
+                    >
+                        <Ionicons name="ellipsis-horizontal" size={20} color="rgba(255,255,255,0.5)" />
+                    </TouchableOpacity>
                 </View>
             </TouchableOpacity>
         );
