@@ -1,0 +1,541 @@
+{
+    "common": {
+        "language": "भाषा",
+        "english": "अंग्रेज़ी",
+        "swahili": "स्वाहिली",
+        "logout": "लॉगआउट",
+        "cancel": "रद्द करें",
+        "save": "सहेजें",
+        "search": "खोजें",
+        "loading": "लोड हो रहा है...",
+        "saving": "सहेजा जा रहा है...",
+        "updating": "अपडेट किया जा रहा है...",
+        "creating": "बनाया जा रहा है...",
+        "error": "त्रुटि",
+        "success": "सफलता",
+        "ok": "ठीक है",
+        "permission_denied": "अनुमति अस्वीकार",
+        "location_req": "कृपया इस सुविधा का उपयोग करने के लिए स्थान अनुमति सक्षम करें।",
+        "location_fail": "वर्तमान स्थान प्राप्त करने में विफल",
+        "camera_req": "फोटो लेने के लिए कैमरा अनुमति की आवश्यकता है।",
+        "camera_perm": "अनुमति आवश्यक",
+        "back": "पीछे",
+        "continue": "जारी रखें"
+    },
+    "home": {
+        "greeting": "नमस्ते, {{name}}!",
+        "sub_greeting": "आज आपका साथी कैसा है?",
+        "my_dogs": "मेरे कुत्ते",
+        "local_alerts": "स्थानीय अलर्ट",
+        "health_wellness": "स्वास्थ्य और तंदुरुस्ती",
+        "health_status": "सब कुछ बहुत अच्छा लग रहा है! इस सप्ताह कोई आगामी टीकाकरण नहीं है।",
+        "view_records": "रिकॉर्ड देखें",
+        "quick_actions": "त्वरित क्रियाएं",
+        "marketplace": "मार्केटप्लेस",
+        "shop_book": "खरीदारी और बुकिंग",
+        "lost_found": "खोया और पाया",
+        "scan_report": "स्कैन या रिपोर्ट",
+        "identity": "पहचान",
+        "biometric_scan": "बायोमेट्रिक स्कैन",
+        "my_events": "मेरे कार्यक्रम",
+        "dog_meetups": "डॉग मीटअप",
+        "community_spotlight": "सामुदायिक स्पॉटलाइट",
+        "see_all": "सभी देखें",
+        "community_walk": "इस रविवार सामुदायिक वॉक!",
+        "community_walk_desc": "सोशल वॉक के लिए सेंट्रल पार्क में अन्य डॉग पेरेंट्स के साथ जुड़ें।",
+        "attending": "{{count}} भाग ले रहे हैं"
+    },
+    "login": {
+        "tagline": "आपके कुत्ते के लिए सबसे अच्छा प्लेटफॉर्म",
+        "email": "ईमेल",
+        "password": "पासवर्ड",
+        "login": "लॉगिन",
+        "no_account": "खाता नहीं है? ",
+        "register": "अभी रजिस्टर करें",
+        "skip": "अभी के लिए छोड़ें →",
+        "google_signin": "Google Signin",
+        "or": "या"
+    },
+    "profile": {
+        "title": "मेरी प्रोफ़ाइल",
+        "edit_profile": "प्रोफ़ाइल संपादित करें",
+        "full_name": "पूरा नाम",
+        "phone_number": "फ़ोन नंबर",
+        "bio": "बायो",
+        "add_dog": "कुत्ता जोड़ें",
+        "no_dogs": "अभी तक कोई कुत्ता नहीं जोड़ा गया।"
+    },
+    "register": {
+        "title": "खाता बनाएं",
+        "subtitle": "उस समुदाय से जुड़ें जो देखभाल करता है",
+        "full_name_label": "पूरा नाम",
+        "full_name_placeholder": "अपना पूरा नाम दर्ज करें",
+        "email_label": "ईमेल पता",
+        "email_placeholder": "अपना ईमेल दर्ज करें",
+        "phone_label": "फ़ोन नंबर",
+        "phone_placeholder": "अपना फ़ोन नंबर दर्ज करें",
+        "bio_label": "संक्षिप्त बायो (वैकल्पिक)",
+        "bio_placeholder": "हमें अपने बारे में बताएं...",
+        "password_label": "पासवर्ड",
+        "password_placeholder": "एक पासवर्ड बनाएं",
+        "join_as": "मैं इस रूप में जुड़ना चाहता हूँ:",
+        "pet_owner": "पालतू जानवर के मालिक",
+        "professional": "पेशेवर",
+        "pro_note": "* पेशेवर सेवाएं और उत्पाद भी खरीद सकते हैं।",
+        "list_note": "* आप पंजीकरण के बाद सेवाओं को सूचीबद्ध कर पाएंगे।",
+        "register": "रजिस्टर",
+        "already_account": "पहले से ही एक खाता है? ",
+        "login": "लॉगिन",
+        "phone_description": "इस फ़ोन नंबर का उपयोग भुगतान प्राप्त करने के लिए किया जाएगा (जैसे एम-पेसा)",
+        "language_label": "पसंदीदा भाषा",
+        "location_compulsory": "मार्केटप्लेस, निकटता सूचनाओं और सुरक्षा सुविधाओं के लिए स्थान पहुंच आवश्यक है।",
+        "location_denied_error": "पंजीकरण पूरा करने के लिए आपको स्थान पहुंच की अनुमति देनी होगी।",
+        "location_title": "स्मार्ट मार्केटप्लेस सक्षम करें",
+        "location_benefit": "स्थानीय खरीद/बिक्री, सुरक्षा रिपोर्ट और निकटता अलर्ट सक्षम करने के लिए आवश्यक।",
+        "country_code": "देश कोड",
+        "step1_title": "पहचान और सुरक्षा",
+        "step2_title": "ग्लोबल प्रोफाइल",
+        "step3_title": "पहुंच और भूमिका",
+        "next_step": "अगला कदम",
+        "secure_access": "सुरक्षित मार्केटप्लेस पहुंच",
+        "location_success": "आपका स्थान सफलतापूर्वक पंजीकृत कर लिया गया है।",
+        "allow_location": "स्थान की अनुमति दें"
+    },
+    "marketplace": {
+        "title": "मार्केटप्लेस",
+        "search_placeholder": "{{type}} खोजें...",
+        "services": "सेवाएं",
+        "products": "उत्पाद",
+        "book_service": "सेवा बुक करें",
+        "buy_now": "अभी खरीदें",
+        "price": "कीमत",
+        "no_listings": "इस श्रेणी में कोई लिस्टिंग नहीं मिली।",
+        "category": "श्रेणी",
+        "location": "स्थान",
+        "all_categories": "सभी",
+        "distance_away": "किमी दूर",
+        "orders": {
+            "summary": "ऑर्डर सारांश",
+            "success": "भुगतान सफल!",
+            "id": "ऑर्डर #",
+            "item_price": "आइटम की कीमत",
+            "fee": "प्लेटफ़ॉर्म शुल्क (20%)",
+            "total": "कुल भुगतान",
+            "download": "PDF रसीद डाउनलोड करें",
+            "downloading": "डाउनलोड हो रहा है...",
+            "rating_title": "आपका अनुभव कैसा रहा?",
+            "rating_subtitle": "प्रदाता और उनकी सेवा को रेट करें",
+            "submit_rating": "रेटिंग सबमिट करें",
+            "thanks": "फीडबैक सबमिट किया गया! धन्यवाद।",
+            "error_download": "रसीद डाउनलोड नहीं की जा सकी। कृपया पुन: प्रयास करें।",
+            "error_download_failed": "डाउनलोड विफल",
+            "error_star": "कृपया स्टार रेटिंग चुनें",
+            "error_rating": "रेटिंग सबमिट करने में विफल",
+            "success_rating": "आपकी प्रतिक्रिया के लिए धन्यवाद!"
+        },
+        "tabs": {
+            "services": "सेवाएं",
+            "products": "उत्पाद"
+        },
+        "categories": {
+            "all": "सभी",
+            "health": "स्वास्थ्य",
+            "therapy": "थेरेपी",
+            "training": "प्रशिक्षण",
+            "grooming": "ग्रूमिंग",
+            "boarding": "बोर्डिंग",
+            "events": "ईवेंट",
+            "safety": "सुरक्षा",
+            "food": "भोजन",
+            "equipment": "उपकरण",
+            "toys": "खिलौने",
+            "travel": "यात्रा",
+            "gear": "गियर"
+        },
+        "actions": {
+            "buy_now": "अभी खरीदें",
+            "book_now": "अभी बुक करें",
+            "add": "जोड़ें"
+        },
+        "empty": {
+            "title": "कोई {{type}} नहीं मिला",
+            "subtitle": "पंजीकरण या फ़िल्टर समायोजित करने का प्रयास करें"
+        },
+        "featured": "सभी {{type}}",
+        "featured_cat": "{{category}} {{type}}",
+        "results": "{{count}} परिणाम मिले",
+        "create": {
+            "title_new": "नया आइटम सूचीबद्ध करें",
+            "title_edit": "लिस्टिंग संपादित करें",
+            "question": "आप क्या सूचीबद्ध कर रहे हैं?",
+            "services": "सेवाएं",
+            "products": "उत्पाद",
+            "cover_image": "कवर इमेज",
+            "upload_photo": "फोटो अपलोड करें",
+            "listing_price": "लिस्टिंग मूल्य: ${{price}} (20% प्लेटफ़ॉर्म शुल्क शामिल)",
+            "location": "सेवा स्थान",
+            "get_location": "मेरे वर्तमान स्थान का उपयोग करें",
+            "update_location": "मेरा स्थान अपडेट करें",
+            "fetching": "स्थान प्राप्त किया जा रहा है...",
+            "error_update": "आइटम अपडेट करने में विफल",
+            "error_create": "आइटम बनाने में विफल",
+            "publish": "लिस्टिंग प्रकाशित करें",
+            "publish_subtitle": "इसे खरीदारों के लिए दृश्यमान बनाएं",
+            "price_label": "आपकी कीमत ($)",
+            "success_create": "{{type}} सफलतापूर्वक प्रकाशित!",
+            "success_update": "लिस्टिंग सफलतापूर्वक अपडेट की गई!",
+            "error_fill": "कृपया सभी फ़ील्ड भरें"
+        }
+    },
+    "events": {
+        "title": "आगामी कार्यक्रम",
+        "badge": "ईवेंट",
+        "my_registrations": "मेरे पंजीकरण",
+        "save": "Save",
+        "saved": "Saved",
+        "unsave": "Unsave",
+        "saved_events": "Saved Events",
+        "form_builder": "Form Builder",
+        "add_field": "Add Field",
+        "share_phone": "Share Phone Number",
+        "registration_form": "Registration Form",
+        "view_responses": "View Responses",
+        "no_saved_events": "No saved events"
+    },
+    "report": {
+        "title": "मामले",
+        "subtitle": "कुत्तों के मामलों की रिपोर्ट करें और प्रतिक्रिया दें",
+        "toggles": {
+            "list": "सूची",
+            "map": "नक्शा"
+        },
+        "types": {
+            "rabies_bite": "रेबीज काटना",
+            "vehicle_hit": "वाहन की टक्कर",
+            "injured_stray": "घायल आवारा",
+            "found_dog": "पाया गया कुत्ता",
+            "lost_dog": "खोया हुआ कुत्ता",
+            "abuse": "दुर्व्यवहार रिपोर्ट",
+            "other": "अन्य"
+        },
+        "empty": {
+            "title": "अभी तक कोई मामला रिपोर्ट नहीं",
+            "subtitle": "अपने क्षेत्र में कुत्ते के मामले की रिपोर्ट करने वाले पहले व्यक्ति बनें"
+        },
+        "form": {
+            "title": "मामले की रिपोर्ट करें",
+            "question": "क्या हुआ?",
+            "labels": {
+                "title": "शीर्षक",
+                "description": "विवरण",
+                "location": "स्थान",
+                "photo": "फोटो साक्ष्य"
+            },
+            "placeholders": {
+                "title": "मामले के लिए संक्षिप्त शीर्षक...",
+                "description": "स्थिति का विस्तार से वर्णन करें...",
+                "location": "यह कहाँ हुआ?"
+            },
+            "buttons": {
+                "camera": "फोटो लें",
+                "gallery": "गैलरी",
+                "submit": "रिपोर्ट सबमिट करें"
+            },
+            "alerts": {
+                "type_required": "कृपया मामले का प्रकार चुनें।",
+                "title_required": "कृपया रिपोर्ट के लिए एक शीर्षक दर्ज करें।",
+                "success": "आपकी मामले की रिपोर्ट पोस्ट कर दी गई है। समुदाय प्रतिक्रिया देगा!",
+                "error": "रिपोर्ट सबमिट करने में विफल। कृपया पुन: प्रयास करें।"
+            }
+        },
+        "map": {
+            "help": "मदद के लिए टैप करें"
+        },
+        "labels": {
+            "breed": "अनुमानित नस्ल",
+            "color": "कुत्ते का रंग",
+            "custom_breed": "नस्ल का नाम टाइप करें..."
+        }
+    },
+    "lost_found": {
+        "title": "खोया और पाया",
+        "i_found": "मुझे एक कुत्ता मिला",
+        "i_lost": "मेरा कुत्ता खो गया है",
+        "labels": {
+            "description": "अतिरिक्त विवरण",
+            "upload": "फोटो लें / इमेज चुनें",
+            "matching": "पहचान मिलाई जा रही है...",
+            "submit": "मामला सबमिट करें"
+        },
+        "colors": {
+            "merle": "Merle (चित्तीदार धब्बे)",
+            "brindle": "Brindle (बाघ जैसी धारियां)"
+        },
+        "alerts": {
+            "camera_perm": "फोटो लेने के लिए कैमरा अनुमति की आवश्यकता है।",
+            "photo_first": "कृपया पहले फोटो लें/चुनें।",
+            "matches_found": "हमें {{count}} संभावित मिलान मिले!",
+            "matches_none": "अभी तक कोई प्रत्यक्ष बायोमेट्रिक मिलान नहीं मिला।",
+            "success_matches": "संभावित मिलान मिले!",
+            "success_matches_desc": "कृपया अपने क्षेत्र में मेल खाने वाले कुत्तों की समीक्षा करें।",
+            "success_report": "रिपोर्ट प्रकाशित",
+            "success_report_desc": "आपकी रिपोर्ट अब समुदाय के लिए दृश्यमान है।",
+            "error_process": "कुत्ते की पहचान संसाधित नहीं की जा सकी।"
+        }
+    },
+    "health": {
+        "title": "स्वास्थ्य रिकॉर्ड जोड़ें",
+        "labels": {
+            "type": "रिकॉर्ड प्रकार",
+            "date": "दिनांक (YYYY-MM-DD)",
+            "due_date": "अगली देय तिथि (वैकल्पिक)",
+            "notes": "नोट्स",
+            "placeholder_notes": "डॉक्टर के नोट्स, क्लिनिक का नाम, आदि।"
+        },
+        "types": {
+            "vaccination": "टीकाकरण",
+            "deworming": "डीवर्मिंग",
+            "grooming": "ग्रूमिंग",
+            "checkup": "चेकअप"
+        },
+        "alerts": {
+            "success": "स्वास्थ्य रिकॉर्ड जोड़ा गया!",
+            "error": "स्वास्थ्य रिकॉर्ड जोड़ने में विफल",
+            "date_required": "दिनांक आवश्यक है"
+        },
+        "reminder": "स्वास्थ्य अनुस्मारक: {{name}}",
+        "reminder_body": "आगामी {{type}} तिथि: {{date}}"
+    },
+    "dog_registration": {
+        "title": "नया कुत्ता पंजीकृत करें",
+        "section_info": "कुत्ते की जानकारी",
+        "section_id": "पहचान (3 आवश्यक फोटो)",
+        "labels": {
+            "name": "कुत्ते का नाम",
+            "age": "उम्र (वर्ष)",
+            "breed": "नस्ल",
+            "color": "रंग",
+            "size": "आकार",
+            "gender": "लिंग",
+            "nose_print": "1. नाक का निशान",
+            "body_photo": "2. पूरे शरीर का फोटो",
+            "birth_marks": "3. जन्म के निशान / विशिष्ट विशेषताएं"
+        },
+        "sizes": {
+            "small": "छोटा",
+            "medium": "मध्यम",
+            "large": "बड़ा",
+            "giant": "विशाल"
+        },
+        "genders": {
+            "male": "नर",
+            "female": "मदा"
+        },
+        "camera": {
+            "align_nose": "नाक का निशान संरेखित करें",
+            "capture_body": "पूरे शरीर को कैप्चर करें",
+            "capture_marks": "जन्म का निशान कैप्चर करें"
+        },
+        "alerts": {
+            "missing_photos": "कृपया सभी 3 आवश्यक फोटो प्रदान करें: नाक का निशान, पूरा शरीर और जन्म का निशान।",
+            "success": "कुत्ता {{name}} सफलतापूर्वक पंजीकृत किया गया!",
+            "error": "कुत्ते को पंजीकृत नहीं किया जा सका"
+        },
+        "my_dogs": "मेरे पंजीकृत कुत्ते"
+    },
+    "wellness": {
+        "title": "तंदुरुस्ती हब",
+        "weight_growth": "वजन वृद्धि (किग्रा)",
+        "weight_advice": "आपका कुत्ता {{start}} से {{amount}} किग्रा वजन बढ़ा चुका है। स्वस्थ विकास!",
+        "active_vaccinations": "सक्रिय टीकाकरण",
+        "upcoming_vets": "आगामी पशु चिकित्सक",
+        "track_wellness": "तंदुरुस्ती को ट्रैक करें",
+        "sections": {
+            "vaccination_title": "टीकाकरण रिकॉर्ड",
+            "vaccination_desc": "अपने पालतू जानवर के बूस्टर और शॉट्स प्रबंधित करें",
+            "diet_title": "आहार और पोषण",
+            "diet_desc": "भोजन लॉग करें और कैलोरी सेवन ट्रैक करें",
+            "vet_notes_title": "डिजिटल वेट नोट्स",
+            "vet_notes_desc": "नुस्खे और रिपोर्ट स्टोर करें"
+        },
+        "pro_tip": "प्रो टिप",
+        "pro_tip_text": "नियमित चेकअप आपके कुत्ते के जीवन को 2 साल तक बढ़ा सकता है!"
+    },
+    "onboarding": {
+        "skip": "Skip",
+        "next": "CONTINUE",
+        "start": "GET STARTED",
+        "slides": [
+            {
+                "title": "Welcome to Lovedogs 360",
+                "description": "The ultimate companion app for your dog's life. Swipe to learn how to navigate the platform."
+            },
+            {
+                "title": "🐾 Wellness Hub",
+                "description": "Keep track of vaccinations, weight growth, and vet notes. Manage your dog's digital health passport here."
+            },
+            {
+                "title": "🛒 Marketplace",
+                "description": "Buy and sell dog gear, or book professional grooming and training services right in your neighborhood."
+            },
+            {
+                "title": "📍 Cases & Map",
+                "description": "Report lost, found, injured stray, abuse, vehicle hit, rabies bite and keep the community alert."
+            },
+            {
+                "title": "💬 Community Hub",
+                "description": "Local and global chats and polls to build your digital pack and stay connected."
+            },
+            {
+                "title": "📅 Events",
+                "description": "Find Dog networking events and programs to keep your furry friend socialized."
+            }
+        ]
+    },
+    "admin": {
+        "title": "एडमिन डैशबोर्ड",
+        "subtitle": "Lovedogs 360 प्रबंधन",
+        "tabs": {
+            "overview": "अवलोकन",
+            "users": "उपयोगकर्ता",
+            "services": "सेवाएं",
+            "orders": "ऑर्डर",
+            "export": "निर्यात"
+        },
+        "stats": {
+            "total_users": "कुल उपयोगकर्ता",
+            "services": "सेवाएं",
+            "orders": "ऑर्डर",
+            "events": "ईवेंट",
+            "revenue": "कुल राजस्व",
+            "commission": "कमीशन"
+        },
+        "overview": {
+            "title": "डैशबोर्ड अवलोकन"
+        },
+        "users": {
+            "title": "सभी उपयोगकर्ता ({{count}})",
+            "empty": "कोई उपयोगकर्ता नहीं मिला"
+        },
+        "services": {
+            "title": "सभी सेवाएं ({{count}})",
+            "add_new": "नई सेवा जोड़ें",
+            "empty": "अभी तक कोई सेवा नहीं",
+            "by": "{{name}} द्वारा",
+            "published": "प्रकाशित",
+            "draft": "ड्राफ्ट"
+        },
+        "orders": {
+            "title": "सभी ऑर्डर ({{count}})",
+            "empty": "अभी तक कोई ऑर्डर नहीं",
+            "buyer": "खरीदार: {{name}}",
+            "amount": "राशि",
+            "commission": "कमीशन",
+            "payout": "भुगतान"
+        },
+        "export": {
+            "title": "डेटा निर्यात",
+            "desc": "रिपोर्टिंग और विश्लेषण के लिए डेटा को एक्सेल स्प्रेडशीट के रूप में डाउनलोड करें।",
+            "registrations_title": "पंजीकरण निर्यात करें",
+            "registrations_sub": "सभी ईवेंट पंजीकरण (.xlsx)",
+            "events_title": "ईवेंट निर्यात करें",
+            "events_sub": "सभी ईवेंट डेटा (.xlsx)"
+        },
+        "actions": {
+            "delete_service_title": "सेवा हटाएं",
+            "delete_service_confirm": "क्या आप वाकई \"{{title}}\" को हटाना चाहते हैं?",
+            "deleted_title": "हटा दिया गया",
+            "deleted_desc": "सेवा हटा दी गई।",
+            "error_delete": "सेवा को नहीं हटाया जा सका।",
+            "error_load": "डेटा लोड करने में विफल",
+            "error_export": "निर्यात विफल रहा।",
+            "error_download": "डाउनलोड विफल रहा। अनुमतियां जांचें।",
+            "logout_title": "लॉगआउट",
+            "logout_confirm": "क्या आप वाकई में चाहते हैं?"
+        }
+    },
+    "payouts": {
+        "title": "वित्तीय पारदर्शिता और कमाई",
+        "empty": "अभी तक लेनदेन का कोई रिकॉर्ड नहीं है।",
+        "labels": {
+            "gross": "कुल राशि",
+            "commission": "कमीशन (20%)",
+            "net": "शुद्ध भुगतान",
+            "status": "स्थिति",
+            "processed": "{{date}} को संसाधित"
+        }
+    },
+    "navigation": {
+        "home": "होम",
+        "marketplace": "मार्केटप्लेस",
+        "events": "ईवेंट",
+        "report": "रिपोर्ट",
+        "payouts": "भुगतान",
+        "profile": "प्रोफ़ाइल"
+    },
+    "community_hub": {
+        "title": "Community Hub",
+        "global_chat": "Global Chat",
+        "nearby": "Nearby",
+        "active_now": "Active Now",
+        "post_global": "Post to Global...",
+        "post_nearby": "Post to Nearby...",
+        "ask_question": "Ask a question...",
+        "create_poll": "Create a Poll",
+        "add_option": "+ Add Option",
+        "votes": "votes",
+        "reported": "Reported",
+        "reported_msg": "Thank you. This message has been flagged for review.",
+        "warning": "Warning",
+        "poll_min_options": "Poll must have at least 2 options",
+        "send_error": "Could not send message.",
+        "pts": "pts"
+    },
+    "profile_screen": {
+        "account_dashboard": "Account Dashboard",
+        "log_out": "Log Out",
+        "dogs_stat": "Dogs",
+        "activities_stat": "Activities",
+        "deals_stat": "Deals",
+        "rate_experience": "Rate Experience",
+        "based_on": "Based on {{count}} completions",
+        "my_pets": "My Registered Pets",
+        "register_pet": "Register a Pet",
+        "register_pet_desc": "Tap here to visit Wellness Hub and add your first pet!",
+        "register_another": "Register Another Pet",
+        "personal_info": "Personal Information",
+        "update": "Update",
+        "whatsapp_phone": "WhatsApp / Phone",
+        "biography": "Biography",
+        "no_bio": "No professional biography set.",
+        "digital_wallet": "Digital Wallet & Payouts",
+        "available_balance": "Available Balance",
+        "active_payout": "Active Payout Method",
+        "not_configured": "Not Configured",
+        "configured": "Configured",
+        "setup": "Setup",
+        "edit": "Edit",
+        "help_support": "Help & Support",
+        "contact_support": "Contact Support",
+        "language": "Language",
+        "update_profile": "Update Profile",
+        "full_name": "Full Name",
+        "region": "Region",
+        "preferred_language": "Preferred Language",
+        "professional_bio": "Professional Biography",
+        "tell_us": "Tell us about yourself...",
+        "back": "Back",
+        "apply_changes": "Apply Changes",
+        "payout_config": "Payout Configuration",
+        "mpesa_phone": "M-Pesa Phone Number",
+        "card_number": "Card Number",
+        "expiry": "Expiry (MM/YY)",
+        "secure_cvv": "Secure CVV",
+        "pci_compliant": "PCI-DSS Compliant Secure Entry",
+        "apply_payout": "Apply Payout Info",
+        "discard": "Discard",
+        "save_updates": "Save Profile Updates",
+        "success_msg": "Profile updated successfully!",
+        "error_msg": "Failed to update profile."
+    }
+}

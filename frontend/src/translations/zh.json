@@ -1,0 +1,541 @@
+{
+    "common": {
+        "language": "语言",
+        "english": "英语",
+        "swahili": "斯瓦希里语",
+        "logout": "注销",
+        "cancel": "取消",
+        "save": "保存",
+        "search": "搜索",
+        "loading": "加载中...",
+        "saving": "保存中...",
+        "updating": "更新中...",
+        "creating": "创建中...",
+        "error": "错误",
+        "success": "成功",
+        "ok": "确定",
+        "permission_denied": "权限被拒绝",
+        "location_req": "请开启位置权限以使用此功能。",
+        "location_fail": "获取当前位置失败",
+        "camera_req": "拍照需要相机权限。",
+        "camera_perm": "权限要求",
+        "back": "返回",
+        "continue": "继续"
+    },
+    "home": {
+        "greeting": "你好, {{name}}!",
+        "sub_greeting": "今天你的伙伴怎么样？",
+        "my_dogs": "我的狗狗",
+        "local_alerts": "本地警报",
+        "health_wellness": "健康与养生",
+        "health_status": "一切看起来都很棒！这周没有即将进行的疫苗接种。",
+        "view_records": "查看记录",
+        "quick_actions": "快速操作",
+        "marketplace": "市场",
+        "shop_book": "商店与预订",
+        "lost_found": "失物招领",
+        "scan_report": "扫描或报告",
+        "identity": "身份",
+        "biometric_scan": "生物特征扫描",
+        "my_events": "我的活动",
+        "dog_meetups": "狗狗聚会",
+        "community_spotlight": "社区焦点",
+        "see_all": "查看全部",
+        "community_walk": "本周日社区漫步！",
+        "community_walk_desc": "在中央公园加入其他养狗人士，进行社交漫步。",
+        "attending": "{{count}} 人参加"
+    },
+    "login": {
+        "tagline": "你狗狗的最佳平台",
+        "email": "电子邮箱",
+        "password": "密码",
+        "login": "登录",
+        "no_account": "还没有账号？ ",
+        "register": "立即注册",
+        "skip": "暂时跳过 →",
+        "google_signin": "Google登录",
+        "or": "或"
+    },
+    "profile": {
+        "title": "我的资料",
+        "edit_profile": "编辑资料",
+        "full_name": "全名",
+        "phone_number": "电话号码",
+        "bio": "简介",
+        "add_dog": "添加狗狗",
+        "no_dogs": "尚未添加狗狗。"
+    },
+    "register": {
+        "title": "创建账户",
+        "subtitle": "加入关爱狗狗的社区",
+        "full_name_label": "全名",
+        "full_name_placeholder": "输入你的全名",
+        "email_label": "电子邮箱地址",
+        "email_placeholder": "输入你的电子邮箱",
+        "phone_label": "电话号码",
+        "phone_placeholder": "输入你的电话号码",
+        "bio_label": "简短简介（可选）",
+        "bio_placeholder": "告诉我们关于你的事情...",
+        "password_label": "密码",
+        "password_placeholder": "创建密码",
+        "join_as": "我想加入身份为：",
+        "pet_owner": "宠物主人",
+        "professional": "专业人士",
+        "pro_note": "* 专业人士也可以购买服务和产品。",
+        "list_note": "* 注册后你将可以列出服务。",
+        "register": "注册",
+        "already_account": "已经有账号了？ ",
+        "login": "登录",
+        "phone_description": "此电话号码将用于接收付款（例如：M-Pesa）",
+        "language_label": "首选语言",
+        "location_compulsory": "市场、位置提醒和安全功能需要位置访问权限。",
+        "location_denied_error": "你必须允许位置访问才能完成注册。",
+        "location_title": "开启智能市场",
+        "location_benefit": "需要开启本地买卖、安全报告和位置警报。",
+        "country_code": "国家/地区代码",
+        "step1_title": "身份与安全",
+        "step2_title": "全球个人资料",
+        "step3_title": "访问与角色",
+        "next_step": "下一步",
+        "secure_access": "安全市场访问",
+        "location_success": "位置信息已成功注册。",
+        "allow_location": "允许访问位置"
+    },
+    "marketplace": {
+        "title": "市场",
+        "search_placeholder": "搜索 {{type}}...",
+        "services": "服务",
+        "products": "产品",
+        "book_service": "预订服务",
+        "buy_now": "立即购买",
+        "price": "价格",
+        "no_listings": "该分类下未找到列表。",
+        "category": "分类",
+        "location": "位置",
+        "all_categories": "全部",
+        "distance_away": "公里外",
+        "orders": {
+            "summary": "订单摘要",
+            "success": "付款成功！",
+            "id": "订单号 #",
+            "item_price": "商品价格",
+            "fee": "平台费用 (20%)",
+            "total": "总实付",
+            "download": "下载 PDF 收据",
+            "downloading": "下载中...",
+            "rating_title": "你的体验如何？",
+            "rating_subtitle": "评价服务提供商及其服务",
+            "submit_rating": "提交评价",
+            "thanks": "反馈已提交！谢谢。",
+            "error_download": "无法下载收据。请重试。",
+            "error_download_failed": "下载失败",
+            "error_star": "请选择星级评分",
+            "error_rating": "提交评价失败",
+            "success_rating": "感谢你的反馈！"
+        },
+        "tabs": {
+            "services": "服务",
+            "products": "产品"
+        },
+        "categories": {
+            "all": "全部",
+            "health": "健康",
+            "therapy": "疗法",
+            "training": "训练",
+            "grooming": "美容",
+            "boarding": "寄养",
+            "events": "活动",
+            "safety": "安全",
+            "food": "食品",
+            "equipment": "器材",
+            "toys": "玩具",
+            "travel": "旅行",
+            "gear": "装备"
+        },
+        "actions": {
+            "buy_now": "立即购买",
+            "book_now": "立即预订",
+            "add": "添加"
+        },
+        "empty": {
+            "title": "未找到 {{type}}",
+            "subtitle": "尝试调整搜索或过滤器"
+        },
+        "featured": "所有 {{type}}",
+        "featured_cat": "{{category}} {{type}}",
+        "results": "找到 {{count}} 条结果",
+        "create": {
+            "title_new": "列出新商品",
+            "title_edit": "编辑列表",
+            "question": "你要列出什么？",
+            "services": "服务",
+            "products": "产品",
+            "cover_image": "封面图片",
+            "upload_photo": "上传照片",
+            "listing_price": "列表价格：${{price}}（包含 20% 平台费）",
+            "location": "服务位置",
+            "get_location": "使用当前位置",
+            "update_location": "更新我的位置",
+            "fetching": "正在获取位置...",
+            "error_update": "更新项目失败",
+            "error_create": "创建项目失败",
+            "publish": "发布列表",
+            "publish_subtitle": "使买家可见",
+            "price_label": "你的价格 ($)",
+            "success_create": "{{type}} 发布成功！",
+            "success_update": "列表更新成功！",
+            "error_fill": "请填写所有字段"
+        }
+    },
+    "events": {
+        "title": "即将举行的活动",
+        "badge": "活动",
+        "my_registrations": "我的报名",
+        "save": "Save",
+        "saved": "Saved",
+        "unsave": "Unsave",
+        "saved_events": "Saved Events",
+        "form_builder": "Form Builder",
+        "add_field": "Add Field",
+        "share_phone": "Share Phone Number",
+        "registration_form": "Registration Form",
+        "view_responses": "View Responses",
+        "no_saved_events": "No saved events"
+    },
+    "report": {
+        "title": "案例",
+        "subtitle": "报告并响应狗狗案例",
+        "toggles": {
+            "list": "列表",
+            "map": "地图"
+        },
+        "types": {
+            "rabies_bite": "狂犬病咬伤",
+            "vehicle_hit": "车辆撞击",
+            "injured_stray": "受伤流浪狗",
+            "found_dog": "发现狗狗",
+            "lost_dog": "丢失狗狗",
+            "abuse": "虐待报告",
+            "other": "其他"
+        },
+        "empty": {
+            "title": "尚无案例报告",
+            "subtitle": "成为第一个报告你区域内狗狗案例的人"
+        },
+        "form": {
+            "title": "报告案例",
+            "question": "发生了什么？",
+            "labels": {
+                "title": "标题",
+                "description": "描述",
+                "location": "位置",
+                "photo": "照片证据"
+            },
+            "placeholders": {
+                "title": "案例简短标题...",
+                "description": "详细描述情况...",
+                "location": "这发生在什么地方？"
+            },
+            "buttons": {
+                "camera": "拍照",
+                "gallery": "相册",
+                "submit": "提交报告"
+            },
+            "alerts": {
+                "type_required": "请选择案例类型。",
+                "title_required": "请输入报告标题。",
+                "success": "你的案例报告已发布。社区将会响应！",
+                "error": "提交报告失败。请重试。"
+            }
+        },
+        "map": {
+            "help": "点击以提供帮助"
+        },
+        "labels": {
+            "breed": "预估品种",
+            "color": "狗狗颜色",
+            "custom_breed": "输入品种名称..."
+        }
+    },
+    "lost_found": {
+        "title": "失物招领",
+        "i_found": "我发现了一只狗",
+        "i_lost": "我丢失了一只狗",
+        "labels": {
+            "description": "其他细节",
+            "upload": "拍照 / 选择图片",
+            "matching": "匹配身份中...",
+            "submit": "提交案例"
+        },
+        "colors": {
+            "merle": "陨石色 (大理石纹)",
+            "brindle": "虎斑色 (虎纹)"
+        },
+        "alerts": {
+            "camera_perm": "拍照需要相机权限。",
+            "photo_first": "请先拍照或选择照片。",
+            "matches_found": "我们找到了 {{count}} 个潜在匹配项！",
+            "matches_none": "尚未找到直接的生物特征匹配项。",
+            "success_matches": "找到潜在匹配项！",
+            "success_matches_desc": "请查看你区域内的匹配狗狗。",
+            "success_report": "报告已发布",
+            "success_report_desc": "你的报告现在对社区可见。",
+            "error_process": "无法处理狗狗身份。"
+        }
+    },
+    "health": {
+        "title": "添加健康记录",
+        "labels": {
+            "type": "记录类型",
+            "date": "日期 (YYYY-MM-DD)",
+            "due_date": "下次到期日期 (可选)",
+            "notes": "备注",
+            "placeholder_notes": "医生备注、诊所名称等"
+        },
+        "types": {
+            "vaccination": "疫苗接种",
+            "deworming": "驱虫",
+            "grooming": "美容",
+            "checkup": "检查"
+        },
+        "alerts": {
+            "success": "健康记录已添加！",
+            "error": "添加健康记录失败",
+            "date_required": "日期是必填项"
+        },
+        "reminder": "健康提醒：{{name}}",
+        "reminder_body": "即将到期的 {{type}}，日期：{{date}}"
+    },
+    "dog_registration": {
+        "title": "注册新狗狗",
+        "section_info": "狗狗信息",
+        "section_id": "身份识别 (需要3张照片)",
+        "labels": {
+            "name": "狗狗名字",
+            "age": "年龄 (岁)",
+            "breed": "品种",
+            "color": "颜色",
+            "size": "体型",
+            "gender": "性别",
+            "nose_print": "1. 鼻纹",
+            "body_photo": "2. 全身照片",
+            "birth_marks": "3. 胎记 / 独特特征"
+        },
+        "sizes": {
+            "small": "小型",
+            "medium": "中型",
+            "large": "大型",
+            "giant": "超大型"
+        },
+        "genders": {
+            "male": "公",
+            "female": "母"
+        },
+        "camera": {
+            "align_nose": "对准鼻纹",
+            "capture_body": "拍摄全身",
+            "capture_marks": "拍摄胎记"
+        },
+        "alerts": {
+            "missing_photos": "请提供所有3张要求的照片：鼻纹、全身、胎记。",
+            "success": "狗狗 {{name}} 注册成功！",
+            "error": "无法注册狗狗"
+        },
+        "my_dogs": "我注册的狗狗"
+    },
+    "wellness": {
+        "title": "健康中心",
+        "weight_growth": "体重增长 (kg)",
+        "weight_advice": "自 {{start}} 以来，你的狗狗增长了 {{amount}}kg。健康的增长！",
+        "active_vaccinations": "有效疫苗",
+        "upcoming_vets": "即将进行的兽医检查",
+        "track_wellness": "追踪健康",
+        "sections": {
+            "vaccination_title": "疫苗接种记录",
+            "vaccination_desc": "管理宠物的加强针和疫苗",
+            "diet_title": "饮食与营养",
+            "diet_desc": "记录饮食并追踪卡路里摄入",
+            "vet_notes_title": "数字兽医笔记",
+            "vet_notes_desc": "存储处方和报告"
+        },
+        "pro_tip": "小贴士",
+        "pro_tip_text": "定期检查可以延长你狗狗长达2年的寿命！"
+    },
+    "onboarding": {
+        "skip": "Skip",
+        "next": "CONTINUE",
+        "start": "GET STARTED",
+        "slides": [
+            {
+                "title": "Welcome to Lovedogs 360",
+                "description": "The ultimate companion app for your dog's life. Swipe to learn how to navigate the platform."
+            },
+            {
+                "title": "🐾 Wellness Hub",
+                "description": "Keep track of vaccinations, weight growth, and vet notes. Manage your dog's digital health passport here."
+            },
+            {
+                "title": "🛒 Marketplace",
+                "description": "Buy and sell dog gear, or book professional grooming and training services right in your neighborhood."
+            },
+            {
+                "title": "📍 Cases & Map",
+                "description": "Report lost, found, injured stray, abuse, vehicle hit, rabies bite and keep the community alert."
+            },
+            {
+                "title": "💬 Community Hub",
+                "description": "Local and global chats and polls to build your digital pack and stay connected."
+            },
+            {
+                "title": "📅 Events",
+                "description": "Find Dog networking events and programs to keep your furry friend socialized."
+            }
+        ]
+    },
+    "admin": {
+        "title": "管理后台",
+        "subtitle": "Lovedogs 360 管理",
+        "tabs": {
+            "overview": "概览",
+            "users": "用户",
+            "services": "服务",
+            "orders": "订单",
+            "export": "导出"
+        },
+        "stats": {
+            "total_users": "总用户数",
+            "services": "服务数",
+            "orders": "订单数",
+            "events": "活动数",
+            "revenue": "总收入",
+            "commission": "佣金"
+        },
+        "overview": {
+            "title": "仪表板概览"
+        },
+        "users": {
+            "title": "所有用户 ({{count}})",
+            "empty": "未找到用户"
+        },
+        "services": {
+            "title": "所有服务 ({{count}})",
+            "add_new": "添加新服务",
+            "empty": "尚无服务",
+            "by": "由 {{name}} 发布",
+            "published": "已发布",
+            "draft": "草稿"
+        },
+        "orders": {
+            "title": "所有订单 ({{count}})",
+            "empty": "尚无订单",
+            "buyer": "买家: {{name}}",
+            "amount": "金额",
+            "commission": "佣金",
+            "payout": "实付"
+        },
+        "export": {
+            "title": "数据导出",
+            "desc": "将数据下载为 Excel 表格，用于报告和分析。",
+            "registrations_title": "导出报名信息",
+            "registrations_sub": "所有活动报名数据 (.xlsx)",
+            "events_title": "导出活动",
+            "events_sub": "所有活动数据 (.xlsx)"
+        },
+        "actions": {
+            "delete_service_title": "删除服务",
+            "delete_service_confirm": "确定要删除 \"{{title}}\" 吗？",
+            "deleted_title": "已删除",
+            "deleted_desc": "服务已移除。",
+            "error_delete": "无法删除服务。",
+            "error_load": "加载数据失败",
+            "error_export": "导出失败。",
+            "error_download": "下载失败。请检查权限。",
+            "logout_title": "注销",
+            "logout_confirm": "确定要注销吗？"
+        }
+    },
+    "payouts": {
+        "title": "财务透明与收益",
+        "empty": "尚无交易记录。",
+        "labels": {
+            "gross": "总金额",
+            "commission": "佣金 (20%)",
+            "net": "实收金额",
+            "status": "状态",
+            "processed": "处理日期 {{date}}"
+        }
+    },
+    "navigation": {
+        "home": "首页",
+        "marketplace": "市场",
+        "events": "活动",
+        "report": "报告",
+        "payouts": "收益",
+        "profile": "我的"
+    },
+    "community_hub": {
+        "title": "Community Hub",
+        "global_chat": "Global Chat",
+        "nearby": "Nearby",
+        "active_now": "Active Now",
+        "post_global": "Post to Global...",
+        "post_nearby": "Post to Nearby...",
+        "ask_question": "Ask a question...",
+        "create_poll": "Create a Poll",
+        "add_option": "+ Add Option",
+        "votes": "votes",
+        "reported": "Reported",
+        "reported_msg": "Thank you. This message has been flagged for review.",
+        "warning": "Warning",
+        "poll_min_options": "Poll must have at least 2 options",
+        "send_error": "Could not send message.",
+        "pts": "pts"
+    },
+    "profile_screen": {
+        "account_dashboard": "Account Dashboard",
+        "log_out": "Log Out",
+        "dogs_stat": "Dogs",
+        "activities_stat": "Activities",
+        "deals_stat": "Deals",
+        "rate_experience": "Rate Experience",
+        "based_on": "Based on {{count}} completions",
+        "my_pets": "My Registered Pets",
+        "register_pet": "Register a Pet",
+        "register_pet_desc": "Tap here to visit Wellness Hub and add your first pet!",
+        "register_another": "Register Another Pet",
+        "personal_info": "Personal Information",
+        "update": "Update",
+        "whatsapp_phone": "WhatsApp / Phone",
+        "biography": "Biography",
+        "no_bio": "No professional biography set.",
+        "digital_wallet": "Digital Wallet & Payouts",
+        "available_balance": "Available Balance",
+        "active_payout": "Active Payout Method",
+        "not_configured": "Not Configured",
+        "configured": "Configured",
+        "setup": "Setup",
+        "edit": "Edit",
+        "help_support": "Help & Support",
+        "contact_support": "Contact Support",
+        "language": "Language",
+        "update_profile": "Update Profile",
+        "full_name": "Full Name",
+        "region": "Region",
+        "preferred_language": "Preferred Language",
+        "professional_bio": "Professional Biography",
+        "tell_us": "Tell us about yourself...",
+        "back": "Back",
+        "apply_changes": "Apply Changes",
+        "payout_config": "Payout Configuration",
+        "mpesa_phone": "M-Pesa Phone Number",
+        "card_number": "Card Number",
+        "expiry": "Expiry (MM/YY)",
+        "secure_cvv": "Secure CVV",
+        "pci_compliant": "PCI-DSS Compliant Secure Entry",
+        "apply_payout": "Apply Payout Info",
+        "discard": "Discard",
+        "save_updates": "Save Profile Updates",
+        "success_msg": "Profile updated successfully!",
+        "error_msg": "Failed to update profile."
+    }
+}

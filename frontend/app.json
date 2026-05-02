@@ -1,0 +1,67 @@
+{
+  "expo": {
+    "name": "lovedogs360",
+    "slug": "lovedogs360",
+    "scheme": "lovedogs360",
+    "version": "1.0.1",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#4B0082"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.lovedogs360.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Lovedogs 360 needs camera access to capture dog photos, nose prints, and profile images.",
+        "NSPhotoLibraryUsageDescription": "Lovedogs 360 needs photo library access to upload images for profiles, services, and case reports.",
+        "NSLocationWhenInUseUsageDescription": "Lovedogs 360 uses your location to find nearby services, events, and to help locate lost dogs."
+      }
+    },
+    "android": {
+      "package": "com.lovedogs360.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#4B0082"
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "REPLACE_WITH_YOUR_GOOGLE_MAPS_API_KEY"
+        }
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundleIdentifier": "com.lovedogs360.app",
+      "name": "Lovedogs 360"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-web-browser",
+      "expo-camera",
+      "expo-location",
+      "expo-image-picker",
+      "expo-notifications"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ab1053cf-6634-487e-9fd5-1271e9b41cb6"
+      }
+    },
+    "owner": "eliudachero"
+  }
+}

@@ -1,0 +1,541 @@
+{
+    "common": {
+        "language": "اللغة",
+        "english": "الإنجليزية",
+        "swahili": "السواحلية",
+        "logout": "تسجيل الخروج",
+        "cancel": "إلغاء",
+        "save": "حفظ",
+        "search": "بحث",
+        "loading": "جاري التحميل...",
+        "saving": "جاري الحفظ...",
+        "updating": "جاري التحديث...",
+        "creating": "جاري الإنشاء...",
+        "error": "خطأ",
+        "success": "نجاح",
+        "ok": "موافق",
+        "permission_denied": "تم رفض الإذن",
+        "location_req": "يرجى تفعيل أذونات الموقع لاستخدام هذه الميزة.",
+        "location_fail": "فشل الحصول على الموقع الحالي",
+        "camera_req": "إذن الكاميرا مطلوب لالتقاط الصور.",
+        "camera_perm": "إذن مطلوب",
+        "back": "رجوع",
+        "continue": "استمرار"
+    },
+    "home": {
+        "greeting": "مرحباً، {{name}}!",
+        "sub_greeting": "كيف حال رفيقك اليوم؟",
+        "my_dogs": "كلابي",
+        "local_alerts": "تنبيهات محلية",
+        "health_wellness": "الصحة والعافية",
+        "health_status": "كل شيء يبدو رائعاً! لا توجد تطعيمات قادمة هذا الأسبوع.",
+        "view_records": "عرض السجلات",
+        "quick_actions": "إجراءات سريعة",
+        "marketplace": "المتجر",
+        "shop_book": "تسوق واحجز",
+        "lost_found": "مفقود وموجود",
+        "scan_report": "مسح أو إبلاغ",
+        "identity": "الهوية",
+        "biometric_scan": "مسح حيوي",
+        "my_events": "فعالياتي",
+        "dog_meetups": "لقاءات الكلاب",
+        "community_spotlight": "أضواء المجتمع",
+        "see_all": "عرض الكل",
+        "community_walk": "مسيرة مجتمعية هذا الأحد!",
+        "community_walk_desc": "انضم إلى مربي الكلاب الآخرين في سنترال بارك في مسيرة اجتماعية.",
+        "attending": "{{count}} سيحضرون"
+    },
+    "login": {
+        "tagline": "أفضل منصة لكلبك",
+        "email": "البريد الإلكتروني",
+        "password": "كلمة المرور",
+        "login": "تسجيل الدخول",
+        "no_account": "ليس لديك حساب؟ ",
+        "register": "سجل الآن",
+        "skip": "تخطي الآن ←",
+        "google_signin": "Google Signin",
+        "or": "أو"
+    },
+    "profile": {
+        "title": "ملفي الشخصي",
+        "edit_profile": "تعديل الملف",
+        "full_name": "الاسم الكامل",
+        "phone_number": "رقم الهاتف",
+        "bio": "نبذة شخصية",
+        "add_dog": "إضافة كلب",
+        "no_dogs": "لم يتم إضافة كلاب بعد."
+    },
+    "register": {
+        "title": "إنشاء حساب",
+        "subtitle": "انضم إلى المجتمع الذي يهتم",
+        "full_name_label": "الاسم الكامل",
+        "full_name_placeholder": "أدخل اسمك الكامل",
+        "email_label": "البريد الإلكتروني",
+        "email_placeholder": "أدخل بريدك الإلكتروني",
+        "phone_label": "رقم الهاتف",
+        "phone_placeholder": "أدخل رقم هاتفك",
+        "bio_label": "نبذة مختصرة (اختياري)",
+        "bio_placeholder": "أخبرنا عن نفسك...",
+        "password_label": "كلمة المرور",
+        "password_placeholder": "أنشئ كلمة مرور",
+        "join_as": "أريد الانضمام بصفة:",
+        "pet_owner": "صاحب حيوان أليف",
+        "professional": "محترف",
+        "pro_note": "* يمكن للمحترفين أيضاً شراء الخدمات والمنتجات.",
+        "list_note": "* ستتمكن من إدراج خدماتك بعد التسجيل.",
+        "register": "تسجيل",
+        "already_account": "لديك حساب بالفعل؟ ",
+        "login": "تسجيل الدخول",
+        "phone_description": "سيتم استخدام رقم الهاتف هذا لتلقي المدفوعات (مثل M-Pesa)",
+        "language_label": "اللغة المفضلة",
+        "location_compulsory": "الوصول إلى الموقع مطلوب للمتجر، وتنبيهات القرب، وميزات السلامة.",
+        "location_denied_error": "يجب السماح بالوصول إلى الموقع لإكمال التسجيل.",
+        "location_title": "تفعيل المتجر الذكي",
+        "location_benefit": "مطلوب لتمكين البيع/الشراء المحلي، وتقارير السلامة، وتنبيهات القرب.",
+        "country_code": "رمز الدولة",
+        "step1_title": "الهوية والأمان",
+        "step2_title": "الملف العالمي",
+        "step3_title": "الوصول والدور",
+        "next_step": "الخطوة التالية",
+        "secure_access": "وصول آمن للمتجر",
+        "location_success": "تم تسجيل موقعك بنجاح.",
+        "allow_location": "السماح بالوصول للموقع"
+    },
+    "marketplace": {
+        "title": "المتجر",
+        "search_placeholder": "بحث عن {{type}}...",
+        "services": "خدمات",
+        "products": "منتجات",
+        "book_service": "حجز خدمة",
+        "buy_now": "اشترِ الآن",
+        "price": "السعر",
+        "no_listings": "لا توجد قوائم في هذه الفئة.",
+        "category": "الفئة",
+        "location": "الموقع",
+        "all_categories": "الكل",
+        "distance_away": "كم بعيداً",
+        "orders": {
+            "summary": "ملخص الطلب",
+            "success": "تم الدفع بنجاح!",
+            "id": "طلب رقم #",
+            "item_price": "سعر المنتج",
+            "fee": "رسوم المنصة (20%)",
+            "total": "الإجمالي المدفوع",
+            "download": "تحميل إيصال PDF",
+            "downloading": "جاري التحميل...",
+            "rating_title": "كيف كانت تجربتك؟",
+            "rating_subtitle": "قيم مقدم الخدمة وخدمته",
+            "submit_rating": "إرسال التقييم",
+            "thanks": "تم إرسال التعليقات! شكراً لك.",
+            "error_download": "تعذر تحميل الإيصال. يرجى المحاولة مرة أخرى.",
+            "error_download_failed": "فشل التحميل",
+            "error_star": "يرجى اختيار تقييم بالنجوم",
+            "error_rating": "فشل إرسال التقييم",
+            "success_rating": "شكراً لتعليقاتك!"
+        },
+        "tabs": {
+            "services": "خدمات",
+            "products": "منتجات"
+        },
+        "categories": {
+            "all": "الكل",
+            "health": "صحة",
+            "therapy": "علاج",
+            "training": "تدريب",
+            "grooming": "نظافة",
+            "boarding": "إيواء",
+            "events": "فعاليات",
+            "safety": "سلامة",
+            "food": "طعام",
+            "equipment": "معدات",
+            "toys": "ألعاب",
+            "travel": "سفر",
+            "gear": "معدات"
+        },
+        "actions": {
+            "buy_now": "اشترِ الآن",
+            "book_now": "احجز الآن",
+            "add": "إضافة"
+        },
+        "empty": {
+            "title": "لم يتم العثور على {{type}}",
+            "subtitle": "حاول تعديل البحث أو التصنيفات"
+        },
+        "featured": "كل {{type}}",
+        "featured_cat": "{{category}} {{type}}",
+        "results": "تم العثور على {{count}} نتائج",
+        "create": {
+            "title_new": "إدراج منتج جديد",
+            "title_edit": "تعديل القائمة",
+            "question": "ماذا ستدرج؟",
+            "services": "خدمات",
+            "products": "منتجات",
+            "cover_image": "صورة الغلاف",
+            "upload_photo": "رفع صورة",
+            "listing_price": "سعر القائمة: ${{price}} (يشمل 20% رسوم المنصة)",
+            "location": "موقع الخدمة",
+            "get_location": "استخدام موقعي الحالي",
+            "update_location": "تحديث موقعي",
+            "fetching": "جاري جلب الموقع...",
+            "error_update": "فشل تحديث المنتج",
+            "error_create": "فشل إنشاء المنتج",
+            "publish": "نشر القائمة",
+            "publish_subtitle": "اجعل هذا مرئياً للمشترين",
+            "price_label": "سعرك ($)",
+            "success_create": "تم نشر {{type}} بنجاح!",
+            "success_update": "تم تحديث القائمة بنجاح!",
+            "error_fill": "يرجى ملء جميع الحقول"
+        }
+    },
+    "events": {
+        "title": "الفعاليات القادمة",
+        "badge": "فعالية",
+        "my_registrations": "تسجيلاتي",
+        "save": "Save",
+        "saved": "Saved",
+        "unsave": "Unsave",
+        "saved_events": "Saved Events",
+        "form_builder": "Form Builder",
+        "add_field": "Add Field",
+        "share_phone": "Share Phone Number",
+        "registration_form": "Registration Form",
+        "view_responses": "View Responses",
+        "no_saved_events": "No saved events"
+    },
+    "report": {
+        "title": "الحالات",
+        "subtitle": "الإبلاغ عن حالات الكلاب والاستجابة لها",
+        "toggles": {
+            "list": "قائمة",
+            "map": "خريطة"
+        },
+        "types": {
+            "rabies_bite": "عضة داء الكلب",
+            "vehicle_hit": "حادث سيارة",
+            "injured_stray": "كلب ضال مصاب",
+            "found_dog": "كلب موجود",
+            "lost_dog": "كلب مفقود",
+            "abuse": "بلاغ إساءة معاملة",
+            "other": "أخرى"
+        },
+        "empty": {
+            "title": "لا يوجد بلاغات بعد",
+            "subtitle": "كن أول من يبلغ عن حالة كلب في منطقتك"
+        },
+        "form": {
+            "title": "إبلاغ عن حالة",
+            "question": "ماذا حدث؟",
+            "labels": {
+                "title": "العنوان",
+                "description": "الوصف",
+                "location": "الموقع",
+                "photo": "دليل مصور"
+            },
+            "placeholders": {
+                "title": "عنوان موجز للحالة...",
+                "description": "صف الموقف بالتفصيل...",
+                "location": "أين حدث هذا؟"
+            },
+            "buttons": {
+                "camera": "التقاط صورة",
+                "gallery": "المعرض",
+                "submit": "إرسال البلاغ"
+            },
+            "alerts": {
+                "type_required": "يرجى اختيار نوع الحالة.",
+                "title_required": "يرجى إدخال عنوان للبلاغ.",
+                "success": "تم نشر بلاغك. سيستجيب المجتمع!",
+                "error": "فشل إرسال البلاغ. يرجى المحاولة مرة أخرى."
+            }
+        },
+        "map": {
+            "help": "اضغط للمساعدة"
+        },
+        "labels": {
+            "breed": "السلالة المقدّرة",
+            "color": "لون الكلب",
+            "custom_breed": "اكتب اسم السلالة..."
+        }
+    },
+    "lost_found": {
+        "title": "مفقود وموجود",
+        "i_found": "وجدت كلباً",
+        "i_lost": "فقدت كلباً",
+        "labels": {
+            "description": "تفاصيل إضافية",
+            "upload": "التقاط صورة / اختيار صورة",
+            "matching": "جاري مطابقة الهوية...",
+            "submit": "إرسال الحالة"
+        },
+        "colors": {
+            "merle": "ميرلي (بقع مرقطة)",
+            "brindle": "بريندل (مخطط مثل النمر)"
+        },
+        "alerts": {
+            "camera_perm": "إذن الكاميرا مطلوب لالتقاط الصور.",
+            "photo_first": "يرجى التقاط/اختيار صورة أولاً.",
+            "matches_found": "وجدنا {{count}} تطابق محتمل!",
+            "matches_none": "لا يوجد تطابقات حيوية مباشرة بعد.",
+            "success_matches": "تم العثور على تطابقات محتملة!",
+            "success_matches_desc": "يرجى مراجعة الكلاب المتطابقة في منطقتك.",
+            "success_report": "تم نشر البلاغ",
+            "success_report_desc": "بلاغك متاح الآن للمجتمع.",
+            "error_process": "تعذر معالجة هوية الكلب."
+        }
+    },
+    "health": {
+        "title": "إضافة سجل صحي",
+        "labels": {
+            "type": "نوع السجل",
+            "date": "التاريخ (YYYY-MM-DD)",
+            "due_date": "تاريخ الاستحقاق القادم (اختياري)",
+            "notes": "ملاحظات",
+            "placeholder_notes": "ملاحظات الطبيب، اسم العيادة، إلخ."
+        },
+        "types": {
+            "vaccination": "تطعيم",
+            "deworming": "تجريد من الديدان",
+            "grooming": "نظافة/تزيين",
+            "checkup": "فحص طبي"
+        },
+        "alerts": {
+            "success": "تم إضافة السجل الصحي!",
+            "error": "فشل إضافة السجل الصحي",
+            "date_required": "التاريخ مطلوب"
+        },
+        "reminder": "تذكير صحي: {{name}}",
+        "reminder_body": "{{type}} القادم مستحق في {{date}}"
+    },
+    "dog_registration": {
+        "title": "تسجيل كلب جديد",
+        "section_info": "معلومات الكلب",
+        "section_id": "الهوية (3 صور مطلوبة)",
+        "labels": {
+            "name": "اسم الكلب",
+            "age": "العمر (سنوات)",
+            "breed": "السلالة",
+            "color": "اللون",
+            "size": "الحجم",
+            "gender": "الجنس",
+            "nose_print": "1. بصمة الأنف",
+            "body_photo": "2. صورة للجسم كامل",
+            "birth_marks": "3. علامات الولادة / ميزات فريدة"
+        },
+        "sizes": {
+            "small": "صغير",
+            "medium": "متوسط",
+            "large": "كبير",
+            "giant": "ضخم"
+        },
+        "genders": {
+            "male": "ذكر",
+            "female": "أنثى"
+        },
+        "camera": {
+            "align_nose": "محاذاة بصمة الأنف",
+            "capture_body": "التقاط الجسم كامل",
+            "capture_marks": "التقاط علامة الولادة"
+        },
+        "alerts": {
+            "missing_photos": "يرجى تقديم جميع الصور الثلاثة المطلوبة: بصمة الأنف، والجسم كامل، وعلامة الولادة.",
+            "success": "تم تسجيل الكلب {{name}} بنجاح!",
+            "error": "تعذر تسجيل الكلب"
+        },
+        "my_dogs": "كلابي المسجلة"
+    },
+    "wellness": {
+        "title": "مركز العافية",
+        "weight_growth": "نمو الوزن (كجم)",
+        "weight_advice": "زاد وزن كلبك بمقدار {{amount}} كجم منذ {{start}}. نمو صحي!",
+        "active_vaccinations": "تطعيمات نشطة",
+        "upcoming_vets": "زيارات الطبيب القادمة",
+        "track_wellness": "تتبع العافية",
+        "sections": {
+            "vaccination_title": "سجلات التطعيم",
+            "vaccination_desc": "إدارة جرعات كلبك وتطعيماته",
+            "diet_title": "الحمية والتغذية",
+            "diet_desc": "تسجيل الوجبات وتتبع السعرات الحرارية",
+            "vet_notes_title": "ملاحظات الطبيب الرقمية",
+            "vet_notes_desc": "تخزين الوصفات الطبية والتقارير"
+        },
+        "pro_tip": "نصيحة للمحترفين",
+        "pro_tip_text": "الفحوصات المنتظمة يمكن أن تطيل عمر كلبك حتى سنتين!"
+    },
+    "onboarding": {
+        "skip": "Skip",
+        "next": "CONTINUE",
+        "start": "GET STARTED",
+        "slides": [
+            {
+                "title": "Welcome to Lovedogs 360",
+                "description": "The ultimate companion app for your dog's life. Swipe to learn how to navigate the platform."
+            },
+            {
+                "title": "🐾 Wellness Hub",
+                "description": "Keep track of vaccinations, weight growth, and vet notes. Manage your dog's digital health passport here."
+            },
+            {
+                "title": "🛒 Marketplace",
+                "description": "Buy and sell dog gear, or book professional grooming and training services right in your neighborhood."
+            },
+            {
+                "title": "📍 Cases & Map",
+                "description": "Report lost, found, injured stray, abuse, vehicle hit, rabies bite and keep the community alert."
+            },
+            {
+                "title": "💬 Community Hub",
+                "description": "Local and global chats and polls to build your digital pack and stay connected."
+            },
+            {
+                "title": "📅 Events",
+                "description": "Find Dog networking events and programs to keep your furry friend socialized."
+            }
+        ]
+    },
+    "admin": {
+        "title": "لوحة الإدارة",
+        "subtitle": "إدارة Lovedogs 360",
+        "tabs": {
+            "overview": "نظرة عامة",
+            "users": "المستخدمون",
+            "services": "الخدمات",
+            "orders": "الطلبات",
+            "export": "تصدير"
+        },
+        "stats": {
+            "total_users": "إجمالي المستخدمين",
+            "services": "الخدمات",
+            "orders": "الطلبات",
+            "events": "الفعاليات",
+            "revenue": "إجمالي الإيرادات",
+            "commission": "العمولة"
+        },
+        "overview": {
+            "title": "نظرة عامة على اللوحة"
+        },
+        "users": {
+            "title": "كل المستخدمين ({{count}})",
+            "empty": "لم يتم العثور على مستخدمين"
+        },
+        "services": {
+            "title": "كل الخدمات ({{count}})",
+            "add_new": "إضافة خدمة جديدة",
+            "empty": "لا يوجد خدمات بعد",
+            "by": "بواسطة {{name}}",
+            "published": "منشور",
+            "draft": "مسودة"
+        },
+        "orders": {
+            "title": "كل الطلبات ({{count}})",
+            "empty": "لا يوجد طلبات بعد",
+            "buyer": "المشتري: {{name}}",
+            "amount": "المبلغ",
+            "commission": "العمولة",
+            "payout": "المدفوعات"
+        },
+        "export": {
+            "title": "تصدير البيانات",
+            "desc": "قم بتحميل البيانات كجداول إكسل للتقارير والتحليل.",
+            "registrations_title": "تصدير التسجيلات",
+            "registrations_sub": "كل تسجيلات الفعاليات (.xlsx)",
+            "events_title": "تصدير الفعاليات",
+            "events_sub": "كل بيانات الفعاليات (.xlsx)"
+        },
+        "actions": {
+            "delete_service_title": "حذف الخدمة",
+            "delete_service_confirm": "هل أنت متأكد أنك تريد حذف \"{{title}}\"؟",
+            "deleted_title": "تم الحذف",
+            "deleted_desc": "تمت إزالة الخدمة.",
+            "error_delete": "تعذر حذف الخدمة.",
+            "error_load": "فشل تحميل البيانات",
+            "error_export": "فشل التصدير.",
+            "error_download": "فشل التحميل. تحقق من الأذونات.",
+            "logout_title": "تسجيل الخروج",
+            "logout_confirm": "هل أنت متأكد؟"
+        }
+    },
+    "payouts": {
+        "title": "الشفافية المالية والأرباح",
+        "empty": "لا توجد سجلات للمعاملات بعد.",
+        "labels": {
+            "gross": "المبلغ الإجمالي",
+            "commission": "العمولة (20%)",
+            "net": "صافي الدفع",
+            "status": "الحالة",
+            "processed": "تمت المعالجة في {{date}}"
+        }
+    },
+    "navigation": {
+        "home": "الرئيسية",
+        "marketplace": "المتجر",
+        "events": "الفعاليات",
+        "report": "بلاغ",
+        "payouts": "المدفوعات",
+        "profile": "الملف"
+    },
+    "community_hub": {
+        "title": "Community Hub",
+        "global_chat": "Global Chat",
+        "nearby": "Nearby",
+        "active_now": "Active Now",
+        "post_global": "Post to Global...",
+        "post_nearby": "Post to Nearby...",
+        "ask_question": "Ask a question...",
+        "create_poll": "Create a Poll",
+        "add_option": "+ Add Option",
+        "votes": "votes",
+        "reported": "Reported",
+        "reported_msg": "Thank you. This message has been flagged for review.",
+        "warning": "Warning",
+        "poll_min_options": "Poll must have at least 2 options",
+        "send_error": "Could not send message.",
+        "pts": "pts"
+    },
+    "profile_screen": {
+        "account_dashboard": "Account Dashboard",
+        "log_out": "Log Out",
+        "dogs_stat": "Dogs",
+        "activities_stat": "Activities",
+        "deals_stat": "Deals",
+        "rate_experience": "Rate Experience",
+        "based_on": "Based on {{count}} completions",
+        "my_pets": "My Registered Pets",
+        "register_pet": "Register a Pet",
+        "register_pet_desc": "Tap here to visit Wellness Hub and add your first pet!",
+        "register_another": "Register Another Pet",
+        "personal_info": "Personal Information",
+        "update": "Update",
+        "whatsapp_phone": "WhatsApp / Phone",
+        "biography": "Biography",
+        "no_bio": "No professional biography set.",
+        "digital_wallet": "Digital Wallet & Payouts",
+        "available_balance": "Available Balance",
+        "active_payout": "Active Payout Method",
+        "not_configured": "Not Configured",
+        "configured": "Configured",
+        "setup": "Setup",
+        "edit": "Edit",
+        "help_support": "Help & Support",
+        "contact_support": "Contact Support",
+        "language": "Language",
+        "update_profile": "Update Profile",
+        "full_name": "Full Name",
+        "region": "Region",
+        "preferred_language": "Preferred Language",
+        "professional_bio": "Professional Biography",
+        "tell_us": "Tell us about yourself...",
+        "back": "Back",
+        "apply_changes": "Apply Changes",
+        "payout_config": "Payout Configuration",
+        "mpesa_phone": "M-Pesa Phone Number",
+        "card_number": "Card Number",
+        "expiry": "Expiry (MM/YY)",
+        "secure_cvv": "Secure CVV",
+        "pci_compliant": "PCI-DSS Compliant Secure Entry",
+        "apply_payout": "Apply Payout Info",
+        "discard": "Discard",
+        "save_updates": "Save Profile Updates",
+        "success_msg": "Profile updated successfully!",
+        "error_msg": "Failed to update profile."
+    }
+}
