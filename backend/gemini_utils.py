@@ -1,7 +1,7 @@
 
 import os
 import logging
-import google.generativeai as genai
+from google import genai
 from typing import List, Dict, Any
 
 logger = logging.getLogger(__name__)
@@ -10,13 +10,12 @@ class GeminiAdvisor:
     def __init__(self):
         self.api_key = os.getenv("GEMINI_API_KEY")
         if self.api_key:
-            genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel('gemini-pro')
+            self.client = genai.Client(api_key=self.api_key)
         else:
-            self.model = None
+            self.client = None
 
     def generate_health_insights(self, dog_data: Dict[str, Any], records: List[Dict[str, Any]], wellness_stats: Dict[str, Any]) -> Dict[str, Any]:
-        if not self.model:
+        if not self.client:
             return None
         
         # Prepare context
@@ -56,7 +55,10 @@ class GeminiAdvisor:
         """
 
         try:
-            response = self.model.generate_content(prompt)
+            response = self.client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt
+            )
             # Try to parse JSON from response.text
             import json
             import re
