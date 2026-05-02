@@ -5,8 +5,8 @@ import client from '../api/client';
 import { COLORS, SHADOWS } from '../constants/theme';
 
 // Only use CameraView on native
-let Camera: any = null;
-let CameraView: any = null;
+let Camera = null;
+let CameraView = null;
 if (Platform.OS !== 'web') {
     const ExpoCamera = require('expo-camera');
     Camera = ExpoCamera.Camera;

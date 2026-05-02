@@ -20,7 +20,7 @@ if (Platform.OS !== 'web') {
 
 export const DogIdentityScreen = ({ navigation }: any) => {
     const [permission, requestPermission] = useCameraPermissions();
-    const [cameraRef, setCameraRef] = useState<CameraView | null>(null);
+    const [cameraRef, setCameraRef] = useState<any | null>(null);
 
     // Multi-step state
     const [currentStep, setCurrentStep] = useState(0); // 0: Bio, 1: nose, 2: body, 3: mark

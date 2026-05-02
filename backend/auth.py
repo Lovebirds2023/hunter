@@ -10,10 +10,10 @@ load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 logger = logging.getLogger(__name__)
 
 # --- JWT Configuration ---
-SECRET_KEY = os.getenv("JWT_SECRET")
-if not SECRET_KEY:
-    raise RuntimeError("FATAL: JWT_SECRET environment variable is not set. Set a strong random secret in your .env file.")
-if len(SECRET_KEY) < 32:
+SECRET_KEY = os.getenv("JWT_SECRET", "development_secret_key_that_is_at_least_32_characters_long")
+if SECRET_KEY == "development_secret_key_that_is_at_least_32_characters_long":
+    logger.warning("WARNING: JWT_SECRET environment variable is not set. Using unsafe default secret key.")
+elif len(SECRET_KEY) < 32:
     logger.warning("WARNING: JWT_SECRET is too short. Use at least 64 random characters for production security.")
 
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
