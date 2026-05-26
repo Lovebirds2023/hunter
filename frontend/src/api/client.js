@@ -32,13 +32,16 @@ client.interceptors.request.use(
     async (config) => {
         let token = null;
         try {
-            if (Platform.OS === 'web') {
+            // On web, Platform.OS may be 'web' or undefined, so check both
+            const isWeb = typeof window !== 'undefined' && typeof localStorage !== 'undefined';
+            
+            if (isWeb) {
                 token = localStorage.getItem('userToken');
-            } else {
+            } else if (Platform.OS && Platform.OS !== 'web') {
                 token = await SecureStore.getItemAsync('userToken');
             }
         } catch (e) {
-            // Silently handle storage errors
+            console.error('Token retrieval error:', e);
         }
         
         if (token) {

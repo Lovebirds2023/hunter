@@ -35,11 +35,36 @@ export const HealthPassportScreen = ({ route, navigation }: any) => {
         }
     };
 
+    const getHealthStatus = () => {
+        if (records.length === 0) return { status: 'Unknown', color: '#9E9E9E', icon: 'help-circle' };
+        
+        const vaccinationRecords = records.filter(r => r.record_type === 'vaccination');
+        const overdue = vaccinationRecords.filter(r => r.next_due_date && new Date(r.next_due_date) < new Date());
+        
+        if (overdue.length > 0) {
+            return { status: 'Action Needed', color: '#D32F2F', icon: 'alert-circle' };
+        }
+        return { status: 'Healthy', color: '#388E3C', icon: 'checkmark-circle' };
+    };
+
+    const getNextDueDates = () => {
+        const dueDates = records
+            .filter(r => r.next_due_date)
+            .map(r => ({ type: r.record_type, date: new Date(r.next_due_date), notes: r.notes }))
+            .sort((a, b) => a.date.getTime() - b.date.getTime())
+            .slice(0, 3);
+        return dueDates;
+    };
+
     const handleExport = async () => {
-        // For now, implement a Share logic which is safe and cross-platform
         try {
-            const history = records.map(r => `${r.date.split('T')[0]}: ${r.record_type.toUpperCase()} - ${r.notes || 'No notes'}`).join('\n');
-            const message = `Lovedogs 360 Health Passport\n\nDog: ${dog.name}\nBreed: ${dog.breed}\nWeight: ${dog.weight}kg\n\nMedical History:\n${history}`;
+            const healthStatus = getHealthStatus();
+            const nextDue = getNextDueDates();
+            const nextDueText = nextDue.length > 0 
+                ? nextDue.map(d => `${d.type.toUpperCase()}: ${d.date.toLocaleDateString()}`).join('\n')
+                : 'All up to date';
+            
+            const message = `Lovedogs 360 Health Passport\n\nDog: ${dog?.name || 'Unknown'}\nBreed: ${dog?.breed || 'Unknown'}\nWeight: ${dog?.weight || '?'}kg\nHealth Status: ${healthStatus.status}\n\nNext Due:\n${nextDueText}`;
             
             await Share.share({
                 title: `${dog.name} Health Passport`,
@@ -57,6 +82,23 @@ export const HealthPassportScreen = ({ route, navigation }: any) => {
             </View>
         );
     }
+
+    // If fetching completed but no dog data is available, show retry to avoid blank crash
+    if (!dog) {
+        return (
+            <SafeAreaView style={styles.safeArea}>
+                <View style={styles.center}>
+                    <Text style={styles.emptyText}>Unable to load health passport.</Text>
+                    <TouchableOpacity onPress={fetchPassportData} style={styles.retryBtn}>
+                        <Text style={styles.retryText}>Retry</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    const healthStatus = getHealthStatus();
+    const nextDueDates = getNextDueDates();
 
     return (
         <SafeAreaView style={styles.safeArea}>
@@ -100,39 +142,45 @@ export const HealthPassportScreen = ({ route, navigation }: any) => {
                     </View>
                 </View>
 
-                {/* RECORDS TIMELINE */}
+                {/* HEALTH STATUS SECTION */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Medical History</Text>
-                    {records.length === 0 ? (
-                        <Text style={styles.emptyText}>No medical records found.</Text>
+                    <Text style={styles.sectionTitle}>Current Health Status</Text>
+                    <View style={styles.statusBox}>
+                        <View style={[styles.statusIndicator, { backgroundColor: healthStatus.color }]}>
+                            <Ionicons name={healthStatus.icon as any} size={28} color={COLORS.white} />
+                        </View>
+                        <Text style={styles.statusText}>{healthStatus.status}</Text>
+                    </View>
+                </View>
+
+                {/* NEXT DUE DATES SECTION */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Next Due Dates</Text>
+                    {nextDueDates.length === 0 ? (
+                        <View style={styles.recordItem}>
+                            <Text style={styles.emptyText}>All records up to date</Text>
+                        </View>
                     ) : (
-                        records.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((record, idx) => (
-                            <View key={record.id} style={styles.recordItem}>
-                                <View style={styles.recordMeta}>
-                                    <View style={[styles.typeTag, { backgroundColor: record.record_type === 'vaccination' ? '#E8F5E9' : '#E3F2FD' }]}>
-                                        <Text style={[styles.typeText, { color: record.record_type === 'vaccination' ? '#2E7D32' : '#1565C0' }]}>
-                                            {record.record_type.toUpperCase()}
+                        nextDueDates.map((due, idx) => (
+                            <View key={idx} style={[styles.recordItem, styles.dueItem]}>
+                                <View style={styles.dueItemMeta}>
+                                    <View style={[styles.dueTypeTag, { backgroundColor: due.type === 'vaccination' ? '#E8F5E9' : '#E3F2FD' }]}>
+                                        <Text style={[styles.dueTypeText, { color: due.type === 'vaccination' ? '#2E7D32' : '#1565C0' }]}>
+                                            {due.type.toUpperCase()}
                                         </Text>
                                     </View>
-                                    <Text style={styles.recordDate}>{new Date(record.date).toLocaleDateString()}</Text>
+                                    <Text style={styles.dueDateValue}>{due.date.toLocaleDateString()}</Text>
                                 </View>
-                                <Text style={styles.recordNotes}>{record.notes || 'Routine checkup completed.'}</Text>
-                                {record.next_due_date && (
-                                    <View style={styles.dueSoon}>
-                                        <Ionicons name="alert-circle" size={14} color="#E65100" />
-                                        <Text style={styles.dueText}>Next due: {new Date(record.next_due_date).toLocaleDateString()}</Text>
-                                    </View>
-                                )}
+                                {due.notes && <Text style={styles.dueNotes}>{due.notes}</Text>}
                             </View>
                         ))
                     )}
                 </View>
 
-                {/* VETERINARY NOTES STUB */}
+                {/* DISCLAIMER */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Clinical Observations</Text>
                     <View style={[styles.recordItem, styles.infoBox]}>
-                        <Text style={styles.infoText}>This passport is a digital verification of records provided by the owner through the Lovedogs 360 platform.</Text>
+                        <Text style={styles.infoText}>This passport is a digital verification of records provided through the Lovedogs 360 platform.</Text>
                     </View>
                 </View>
             </ScrollView>
@@ -160,15 +208,20 @@ const styles = StyleSheet.create({
     statValue: { fontSize: 14, fontWeight: 'bold', color: COLORS.white },
     section: { marginBottom: 25 },
     sectionTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.primary, marginBottom: 15 },
+    statusBox: { backgroundColor: COLORS.white, borderRadius: 16, padding: 20, ...SHADOWS.small, flexDirection: 'row', alignItems: 'center' },
+    statusIndicator: { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
+    statusText: { fontSize: 18, fontWeight: 'bold', color: COLORS.text, flex: 1 },
     recordItem: { backgroundColor: COLORS.white, borderRadius: 16, padding: 16, marginBottom: 12, ...SHADOWS.small },
-    recordMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-    typeTag: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-    typeText: { fontSize: 10, fontWeight: 'bold' },
-    recordDate: { fontSize: 12, color: COLORS.textSecondary },
-    recordNotes: { fontSize: 14, color: COLORS.text, lineHeight: 20 },
-    dueSoon: { flexDirection: 'row', alignItems: 'center', marginTop: 10, backgroundColor: '#FFF3E0', padding: 8, borderRadius: 8 },
-    dueText: { fontSize: 12, color: '#E65100', fontWeight: 'bold', marginLeft: 6 },
+    dueItem: { borderLeftWidth: 4, borderLeftColor: COLORS.primary },
+    dueItemMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+    dueTypeTag: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+    dueTypeText: { fontSize: 10, fontWeight: 'bold' },
+    dueDateValue: { fontSize: 14, fontWeight: 'bold', color: COLORS.primary },
+    dueNotes: { fontSize: 13, color: COLORS.textSecondary, marginTop: 6 },
     infoBox: { backgroundColor: '#E3F2FD', borderStyle: 'dashed', borderWidth: 1, borderColor: '#1976D2' },
     infoText: { fontSize: 12, color: '#1565C0', fontStyle: 'italic', textAlign: 'center' },
     emptyText: { textAlign: 'center', color: COLORS.textSecondary, fontStyle: 'italic', marginTop: 10 }
+    ,
+    retryBtn: { marginTop: 12, backgroundColor: COLORS.primary, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 },
+    retryText: { color: COLORS.white, fontWeight: 'bold' }
 });
