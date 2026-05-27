@@ -41,7 +41,7 @@ class User(Base):
     average_rating = Column(Float, default=0.0)
     total_ratings = Column(Integer, default=0)
     
-    # Community Hub Fields (Disabled until columns are added to Supabase)
+    # Community Hub Fields
     is_online = Column(Boolean, default=False)
     last_seen = Column(DateTime, default=datetime.datetime.utcnow)
     karma_points = Column(Integer, default=0) # Total karma ever earned
