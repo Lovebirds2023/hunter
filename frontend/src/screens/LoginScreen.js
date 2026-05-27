@@ -16,9 +16,13 @@ const LoginScreen = ({ navigation }) => {
     const [password, setPassword] = useState("");
     const { login, devBypass, googleLogin } = useContext(AuthContext);
 
+    const hasGoogleConfig = !!process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+    const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || 'missing-google-web-client-id';
+    const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || 'missing-google-ios-client-id';
+
     const [request, response, promptAsync] = Google.useAuthRequest({
-        webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-        iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+        webClientId: webClientId,
+        iosClientId: iosClientId,
     });
 
     React.useEffect(() => {
@@ -61,23 +65,27 @@ const LoginScreen = ({ navigation }) => {
                         />
                         <Button title={t('login.login')} onPress={() => login(email.trim().toLowerCase(), password)} variant="gold" />
                         
-                        <View style={styles.divider}>
-                            <View style={styles.line} />
-                            <Text style={styles.dividerText}>{t('login.or')}</Text>
-                            <View style={styles.line} />
-                        </View>
+                        {hasGoogleConfig && (
+                            <>
+                                <View style={styles.divider}>
+                                    <View style={styles.line} />
+                                    <Text style={styles.dividerText}>{t('login.or')}</Text>
+                                    <View style={styles.line} />
+                                </View>
 
-                        <TouchableOpacity 
-                            style={styles.googleBtn} 
-                            onPress={() => promptAsync()}
-                            disabled={!request}
-                        >
-                            <Image 
-                                source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg' }} 
-                                style={styles.googleIcon} 
-                            />
-                            <Text style={styles.googleBtnText}>{t('login.google_signin')}</Text>
-                        </TouchableOpacity>
+                                <TouchableOpacity 
+                                    style={styles.googleBtn} 
+                                    onPress={() => promptAsync()}
+                                    disabled={!request}
+                                >
+                                    <Image 
+                                        source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg' }} 
+                                        style={styles.googleIcon} 
+                                    />
+                                    <Text style={styles.googleBtnText}>{t('login.google_signin')}</Text>
+                                </TouchableOpacity>
+                            </>
+                        )}
                     </View>
 
                     <TouchableOpacity onPress={() => navigation.navigate('Register')}>
