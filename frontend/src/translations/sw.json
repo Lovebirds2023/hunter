@@ -1,0 +1,532 @@
+{
+    "common": {
+        "language": "Lugha",
+        "english": "Kiingereza",
+        "swahili": "Kiswahili",
+        "logout": "Ondoka",
+        "cancel": "Ghairi",
+        "save": "Hifadhi",
+        "search": "Tafuta",
+        "loading": "Inapakia...",
+        "saving": "Inahifadhi...",
+        "updating": "Inasasisha...",
+        "creating": "Inatega...",
+        "error": "Hitilafu",
+        "success": "Mafanikio",
+        "ok": "Sawa",
+        "permission_denied": "Ruhusa Imekataliwa",
+        "location_req": "Tafadhali wezesha ruhusa za eneo ili kutumia kipengele hiki.",
+        "location_fail": "Imeshindwa kupata eneo la sasa",
+        "camera_req": "Ruhusa ya kamera inahitajika ili kupiga picha.",
+        "camera_perm": "Ruhusa Inahitajika",
+        "recommended": "IMEBORA",
+        "view_details": "Gonga ili kuona",
+        "back": "NYUMA",
+        "continue": "ENDELEA"
+    },
+    "home": {
+        "greeting": "Habari, {{name}}!",
+        "sub_greeting": "Mwenzi wako anaendeleaje leo?",
+        "my_dogs": "Mbwa Wangu",
+        "local_alerts": "Arifa za Karibu",
+        "health_wellness": "Afya na Ustawi",
+        "health_status": "Kila kitu kinaonekana vizuri! Hakuna chanjo zinazokuja wiki hii.",
+        "view_records": "Angalia Rekodi",
+        "quick_actions": "Hatua za Haraka",
+        "marketplace": "Soko",
+        "shop_book": "Nunua na Weka Nafasi",
+        "lost_found": "Waliopotea na Kupatikana",
+        "scan_report": "Skeni au Ripoti",
+        "identity": "Utambulisho",
+        "biometric_scan": "Skeni ya Kibayometriki",
+        "my_events": "Matukio Yangu",
+        "dog_meetups": "Mikutano ya Mbwa",
+        "community_spotlight": "Mwanga wa Jamii",
+        "see_all": "Angalia Zote",
+        "community_walk": "Matembezi ya Jamii Jumapili hii!",
+        "community_walk_desc": "Jiunge na wazazi wengine wa mbwa katika Cental Park kwa matembezi ya kijamii.",
+        "attending": "{{count}} wanahudhuria"
+    },
+    "login": {
+        "tagline": "Jukwaa Bora kwa Mbwa Wako",
+        "email": "Barua Pepe",
+        "password": "Nywila",
+        "login": "Ingia",
+        "no_account": "Huna akaunti? ",
+        "register": "Jisajili",
+        "skip": "Ruka kwa Sasa →",
+        "google_signin": "Google Signin",
+        "or": "AU"
+    },
+    "profile": {
+        "title": "Wasifu Wangu",
+        "edit_profile": "Hariri Wasifu",
+        "full_name": "Jina Kamili",
+        "phone_number": "Nambari ya Simu",
+        "bio": "Maelezo Mafupi",
+        "add_dog": "Ongeza Mbwa",
+        "no_dogs": "Hakuna mbwa aliyeongezwa bado."
+    },
+    "register": {
+        "title": "Tengeneza Akaunti",
+        "subtitle": "Jiunge na jamii inayojali",
+        "full_name_label": "Jina Kamili",
+        "full_name_placeholder": "Ingiza jina lako kamili",
+        "email_label": "Anuani ya Barua Pepe",
+        "email_placeholder": "Ingiza barua pepe yako",
+        "phone_label": "Nambari ya Simu",
+        "phone_placeholder": "Ingiza nambari yako ya simu",
+        "bio_label": "Maelezo Mafupi (Hiari)",
+        "bio_placeholder": "Tuambie kuhusu wewe...",
+        "password_label": "Nywila",
+        "password_placeholder": "Tengeneza nywila",
+        "join_as": "Nataka kujiunga kama:",
+        "pet_owner": "Mmiliki wa Mnyama",
+        "professional": "Mtaalamu",
+        "pro_note": "* Wataalamu wanaweza pia kununua huduma na bidhaa.",
+        "list_note": "* Utaweza kuorodhesha Huduma baada ya usajili.",
+        "register": "Jisajili",
+        "already_account": "Tayari unayo akaunti? ",
+        "login": "Ingia",
+        "phone_description": "Nambari hii ya simu itatumika kupokea malipo (mfano, M-Pesa)",
+        "language_label": "Lugha Unayopendelea",
+        "location_compulsory": "Upataji wa eneo unahitajika kwa ajili ya soko, arifa za ukaribu, na vipengele vya usalama.",
+        "location_denied_error": "Lazima uruhusu upataji wa eneo ili kukamilisha usajili.",
+        "location_title": "Washa Soko la Kisasa",
+        "location_benefit": "Inahitajika ili kuwezesha kununua/kuuza ndani ya eneo lako, ripoti za usalama, na arifa za ukaribu.",
+        "country_code": "Msimbo wa Nchi",
+        "step1_title": "Utambulisho na Usalama",
+        "step2_title": "Wasifu wa Kimataifa",
+        "step3_title": "Upatikanaji na Jukumu",
+        "next_step": "Hatua Inayofuata",
+        "secure_access": "Upatikanaji wa Soko Salama",
+        "location_success": "Eneo lako limesajiliwa kwa mafanikio.",
+        "allow_location": "RUHUSU ENEO"
+    },
+    "marketplace": {
+        "title": "Soko",
+        "search_placeholder": "Tafuta {{type}}...",
+        "services": "Huduma",
+        "products": "Bidhaa",
+        "book_service": "Agiza Huduma",
+        "buy_now": "Nunua Sasa",
+        "price": "Bei",
+        "no_listings": "Hakuna orodha zilizopatikana katika kategoria hii.",
+        "category": "Kategoria",
+        "location": "Mahali",
+        "all_categories": "Zote",
+        "distance_away": "km mbali",
+        "tabs": {
+            "services": "HUDUMA",
+            "products": "BIDHAA"
+        },
+        "categories": {
+            "all": "Zote",
+            "health": "Afya",
+            "therapy": "Tiba",
+            "training": "Mafunzo",
+            "grooming": "Usafi",
+            "boarding": "Makazi",
+            "events": "Matukio",
+            "safety": "Usalama",
+            "food": "Chakula",
+            "equipment": "Vifaa",
+            "toys": "Vichezeo",
+            "travel": "Safari",
+            "gear": "Zana"
+        },
+        "actions": {
+            "buy_now": "NUNUA SASA",
+            "book_now": "WEKA SASA",
+            "add": "Ongeza"
+        },
+        "empty": {
+            "title": "Hakuna {{type}} iliyopatikana",
+            "subtitle": "Jaribu kurekebisha utafutaji wako au vichujio"
+        },
+        "featured": "{{type}} Zote",
+        "featured_cat": "{{type}} za {{category}}",
+        "results": "Matokeo {{count}} yamepatikana",
+        "create": {
+            "title_new": "Orodhesha Bidhaa Mpya",
+            "title_edit": "Hariri Orodha",
+            "question": "Unajumuisha nini?",
+            "services": "Huduma",
+            "products": "Bidhaa",
+            "cover_image": "Picha ya Jalada",
+            "upload_photo": "Pakia Picha",
+            "listing_price": "Bei ya Orodha: ${{price}} (pamoja na 20% ya ada ya jukwaa)",
+            "location": "Eneo la Huduma",
+            "get_location": "Tumia Eneo Langu la Sasa",
+            "update_location": "Sasisha Eneo Langu",
+            "fetching": "Inatafuta eneo...",
+            "error_update": "Imeshindwa kusasisha bidhaa",
+            "error_create": "Imeshindwa kuunda bidhaa",
+            "publish": "Chapisha Orodha",
+            "publish_subtitle": "Fanya hili lionekane kwa wanunuzi",
+            "price_label": "Bei Yako ($)",
+            "success_create": "{{type}} imechapishwa kwa mafanikio!",
+            "success_update": "Orodha imesasishwa kwa mafanikio!",
+            "error_fill": "Tafadhali jaza nyanja zote"
+        }
+    },
+    "events": {
+        "title": "Matukio Yajayo",
+        "badge": "Tukio",
+        "my_registrations": "Usajili Wangu",
+        "featured_programs": "Programu Zilizoangaziwa",
+        "search_results": "Matokeo ya Utafutaji",
+        "upcoming_events": "Matukio Yajayo",
+        "no_events_title": "Hakuna Matukio Yaliyopatikana",
+        "no_events_subtitle": "Jaribu kurekebisha utafutaji au vichujio vyako",
+        "slots": "nafasi",
+        "learn_more": "Jifunze Zaidi",
+        "events_this_month": "Matukio ya Mwezi Huu",
+        "save": "Save",
+        "saved": "Saved",
+        "unsave": "Unsave",
+        "saved_events": "Saved Events",
+        "form_builder": "Form Builder",
+        "add_field": "Add Field",
+        "share_phone": "Share Phone Number",
+        "registration_form": "Registration Form",
+        "view_responses": "View Responses",
+        "no_saved_events": "No saved events"
+    },
+    "report": {
+        "title": "Kesi",
+        "subtitle": "Ripoti na Jibu Kesi za Mbwa",
+        "toggles": {
+            "list": "Orodha",
+            "map": "Ramani"
+        },
+        "types": {
+            "rabies_bite": "Kuumwa na Kichaa",
+            "vehicle_hit": "Gonga na Gari",
+            "injured_stray": "Mbwa Aliyeumia",
+            "found_dog": "Mbwa Aliyepatikana",
+            "lost_dog": "Mbwa Aliyepotea",
+            "abuse": "Ripoti ya Unyanyasaji",
+            "other": "Nyingine"
+        },
+        "empty": {
+            "title": "Bado Hakuna Ripoti za Kesi",
+            "subtitle": "Kuwa wa kwanza kuripoti kesi ya mbwa katika eneo lako"
+        },
+        "form": {
+            "title": "Ripoti Kesi",
+            "question": "Nini kimetokea?",
+            "labels": {
+                "title": "Kichwa cha Habari",
+                "description": "Maelezo",
+                "location": "Mahali",
+                "photo": "Uthibitisho wa Picha"
+            },
+            "placeholders": {
+                "title": "Kichwa kifupi cha kesi...",
+                "description": "Eleza hali kwa undani...",
+                "location": "Hii ilitokea wapi?"
+            },
+            "buttons": {
+                "camera": "Piga Picha",
+                "gallery": "Picha",
+                "submit": "Tuma Ripoti"
+            },
+            "alerts": {
+                "type_required": "Tafadhali chagua aina ya kesi.",
+                "title_required": "Tafadhali ingiza kichwa cha habari cha ripoti.",
+                "success": "Ripoti yako ya kesi imetumwa. Jamii itajibu!",
+                "error": "Imeshindwa kutuma ripoti. Tafadhali jaribu tena."
+            }
+        },
+        "map": {
+            "help": "Gonga ili kusaidia"
+        },
+        "labels": {
+            "breed": "Aina ya Mbwa",
+            "color": "Rangi ya Mbwa",
+            "custom_breed": "Andika jina la aina ya mbwa..."
+        }
+    },
+    "lost_found": {
+        "title": "Waliopotea na Kupatikana",
+        "i_found": "Mbwa Aliyepatikana",
+        "i_lost": "Mbwa Aliyepotea",
+        "labels": {
+            "description": "Maelezo ya Ziada",
+            "upload": "Piga Picha / Chagua Picha",
+            "matching": "Kulinganisha Utambulisho...",
+            "submit": "Tuma Ripoti"
+        },
+        "colors": {
+            "merle": "Merle (madoadoa ya rangi)",
+            "brindle": "Brindle (milia kama ya tihi)"
+        },
+        "alerts": {
+            "camera_perm": "Ruhusa ya kamera inahitajika ili kupiga picha.",
+            "photo_first": "Tafadhali piga/chagua picha kwanza.",
+            "matches_found": "Tumepata uwezekano wa kulingana {{count}}!",
+            "matches_none": "Hakuna kulingana kwa kibayometriki kulikopatikana bado.",
+            "success_matches": "Mechi Zinazowezekana Zimepatikana!",
+            "success_matches_desc": "Tafadhali kagua mbwa wanaolingana katika eneo lako.",
+            "success_report": "Ripoti Imechapishwa",
+            "success_report_desc": "Ripoti yako sasa inaonekana kwa jamii.",
+            "error_process": "Imeshindwa kuchakata utambulisho wa mbwa."
+        }
+    },
+    "health": {
+        "title": "Ongeza Rekodi ya Afya",
+        "labels": {
+            "type": "Aina ya Rekodi",
+            "date": "Tarehe (YYYY-MM-DD)",
+            "due_date": "Tarehe Ifuatayo (Hiari)",
+            "notes": "Maelezo",
+            "placeholder_notes": "Maelezo ya daktari, jina la kliniki, n.k."
+        },
+        "types": {
+            "vaccination": "Chanjo",
+            "deworming": "Dawa ya Minyoo",
+            "grooming": "Usafi",
+            "checkup": "Uchunguzi"
+        },
+        "alerts": {
+            "success": "Rekodi ya afya imeongezwa!",
+            "error": "Imeshindwa kuongeza rekodi ya afya",
+            "date_required": "Tarehe inahitajika"
+        },
+        "reminder": "Kumbukumbu ya Afya: {{name}}",
+        "reminder_body": "{{type}} inayokuja mnamo {{date}}"
+    },
+    "dog_registration": {
+        "title": "Sajili Mbwa Mpya",
+        "section_info": "Habari za Mbwa",
+        "section_id": "Utambulisho (Picha 3 Zinazohitajika)",
+        "labels": {
+            "name": "Jina la Mbwa",
+            "age": "Umri (Miaka)",
+            "breed": "Aina ya Mbwa",
+            "color": "Rangi",
+            "size": "Ukubwa",
+            "gender": "Jinsia",
+            "nose_print": "1. Alama ya Pua",
+            "body_photo": "2. Picha Kamili ya Mwili",
+            "birth_marks": "3. Alama za Kuzaliwa / Sifa za Kipekee"
+        },
+        "sizes": {
+            "small": "Mdogo",
+            "medium": "Wastani",
+            "large": "Mkubwa",
+            "giant": "Mkubwa Sana"
+        },
+        "genders": {
+            "male": "Kiume",
+            "female": "Kike"
+        },
+        "camera": {
+            "align_nose": "Linganisha Alama ya Pua",
+            "capture_body": "Piga Picha Kamili ya Mwili",
+            "capture_marks": "Piga Picha ya Alama ya Kuzaliwa"
+        },
+        "alerts": {
+            "missing_photos": "Tafadhali toa picha zote 3 zinazohitajika: Alama ya Pua, Mwili Kamili, na Alama ya Kuzaliwa.",
+            "success": "Mbwa {{name}} amesajiliwa kwa mafanikio!",
+            "error": "Imeshindwa kusajili mbwa"
+        },
+        "my_dogs": "Mbwa Wangu Waliosajiliwa"
+    },
+    "wellness": {
+        "title": "Kituo cha Ustawi",
+        "weight_growth": "Ukuaji wa Uzito (kg)",
+        "weight_advice": "Mbwa wako ameongezeka kilo {{amount}} tangu {{start}}. Ukuaji mzuri!",
+        "active_vaccinations": "Chanjo Zinazofanya Kazi",
+        "upcoming_vets": "Madaktari Wanaokuja",
+        "track_wellness": "Fuatilia Ustawi",
+        "sections": {
+            "vaccination_title": "Rekodi za Chanjo",
+            "vaccination_desc": "Dhibiti chanjo na sindano za mnyama wako",
+            "diet_title": "Chakula na Lishe",
+            "diet_desc": "Rekodi milo na ufuatilie ulaji wa kalori",
+            "vet_notes_title": "Maelezo ya Daktari ya Kidijitali",
+            "vet_notes_desc": "Hifadhi maagizo ya daktari na ripoti"
+        },
+        "pro_tip": "Kidokezo cha Kitaalamu",
+        "pro_tip_text": "Uchunguzi wa mara kwa mara unaweza kurefusha maisha ya mbwa wako kwa hadi miaka 2!"
+    },
+    "onboarding": {
+        "skip": "Ruka",
+        "next": "ENDELEA",
+        "start": "ANZA SASA",
+        "slides": [
+            {
+                "title": "Karibu kwenye Lovedogs 360",
+                "description": "Mwandani kamili kwa maisha ya mbwa wako. Telezesha ili kujifunza jinsi ya kutumia jukwaa hili."
+            },
+            {
+                "title": "🐾 Kituo cha Ustawi",
+                "description": "Fuatilia chanjo, ukuaji wa uzito, na maelezo ya daktari. Dhibiti pasipoti ya afya ya mbwa wako hapa."
+            },
+            {
+                "title": "🛒 Soko",
+                "description": "Nunua na uuze vifaa vya mbwa, au weka nafasi za huduma za kitaalamu za usafi na mafunzo katika eneo lako."
+            },
+            {
+                "title": "📍 Kesi na Ramani",
+                "description": "Ripoti aliyepotea, aliyepatikana, aliyeumia, unyanyasaji, kugongwa na gari, kichaa cha mbwa na utahadharishe jamii."
+            },
+            {
+                "title": "💬 Kituo cha Jamii",
+                "description": "Sogoa na kura za maswali za ndani na kimataifa ili kujenga kundi lako la kidijitali na kuendelea kuwasiliana."
+            },
+            {
+                "title": "📅 Matukio",
+                "description": "Pata matukio na programu za mtandao wa mbwa ili kumfanya mwenzi wako awe na marafiki."
+            }
+        ]
+    },
+    "admin": {
+        "title": "Dashibodi ya Msimamizi",
+        "subtitle": "Usimamizi wa Lovedogs 360",
+        "tabs": {
+            "overview": "Muhtasari",
+            "users": "Watumiaji",
+            "services": "Huduma",
+            "orders": "Maagizo",
+            "export": "Hamisha"
+        },
+        "stats": {
+            "total_users": "Jumla ya Watumiaji",
+            "services": "Huduma",
+            "orders": "Maagizo",
+            "events": "Matukio",
+            "revenue": "Jumla ya Mapato",
+            "commission": "Tume"
+        },
+        "overview": {
+            "title": "Muhtasari wa Dashibodi"
+        },
+        "users": {
+            "title": "Watumiaji Wote ({{count}})",
+            "empty": "Hakuna watumiaji waliopatikana"
+        },
+        "services": {
+            "title": "Huduma Zote ({{count}})",
+            "add_new": "Ongeza Huduma Mpya",
+            "empty": "Bado hakuna huduma",
+            "by": "na {{name}}",
+            "published": "Imechapishwa",
+            "draft": "Rasimu"
+        },
+        "orders": {
+            "title": "Maagizo Yote ({{count}})",
+            "empty": "Bado hakuna maagizo",
+            "buyer": "Mnunuzi: {{name}}",
+            "amount": "Kiasi",
+            "commission": "Tume",
+            "payout": "Malipo"
+        },
+        "export": {
+            "title": "Uhamishaji wa Data",
+            "desc": "Pakua data kama lahajedwali za Excel kwa ajili ya ripoti na uchambuzi.",
+            "registrations_title": "Hamisha Usajili",
+            "registrations_sub": "Usajili wote wa matukio (.xlsx)",
+            "events_title": "Hamisha Matukio",
+            "events_sub": "Data zote za matukio (.xlsx)"
+        },
+        "actions": {
+            "delete_service_title": "Futa Huduma",
+            "delete_service_confirm": "Je, una uhakika unataka kufuta \"{{title}}\"?",
+            "deleted_title": "Imefutwa",
+            "deleted_desc": "Huduma imeondolewa.",
+            "error_delete": "Imeshindwa kufuta huduma.",
+            "error_load": "Imeshindwa kupakia data",
+            "error_export": "Uhamishaji umeshindwa.",
+            "error_download": "Upakuaji umeshindwa. Angalia ruhusa.",
+            "logout_title": "Ondoka",
+            "logout_confirm": "Je, una uhakika?"
+        }
+    },
+    "payouts": {
+        "title": "Uwazi wa Kifedha na Mapato",
+        "empty": "Bado hakuna rekodi za miamala.",
+        "labels": {
+            "gross": "Kiasi Ghafi",
+            "commission": "Tume (20%)",
+            "net": "Malipo Halisi",
+            "status": "Hali",
+            "processed": "Ilikamilika tarehe {{date}}"
+        }
+    },
+    "navigation": {
+        "home": "Nyumbani",
+        "marketplace": "Soko",
+        "events": "Matukio",
+        "report": "Ripoti",
+        "payouts": "Malipo",
+        "profile": "Wasifu"
+    },
+    "community_hub": {
+        "title": "Kituo cha Jamii",
+        "global_chat": "Sogoa Ulimwenguni",
+        "nearby": "Karibu",
+        "active_now": "Wanafanya kazi Sasa",
+        "post_global": "Tuma Ulimwenguni...",
+        "post_nearby": "Tuma Karibu...",
+        "ask_question": "Uliza swali...",
+        "create_poll": "Tengeneza Kura",
+        "add_option": "+ Ongeza Chaguo",
+        "votes": "kura",
+        "reported": "Imeripotiwa",
+        "reported_msg": "Asante. Ujumbe huu umeripotiwa kwa ukaguzi.",
+        "warning": "Onyo",
+        "poll_min_options": "Kura lazima iwe na chaguzi angalau 2",
+        "send_error": "Imeshindwa kutuma ujumbe.",
+        "pts": "pts"
+    },
+    "profile_screen": {
+        "account_dashboard": "Dashibodi ya Akaunti",
+        "log_out": "Ondoka",
+        "dogs_stat": "Mbwa",
+        "activities_stat": "Shughuli",
+        "deals_stat": "Vipunguzo",
+        "rate_experience": "Kadiria Uzoefu",
+        "based_on": "Kulingana na ukamilishaji {{count}}",
+        "my_pets": "Zilizoandikishwa Mnyama",
+        "register_pet": "Sajili Mnyama",
+        "register_pet_desc": "Bonyeza hapa kutembelea Kituo cha Ustawi na kuongeza mnyama wako wa kwanza!",
+        "register_another": "Sajili Mnyama Mwingine",
+        "personal_info": "Taarifa za Kibinafsi",
+        "update": "Sasisha",
+        "whatsapp_phone": "WhatsApp / Simu",
+        "biography": "Maelezo Mafupi",
+        "no_bio": "Hakuna maelezo mafupi ya kitaalamu.",
+        "digital_wallet": "Pochi ya Kidijitali & Malipo",
+        "available_balance": "Salio Inayopatikana",
+        "active_payout": "Njia Hai ya Malipo",
+        "not_configured": "Haijasanidiwa",
+        "configured": "Imesanidiwa",
+        "setup": "Sanidi",
+        "edit": "Hariri",
+        "help_support": "Msaada na Usaidizi",
+        "contact_support": "Wasiliana na Msaada",
+        "language": "Lugha",
+        "update_profile": "Sasisha Wasifu",
+        "full_name": "Jina Kamili",
+        "region": "Mkoa",
+        "preferred_language": "Lugha Unayopendelea",
+        "professional_bio": "Maelezo Mafupi ya Kitaalamu",
+        "tell_us": "Tuambie kuhusu wewe...",
+        "back": "Nyuma",
+        "apply_changes": "Tumia Mabadiliko",
+        "payout_config": "Usanidi wa Malipo",
+        "mpesa_phone": "Nambari ya Simu ya M-Pesa",
+        "card_number": "Nambari ya Kadi",
+        "expiry": "Tarehe ya Kuisha (MM/YY)",
+        "secure_cvv": "CVV Salama",
+        "pci_compliant": "Ingizo Salama Linalotii PCI-DSS",
+        "apply_payout": "Tumia Maelezo ya Malipo",
+        "discard": "Tupa",
+        "save_updates": "Hifadhi Sasisho za Wasifu",
+        "success_msg": "Wasifu umesasishwa kwa mafanikio!",
+        "error_msg": "Imeshindwa kusasisha wasifu."
+    }
+}

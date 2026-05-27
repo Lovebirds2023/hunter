@@ -1,0 +1,15 @@
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app
+    restart: always
+
+# Note: This setup assumes you are using an external Supabase database 
+# as configured in your .env file.

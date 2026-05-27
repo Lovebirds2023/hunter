@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "263487d3-28bb-4524-be30-0b17e468ee9b"
+      }
+    },
+    "android": {
+      "package": "com.eliudachero.lovedogs360root"
+    }
+  }
+}

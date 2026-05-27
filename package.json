@@ -1,0 +1,9 @@
+{
+    "name": "lovedogs360-root",
+    "version": "1.0.1",
+    "scripts": {
+        "dev": "cd frontend && npm run dev",
+        "backend": "cd backend && ..\\.venv\\Scripts\\python -m uvicorn main:app --reload --host 0.0.0.0",
+        "docker-up": "docker-compose up --build"
+    }
+}

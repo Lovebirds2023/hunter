@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lovedogs 360 Admin</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .card { border: 1px solid #ccc; padding: 20px; margin-bottom: 20px; border-radius: 5px; }
+        .stat { font-size: 24px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Lovedogs 360 Admin</h1>
+    
+    <div class="card">
+        <h2>Statistics</h2>
+        <div id="stats">Loading...</div>
+    </div>
+
+    <div class="card">
+        <h2>Actions</h2>
+        <button onclick="verifyUserPrompt()">Verify a Provider</button>
+    </div>
+
+    <script>
+        const BASE_URL = 'http://localhost:8000/api/v1';
+        // Mock Auth Token - In real app, you'd login first
+        const TOKEN = prompt("Enter Admin Token (Bearer ...):");
+
+        async function loadStats() {
+            try {
+                const res = await fetch(`${BASE_URL}/admin/stats`, {
+                    headers: { 'Authorization': `Bearer ${TOKEN}` }
+                });
+                if(!res.ok) throw new Error("Auth failed");
+                const data = await res.json();
+                document.getElementById('stats').innerHTML = `
+                    Users: ${data.users}<br>
+                    Dogs: ${data.dogs}<br>
+                    Bookings: ${data.bookings}
+                `;
+            } catch(e) {
+                document.getElementById('stats').innerHTML = "Error loading stats (Check token)";
+            }
+        }
+
+        async function verifyUserPrompt() {
+            const id = prompt("User ID to verify:");
+            if(!id) return;
+            try {
+                const res = await fetch(`${BASE_URL}/admin/users/${id}/verify`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${TOKEN}` }
+                });
+                const data = await res.json();
+                alert(JSON.stringify(data));
+            } catch(e) {
+                alert("Error verifying user");
+            }
+        }
+
+        if(TOKEN) loadStats();
+    </script>
+</body>
+</html>
