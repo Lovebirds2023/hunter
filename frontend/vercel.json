@@ -1,10 +1,11 @@
 {
-  "framework": "create-react-app",
+  "framework": null,
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "cleanUrls": true,
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!assets/|_expo/|favicon.png).*)",
       "destination": "/index.html"
     }
   ]
