@@ -308,6 +308,19 @@ class Announcement(Base):
     target_audience = Column(String, default="all") # all, providers, buyers
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
+class AppVersion(Base):
+    __tablename__ = "app_versions"
+
+    id = Column(String, primary_key=True, index=True)
+    version = Column(String, nullable=False, unique=True)  # e.g., "1.0.1"
+    platform = Column(String, nullable=False)  # "android", "ios", or "all"
+    release_notes = Column(String, nullable=True)
+    download_url = Column(String, nullable=True)  # Play Store or App Store link
+    is_required = Column(Boolean, default=False)  # Force update or optional
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
 class Notification(Base):
     __tablename__ = "notifications"
 

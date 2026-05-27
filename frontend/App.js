@@ -1,7 +1,7 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import './src/i18n';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Alert } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -9,6 +9,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthProvider, AuthContext } from './src/context/AuthContext';
 import { SyncProvider } from './src/context/SyncContext';
 import { CurrencyProvider } from './src/context/CurrencyContext';
+import { useAppUpdateCheck } from './src/hooks/useAppUpdateCheck';
+import UpdateModal from './src/components/UpdateModal';
 
 import LoginScreen from './src/screens/LoginScreen.js';
 import RegisterScreen from './src/screens/RegisterScreen.js';
@@ -215,6 +217,37 @@ function AppNavigator() {
 }
 
 export default function App() {
+    const [updateModalVisible, setUpdateModalVisible] = useState(false);
+    const [updateInfo, setUpdateInfo] = useState(null);
+    const [isRequiredUpdate, setIsRequiredUpdate] = useState(false);
+
+    const APP_VERSION = '1.0.1'; // Should match package.json
+
+    // Check for app updates on startup
+    useAppUpdateCheck(
+        APP_VERSION,
+        (versionInfo) => {
+            // Optional update available
+            setUpdateInfo(versionInfo);
+            setIsRequiredUpdate(false);
+            setUpdateModalVisible(true);
+        },
+        (versionInfo) => {
+            // Critical update required
+            setUpdateInfo(versionInfo);
+            setIsRequiredUpdate(true);
+            setUpdateModalVisible(true);
+            
+            // Alert user for critical updates
+            Alert.alert(
+                'Critical Update Required',
+                'You must update the app to continue using it.',
+                [{ text: 'OK' }],
+                { cancelable: false }
+            );
+        }
+    );
+
     return (
         <AuthProvider>
             <SyncProvider>
@@ -223,6 +256,19 @@ export default function App() {
                         <AppNavigator />
                         <PlatformDisclaimerModal />
                     </NavigationContainer>
+                    <UpdateModal
+                        visible={updateModalVisible}
+                        versionInfo={updateInfo}
+                        isRequired={isRequiredUpdate}
+                        onClose={() => {
+                            if (!isRequiredUpdate) {
+                                setUpdateModalVisible(false);
+                            }
+                        }}
+                        onUpdate={() => {
+                            setUpdateModalVisible(false);
+                        }}
+                    />
                 </CurrencyProvider>
             </SyncProvider>
         </AuthProvider>

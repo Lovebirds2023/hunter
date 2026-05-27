@@ -22,8 +22,19 @@ from pesapal_utils import PesapalAPI
 
 logger = logging.getLogger(__name__)
 
-pesapal = PesapalAPI()
-gemini_advisor = gemini_utils.GeminiAdvisor()
+# Initialize external services with graceful degradation if credentials missing
+pesapal = None
+gemini_advisor = None
+
+try:
+    pesapal = PesapalAPI()
+except Exception as e:
+    logger.warning(f"Failed to initialize PesapalAPI: {e}. Payment features will be unavailable.")
+
+try:
+    gemini_advisor = gemini_utils.GeminiAdvisor()
+except Exception as e:
+    logger.warning(f"Failed to initialize GeminiAdvisor: {e}. AI health advice features will be unavailable.")
 
 def calculate_distance(lat1, lon1, lat2, lon2):
     # Haversine formula
@@ -72,9 +83,22 @@ app.add_middleware(
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-# Initialize AI engine
-ai_engine_instance = ai_engine.DogIDEngine()
+# Initialize AI engine with graceful degradation if dependencies missing
+ai_engine_instance = None
+try:
+    ai_engine_instance = ai_engine.DogIDEngine()
+except Exception as e:
+    logger.warning(f"Failed to initialize DogIDEngine: {e}. Dog identification features will be unavailable.")
 
+# Lightweight health endpoints for platform healthchecks
+@app.get("/", include_in_schema=False)
+async def _root_health():
+    return {"message": "OK"}
+
+
+@app.get("/health", include_in_schema=False)
+async def _health():
+    return {"status": "ok"}
 @app.post("/register", response_model=schemas.UserResponse)
 def register(user: schemas.UserCreate, db: Session = Depends(database.get_db)):
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
@@ -296,6 +320,9 @@ async def identify_dog(
     file: UploadFile = File(...),
     db: Session = Depends(database.get_db)
 ):
+    if ai_engine_instance is None:
+        raise HTTPException(status_code=503, detail="Dog identification service is unavailable")
+    
     contents = await file.read()
     descriptor = ai_engine_instance.extract_descriptor(contents)
     if descriptor is None:
@@ -1119,7 +1146,16 @@ def get_health_advisor_insights(
         }
         wellness_stats["overall_score"] = int((wellness_stats["who5_score"] * 0.3) + (wellness_stats["welfare_score"] * 0.3) + (wellness_stats["relationship_score"] * 0.2) + ((100 - wellness_stats["pss_score"]) * 0.2))
 
-    # Try Gemini AI First
+    # Try Gemini AI First (if available)
+    if gemini_advisor is None:
+        return {
+            "dog_name": dog.name,
+            "breed": dog.breed,
+            "age": dog.age,
+            "message": "AI health advice is currently unavailable",
+            "wellness_stats": wellness_stats
+        }
+    
     ai_response = gemini_advisor.generate_health_insights(
         dog_data={"name": dog.name, "breed": dog.breed, "age": dog.age, "weight": dog.weight},
         records=[{"record_type": r.record_type, "notes": r.notes, "date": str(r.date)} for r in records],
@@ -2259,30 +2295,60 @@ def search_users(
     ]
 
 @app.post("/payments/initiate")
-async def initiate_payment(order_id: str, amount: float, email: str, phone: str = "0700000000"):
-    # 1. Register IPN
+async def initiate_payment(
+    order_id: str,
+    amount: float,
+    email: str,
+    phone: str = "0700000000",
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Initiate Pesapal payment and return redirect URL for secure checkout."""
+    if pesapal is None:
+        raise HTTPException(status_code=503, detail="Payment service is currently unavailable")
+    
+    # Verify order exists and belongs to current user
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.buyer_id != current_user.id and current_user.role != models.UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Not authorized to pay this order")
+    
+    # 1. Register IPN (Instant Payment Notification)
     ipn_res = pesapal.register_ipn(os.getenv("PESAPAL_IPN_URL"))
     ipn_id = ipn_res.get("ipn_id")
     
     if not ipn_id:
         raise HTTPException(status_code=500, detail="Failed to register IPN with Pesapal")
         
-    # 2. Submit Order
+    # 2. Submit Order to Pesapal
     callback_url = os.getenv("PESAPAL_CALLBACK_URL")
     order_res = pesapal.submit_order(
         order_id=order_id,
         amount=amount,
         description=f"Lovedogs 360 - Order {order_id}",
-        email=email,
-        phone=phone,
+        email=email or current_user.email,
+        phone=phone or current_user.phone_number or "0700000000",
         callback_url=callback_url,
         ipn_id=ipn_id
     )
     
-    return order_res
+    # Extract redirect URL from Pesapal response
+    redirect_url = order_res.get("redirect_url") or order_res.get("payment_url")
+    
+    return {
+        "status": "success",
+        "order_id": order_id,
+        "redirect_url": redirect_url,
+        "tracking_id": order_res.get("order_tracking_id"),
+        "message": "Redirecting to secure payment page..."
+    }
 
 @app.get("/pesapal/callback")
 async def pesapal_callback(OrderTrackingId: str, OrderMerchantReference: str, db: Session = Depends(database.get_db)):
+    if pesapal is None:
+        raise HTTPException(status_code=503, detail="Payment service is currently unavailable")
+    
     # Verify status
     status_res = pesapal.get_transaction_status(OrderTrackingId)
     # Update order in DB
@@ -2626,6 +2692,84 @@ def mark_notification_read(
         notif.is_read = True
         db.commit()
     return {"message": "Success"}
+
+# =====================================================
+# App Version Management & Update Notifications
+# =====================================================
+
+@app.get("/app/version/latest", response_model=Optional[schemas.AppVersionResponse])
+def get_latest_app_version(
+    platform: str = "all",  # "android", "ios", or "all"
+    db: Session = Depends(database.get_db)
+):
+    """Get the latest available app version for the given platform."""
+    query = db.query(models.AppVersion).filter(models.AppVersion.is_active == True)
+    
+    if platform != "all":
+        query = query.filter(
+            (models.AppVersion.platform == platform) | (models.AppVersion.platform == "all")
+        )
+    
+    latest = query.order_by(models.AppVersion.created_at.desc()).first()
+    return latest
+
+@app.post("/app/version", response_model=schemas.AppVersionResponse)
+def create_app_version(
+    version_data: schemas.AppVersionCreate,
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin)
+):
+    """Admin: Create a new app version (will trigger notifications to all users)."""
+    # Check if version already exists
+    existing = db.query(models.AppVersion).filter(models.AppVersion.version == version_data.version).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Version {version_data.version} already exists")
+    
+    new_version = models.AppVersion(
+        id=str(uuid.uuid4()),
+        version=version_data.version,
+        platform=version_data.platform,
+        release_notes=version_data.release_notes,
+        download_url=version_data.download_url,
+        is_required=version_data.is_required,
+        is_active=True
+    )
+    db.add(new_version)
+    db.commit()
+    db.refresh(new_version)
+    
+    # Send notifications to all users
+    notify_all_users_of_update(db, new_version)
+    
+    return new_version
+
+@app.post("/app/version/{version_id}/notify")
+def notify_users_of_update(
+    version_id: str,
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin)
+):
+    """Admin: Send update notification to all users for a specific version."""
+    version = db.query(models.AppVersion).filter(models.AppVersion.id == version_id).first()
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    
+    notify_all_users_of_update(db, version)
+    
+    return {"message": f"Notification sent to all users for version {version.version}"}
+
+def notify_all_users_of_update(db: Session, version: models.AppVersion):
+    """Send update notification to all active users."""
+    all_users = db.query(models.User).filter(models.User.is_active != False).all()
+    
+    update_type = "critical_update" if version.is_required else "app_update"
+    title = "🚀 Important App Update Available!" if version.is_required else "📲 New App Update Available"
+    message = f"Version {version.version} is now available. {version.release_notes or ''}"
+    
+    for user in all_users:
+        create_notification(db, user.id, title, message, update_type)
+    
+    logger.info(f"Update notification sent to {len(all_users)} users for version {version.version}")
 
 # =====================================================
 # QR Code Ticket Verification (Admin)

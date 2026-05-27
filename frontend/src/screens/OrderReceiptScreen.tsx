@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, Alert, ActivityIndicator, TextInput, Switch } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, Alert, ActivityIndicator, TextInput, Switch, Linking, Platform } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING } from '../constants/theme';
@@ -9,7 +9,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as SecureStore from 'expo-secure-store';
 import client from '../api/client';
-import { getServiceFormFields, createOrder } from '../api/marketplace';
+import { getServiceFormFields, createOrder, initiatePayment } from '../api/marketplace';
 import { useCurrency } from '../context/CurrencyContext';
 
 type Step = 'form' | 'checkout' | 'success';
@@ -90,14 +90,41 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
                 }))
             };
 
+            // Step 1: Create the order
             const result = await createOrder(orderData);
-            setOrderId(result.id);
-            setStep('success');
-            Alert.alert("Success", "Your booking has been placed successfully!");
+            const newOrderId = result.id;
+            setOrderId(newOrderId);
+
+            // Step 2: Get user info for payment initiation
+            const userRes = await client.get('/users/me');
+            const userEmail = userRes.data.email;
+            const userPhone = userRes.data.phone_number || '0700000000';
+
+            // Step 3: Initiate payment with Pesapal
+            const paymentRes = await initiatePayment(
+                newOrderId,
+                service.price,
+                userEmail,
+                userPhone
+            );
+
+            if (paymentRes.redirect_url) {
+                // Step 4: Redirect to Pesapal secure checkout page
+                const canOpen = await Linking.canOpenURL(paymentRes.redirect_url);
+                if (canOpen) {
+                    await Linking.openURL(paymentRes.redirect_url);
+                    // After returning from Pesapal, show success screen
+                    setStep('success');
+                } else {
+                    Alert.alert("Error", "Unable to open payment page. Please try again.");
+                }
+            } else {
+                throw new Error("No payment URL received from server");
+            }
         } catch (error: any) {
-            console.error('Order creation error:', error);
-            const detail = error.response?.data?.detail || "Could not complete booking.";
-            Alert.alert("Booking Failed", detail);
+            console.error('Order/Payment creation error:', error);
+            const detail = error.response?.data?.detail || "Could not process payment. Please try again.";
+            Alert.alert("Payment Failed", typeof detail === 'string' ? detail : JSON.stringify(detail));
         } finally {
             setSubmitting(false);
         }
@@ -276,15 +303,27 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
                         </View>
                     </View>
 
+                    {/* Security Information */}
+                    <View style={styles.securityCard}>
+                        <View style={styles.securityHeader}>
+                            <Ionicons name="shield-checkmark" size={20} color={COLORS.primary} />
+                            <Text style={styles.securityTitle}>Secure Card Payments</Text>
+                        </View>
+                        <Text style={styles.securityText}>
+                            Card details are entered securely at checkout through Pesapal's encrypted payment page. We never store your card number, CVV, or expiry date on our servers.
+                        </Text>
+                        <Text style={styles.securityBadge}>🔒 PCI-DSS Compliant via Pesapal</Text>
+                    </View>
+
                     <Button 
-                        title={submitting ? "Processing..." : `Confirm & Pay ${formatCurrency(convertPrice(service.price, service.currency || 'KES', preferredCurrency), preferredCurrency)}`}
+                        title={submitting ? "Processing..." : `Proceed to Secure Checkout`}
                         onPress={handlePlaceOrder}
                         loading={submitting}
                         style={{ marginTop: 10 }}
                     />
                     
                     <Text style={styles.termsText}>
-                        By clicking confirm, you agree to the marketplace terms. Service providers will handle your registration data securely.
+                        By clicking proceed, you will be redirected to Pesapal's secure payment gateway. Your card information is encrypted and never stored on our servers.
                     </Text>
                 </ScrollView>
             </SafeAreaView>
@@ -407,6 +446,11 @@ const styles = StyleSheet.create({
     privacyRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8f9fa', padding: 12, borderRadius: 10 },
     privacyTitle: { fontSize: 14, fontWeight: 'bold', color: COLORS.text },
     privacySubtitle: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2 },
+    securityCard: { backgroundColor: '#f0f4ff', borderRadius: 12, padding: 15, borderLeftWidth: 4, borderLeftColor: COLORS.primary, marginBottom: 20 },
+    securityHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+    securityTitle: { fontSize: 14, fontWeight: '600', color: COLORS.primary, marginLeft: 8 },
+    securityText: { fontSize: 12, color: COLORS.textSecondary, lineHeight: 18, marginBottom: 8 },
+    securityBadge: { fontSize: 11, fontWeight: '600', color: COLORS.primary, textAlign: 'center' },
     termsText: { fontSize: 12, color: COLORS.textSecondary, textAlign: 'center', marginTop: 20, paddingHorizontal: 20, lineHeight: 18 },
     successIcon: { alignItems: 'center', marginBottom: 20 },
     successText: { fontSize: 22, fontWeight: 'bold', color: COLORS.primary, marginTop: 10 },
