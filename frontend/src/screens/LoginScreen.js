@@ -13,6 +13,11 @@ WebBrowser.maybeCompleteAuthSession();
 
 const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+const isUsableGoogleClientId = (clientId) => {
+    if (!clientId) return false;
+    const normalized = clientId.trim().toLowerCase();
+    return normalized.endsWith('.apps.googleusercontent.com') && !normalized.startsWith('your-');
+};
 
 const SocialLoginButton = ({ icon, imageUri, label, onPress, disabled, subtle }) => (
     <TouchableOpacity
@@ -59,18 +64,26 @@ const LoginScreen = ({ navigation }) => {
     const { t } = useTranslation();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [localNotice, setLocalNotice] = useState(null);
     const { login, googleLogin, isLoading, authNotice, clearAuthNotice } = useContext(AuthContext);
     const canUseGoogleAuth = Platform.OS === 'web'
-        ? Boolean(googleWebClientId)
-        : Boolean(googleIosClientId || googleWebClientId);
+        ? isUsableGoogleClientId(googleWebClientId)
+        : Boolean(isUsableGoogleClientId(googleIosClientId) || isUsableGoogleClientId(googleWebClientId));
+    const visibleNotice = localNotice || authNotice;
 
     const handleLogin = async () => {
+        setLocalNotice(null);
         clearAuthNotice();
         const cleanEmail = email.trim().toLowerCase();
         if (!cleanEmail || !password) {
             return;
         }
         await login(cleanEmail, password);
+    };
+
+    const showUnavailableNotice = (message) => {
+        clearAuthNotice();
+        setLocalNotice({ type: 'info', message });
     };
 
     return (
@@ -90,9 +103,13 @@ const LoginScreen = ({ navigation }) => {
                         <Text style={styles.title}>Log in or sign up</Text>
                         <Text style={styles.subtitle}>Access your pet services, health records, events, and Lovedogs360 community.</Text>
 
-                        {authNotice && (
-                            <View style={[styles.notice, authNotice.type === 'success' && styles.noticeSuccess]}>
-                                <Text style={styles.noticeText}>{authNotice.message}</Text>
+                        {visibleNotice && (
+                            <View style={[
+                                styles.notice,
+                                visibleNotice.type === 'success' && styles.noticeSuccess,
+                                visibleNotice.type === 'info' && styles.noticeInfo,
+                            ]}>
+                                <Text style={styles.noticeText}>{visibleNotice.message}</Text>
                             </View>
                         )}
 
@@ -105,13 +122,23 @@ const LoginScreen = ({ navigation }) => {
                         ) : (
                             <SocialLoginButton
                                 imageUri="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg"
-                                label="Google login not configured"
-                                disabled
+                                label="Set up Google login"
+                                onPress={() => showUnavailableNotice('Google login needs a real Google Web Client ID in Vercel and Railway. The current value is still a placeholder.')}
                             />
                         )}
 
-                        <SocialLoginButton icon="logo-apple" label="Continue with Apple" disabled subtle />
-                        <SocialLoginButton icon="call-outline" label="Continue with phone" disabled subtle />
+                        <SocialLoginButton
+                            icon="logo-apple"
+                            label="Continue with Apple"
+                            subtle
+                            onPress={() => showUnavailableNotice('Apple login needs an Apple Developer account and an Apple Services ID before it can authenticate users.')}
+                        />
+                        <SocialLoginButton
+                            icon="call-outline"
+                            label="Continue with phone"
+                            subtle
+                            onPress={() => showUnavailableNotice('Phone login needs an SMS provider such as Twilio or Firebase phone auth before codes can be sent.')}
+                        />
 
                         <View style={styles.divider}>
                             <View style={styles.line} />
@@ -307,6 +334,10 @@ const styles = StyleSheet.create({
     noticeSuccess: {
         borderColor: 'rgba(76, 175, 80, 0.45)',
         backgroundColor: 'rgba(76, 175, 80, 0.14)',
+    },
+    noticeInfo: {
+        borderColor: 'rgba(255,215,0,0.45)',
+        backgroundColor: 'rgba(255,215,0,0.12)',
     },
     noticeText: {
         color: COLORS.white,

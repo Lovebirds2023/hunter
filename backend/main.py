@@ -29,6 +29,44 @@ logger = logging.getLogger(__name__)
 pesapal = PesapalAPI()
 gemini_advisor = gemini_utils.GeminiAdvisor()
 
+def bootstrap_admin_user():
+    admin_email = os.getenv("ADMIN_EMAIL", "").strip().lower()
+    admin_password = os.getenv("ADMIN_PASSWORD", "")
+    admin_name = os.getenv("ADMIN_NAME", "Lovedogs360 Admin").strip() or "Lovedogs360 Admin"
+
+    if not admin_email or not admin_password:
+        logger.info("ADMIN_EMAIL or ADMIN_PASSWORD not set; skipping admin bootstrap.")
+        return
+
+    if len(admin_password) < 8:
+        logger.error("ADMIN_PASSWORD must be at least 8 characters; skipping admin bootstrap.")
+        return
+
+    db = database.SessionLocal()
+    try:
+        user = db.query(models.User).filter(models.User.email == admin_email).first()
+        if user:
+            user.role = models.UserRole.ADMIN.value
+            user.full_name = user.full_name or admin_name
+            user.hashed_password = auth.get_password_hash(admin_password)
+            logger.info("Updated existing user %s as admin.", admin_email)
+        else:
+            user = models.User(
+                id=str(uuid.uuid4()),
+                email=admin_email,
+                full_name=admin_name,
+                hashed_password=auth.get_password_hash(admin_password),
+                role=models.UserRole.ADMIN.value,
+            )
+            db.add(user)
+            logger.info("Created bootstrap admin user %s.", admin_email)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error("Admin bootstrap failed: %s", e)
+    finally:
+        db.close()
+
 def is_smtp_configured():
     smtp_host = os.getenv("SMTP_HOST")
     smtp_user = os.getenv("SMTP_USER")
@@ -98,6 +136,7 @@ app = FastAPI(title="Lovedogs 360 API")
 try:
     models.Base.metadata.create_all(bind=database.engine)
     logger.info("Successfully initialized database tables")
+    bootstrap_admin_user()
 except Exception as e:
     logger.error(f"Error initializing database tables: {e}")
 
