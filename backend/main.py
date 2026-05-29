@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from pydantic import BaseModel
 import uuid
 import os
@@ -69,6 +70,15 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+@app.get("/health/db")
+def database_health_check(db: Session = Depends(database.get_db)):
+    try:
+        db.execute(text("SELECT 1"))
+        return {"status": "healthy", "database": "connected"}
+    except Exception as e:
+        logger.error(f"Database health check failed: {e}")
+        raise HTTPException(status_code=503, detail="Database connection failed")
 
 app.add_middleware(
     CORSMiddleware,
