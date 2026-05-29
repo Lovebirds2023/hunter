@@ -5,6 +5,7 @@ import { Button } from '../components/Button';
 import { AuthContext } from '../context/AuthContext';
 import { ThemeBackground } from '../components/ThemeBackground';
 import { COLORS, SPACING, SIZES } from '../constants/theme';
+import { Ionicons } from '@expo/vector-icons';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 
@@ -13,7 +14,23 @@ WebBrowser.maybeCompleteAuthSession();
 const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 
-const GoogleSignInButton = ({ googleLogin, label }) => {
+const SocialLoginButton = ({ icon, imageUri, label, onPress, disabled, subtle }) => (
+    <TouchableOpacity
+        style={[styles.socialBtn, subtle && styles.socialBtnSubtle, disabled && styles.socialBtnDisabled]}
+        onPress={onPress}
+        disabled={disabled}
+        activeOpacity={0.82}
+    >
+        {imageUri ? (
+            <Image source={{ uri: imageUri }} style={styles.socialImageIcon} />
+        ) : (
+            <Ionicons name={icon} size={23} color={disabled ? 'rgba(255,255,255,0.45)' : COLORS.white} />
+        )}
+        <Text style={[styles.socialBtnText, disabled && styles.socialBtnTextDisabled]}>{label}</Text>
+    </TouchableOpacity>
+);
+
+const GoogleSignInButton = ({ googleLogin, label, disabledLabel }) => {
     const [request, response, promptAsync] = Google.useAuthRequest({
         webClientId: googleWebClientId,
         iosClientId: googleIosClientId,
@@ -29,17 +46,12 @@ const GoogleSignInButton = ({ googleLogin, label }) => {
     }, [response, googleLogin]);
 
     return (
-        <TouchableOpacity
-            style={styles.googleBtn}
+        <SocialLoginButton
+            imageUri="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg"
+            label={request ? label : disabledLabel}
             onPress={() => promptAsync()}
             disabled={!request}
-        >
-            <Image
-                source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg' }}
-                style={styles.googleIcon}
-            />
-            <Text style={styles.googleBtnText}>{label}</Text>
-        </TouchableOpacity>
+        />
     );
 };
 
@@ -75,11 +87,38 @@ const LoginScreen = ({ navigation }) => {
                     />
 
                     <View style={styles.formContainer}>
+                        <Text style={styles.title}>Log in or sign up</Text>
+                        <Text style={styles.subtitle}>Access your pet services, health records, events, and Lovedogs360 community.</Text>
+
                         {authNotice && (
                             <View style={[styles.notice, authNotice.type === 'success' && styles.noticeSuccess]}>
                                 <Text style={styles.noticeText}>{authNotice.message}</Text>
                             </View>
                         )}
+
+                        {canUseGoogleAuth ? (
+                            <GoogleSignInButton
+                                googleLogin={googleLogin}
+                                label="Continue with Google"
+                                disabledLabel="Google login unavailable"
+                            />
+                        ) : (
+                            <SocialLoginButton
+                                imageUri="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg"
+                                label="Google login not configured"
+                                disabled
+                            />
+                        )}
+
+                        <SocialLoginButton icon="logo-apple" label="Continue with Apple" disabled subtle />
+                        <SocialLoginButton icon="call-outline" label="Continue with phone" disabled subtle />
+
+                        <View style={styles.divider}>
+                            <View style={styles.line} />
+                            <Text style={styles.dividerText}>{t('login.or')}</Text>
+                            <View style={styles.line} />
+                        </View>
+
                         <TextInput
                             style={styles.input}
                             placeholder={t('login.email')}
@@ -107,21 +146,8 @@ const LoginScreen = ({ navigation }) => {
                         <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} style={styles.forgotLink}>
                             <Text style={styles.forgotText}>Forgot password?</Text>
                         </TouchableOpacity>
-                        
-                        {canUseGoogleAuth && (
-                            <>
-                                <View style={styles.divider}>
-                                    <View style={styles.line} />
-                                    <Text style={styles.dividerText}>{t('login.or')}</Text>
-                                    <View style={styles.line} />
-                                </View>
 
-                                <GoogleSignInButton
-                                    googleLogin={googleLogin}
-                                    label={t('login.google_signin')}
-                                />
-                            </>
-                        )}
+                        <Text style={styles.adminHint}>Admin accounts open the control center automatically after login.</Text>
                     </View>
 
                     <TouchableOpacity onPress={() => navigation.navigate('Register')}>
@@ -143,9 +169,23 @@ const styles = StyleSheet.create({
         padding: SPACING.lg,
     },
     logo: {
-        width: 280,
-        height: 140,
-        marginBottom: SPACING.md,
+        width: 220,
+        height: 110,
+        marginBottom: SPACING.sm,
+    },
+    title: {
+        color: COLORS.white,
+        fontSize: 30,
+        fontWeight: '900',
+        textAlign: 'center',
+        marginBottom: SPACING.sm,
+    },
+    subtitle: {
+        color: 'rgba(255,255,255,0.84)',
+        fontSize: 15,
+        lineHeight: 22,
+        textAlign: 'center',
+        marginBottom: SPACING.lg,
     },
     tagline: {
         fontSize: 14,
@@ -157,14 +197,14 @@ const styles = StyleSheet.create({
     },
     formContainer: {
         width: '100%',
-        maxWidth: 400,
+        maxWidth: 460,
     },
     input: {
         width: '100%',
         borderWidth: 1,
         borderColor: 'rgba(255,215,0,0.3)',
-        borderRadius: SIZES.radius,
-        padding: 14,
+        borderRadius: 28,
+        padding: 17,
         marginBottom: SPACING.md,
         backgroundColor: 'rgba(255,255,255,0.08)',
         color: COLORS.white,
@@ -193,7 +233,7 @@ const styles = StyleSheet.create({
     divider: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginVertical: SPACING.lg,
+        marginVertical: SPACING.md,
     },
     line: {
         flex: 1,
@@ -201,28 +241,44 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255,255,255,0.2)',
     },
     dividerText: {
-        color: 'rgba(255,255,255,0.6)',
+        color: 'rgba(255,255,255,0.78)',
         marginHorizontal: SPACING.md,
-        fontSize: 14,
+        fontSize: 13,
+        fontWeight: '800',
     },
-    googleBtn: {
+    socialBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: COLORS.white,
-        borderRadius: SIZES.radius,
-        padding: 12,
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        borderColor: 'rgba(255,215,0,0.42)',
+        borderWidth: 1,
+        borderRadius: 28,
+        paddingVertical: 15,
+        paddingHorizontal: 18,
         width: '100%',
+        minHeight: 58,
+        marginBottom: SPACING.sm,
     },
-    googleIcon: {
+    socialBtnSubtle: {
+        backgroundColor: 'rgba(255,255,255,0.08)',
+        borderColor: 'rgba(255,255,255,0.16)',
+    },
+    socialBtnDisabled: {
+        opacity: 0.72,
+    },
+    socialImageIcon: {
         width: 24,
         height: 24,
-        marginRight: 10,
+        marginRight: 12,
     },
-    googleBtnText: {
-        color: '#757575',
+    socialBtnText: {
+        color: COLORS.white,
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '800',
+    },
+    socialBtnTextDisabled: {
+        color: 'rgba(255,255,255,0.62)',
     },
     forgotLink: {
         alignItems: 'center',
@@ -232,6 +288,13 @@ const styles = StyleSheet.create({
         color: COLORS.accent,
         fontWeight: '700',
         fontSize: 14,
+    },
+    adminHint: {
+        color: 'rgba(255,255,255,0.68)',
+        textAlign: 'center',
+        fontSize: 12,
+        lineHeight: 17,
+        marginTop: SPACING.sm,
     },
     notice: {
         borderWidth: 1,
