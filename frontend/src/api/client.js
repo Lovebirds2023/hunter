@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 
 // Production API URL — must be set via EXPO_PUBLIC_API_URL in .env
 const getBaseUrl = () => {
-    const envUrl = process.env.EXPO_PUBLIC_API_URL;
+    const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
 
     if (!envUrl) {
         // In production builds, EXPO_PUBLIC_API_URL must always be set
@@ -18,7 +18,8 @@ const getBaseUrl = () => {
         return 'http://localhost:8000';
     }
 
-    return envUrl;
+    const normalizedUrl = /^https?:\/\//i.test(envUrl) ? envUrl : `https://${envUrl}`;
+    return normalizedUrl.replace(/\/+$/, '');
 };
 
 export const BASE_URL = getBaseUrl();
@@ -52,4 +53,5 @@ client.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
+export { client };
 export default client;

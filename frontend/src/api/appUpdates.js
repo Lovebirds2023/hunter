@@ -1,5 +1,5 @@
-import { client } from './client';
-import * as Platform from 'react-native';
+import client from './client';
+import { Platform } from 'react-native';
 
 /**
  * Get the latest app version available from the server
@@ -10,7 +10,7 @@ export const getLatestAppVersion = async (platform = null) => {
   try {
     // Detect platform if not provided
     if (!platform) {
-      platform = Platform.Platform.OS === 'ios' ? 'ios' : 'android';
+      platform = Platform.OS === 'ios' ? 'ios' : 'android';
     }
 
     const response = await client.get('/app/version/latest', {

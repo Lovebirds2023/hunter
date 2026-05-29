@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import axios from 'axios';
-import { API_URL } from '../api/client';
+import client from '../api/client';
 
 const CurrencyContext = createContext();
 
@@ -13,7 +12,7 @@ export const CurrencyProvider = ({ children }) => {
     useEffect(() => {
         const fetchRates = async () => {
             try {
-                const response = await axios.get(`${API_URL}/exchange-rates`);
+                const response = await client.get('/exchange-rates');
                 setRates(response.data.rates);
             } catch (error) {
                 console.error("Failed to fetch exchange rates:", error);
