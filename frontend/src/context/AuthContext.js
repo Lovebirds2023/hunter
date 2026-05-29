@@ -150,7 +150,7 @@ export const AuthProvider = ({ children }) => {
             const response = await client.post('/password/forgot', { email });
             const message = response.data?.message || 'If this email exists, password reset instructions will be sent shortly.';
             setAuthNotice({ type: 'success', message });
-            return { success: true, message, resetToken: response.data?.reset_token };
+            return { success: true, message };
         } catch (e) {
             if (__DEV__) console.log('Forgot password error', e);
             const message = getFriendlyAuthError(e, 'Could not start password reset. Please try again.');

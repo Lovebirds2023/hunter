@@ -11,6 +11,7 @@ import json
 import time
 import urllib.request
 import smtplib
+import hashlib
 import models, schemas, auth, database, ai_engine, wellness_utils, gemini_utils
 from typing import List, Optional
 import csv
@@ -27,7 +28,16 @@ logger = logging.getLogger(__name__)
 
 pesapal = PesapalAPI()
 gemini_advisor = gemini_utils.GeminiAdvisor()
-password_reset_tokens = {}
+
+def is_smtp_configured():
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_password = os.getenv("SMTP_PASSWORD")
+    from_email = os.getenv("SMTP_FROM_EMAIL") or smtp_user
+    return bool(smtp_host and smtp_user and smtp_password and from_email)
+
+def hash_reset_token(token: str):
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 def send_password_reset_email(email: str, token: str):
     smtp_host = os.getenv("SMTP_HOST")
@@ -36,14 +46,6 @@ def send_password_reset_email(email: str, token: str):
     smtp_password = os.getenv("SMTP_PASSWORD")
     from_email = os.getenv("SMTP_FROM_EMAIL") or smtp_user
     frontend_url = os.getenv("FRONTEND_URL", "https://hunter-v9qj-lovebirds-project.vercel.app")
-
-    if not smtp_host or not smtp_user or not smtp_password or not from_email:
-        logger.warning(
-            "SMTP is not configured. Password reset token for %s expires in 30 minutes: %s",
-            email,
-            token,
-        )
-        return False
 
     message = EmailMessage()
     message["Subject"] = "Reset your Lovedogs360 password"
@@ -180,7 +182,14 @@ def register(user: schemas.UserCreate, db: Session = Depends(database.get_db)):
 
 @app.post("/password/forgot")
 def forgot_password(request: schemas.PasswordResetRequest, db: Session = Depends(database.get_db)):
-    user = db.query(models.User).filter(models.User.email == request.email).first()
+    if not is_smtp_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Password reset email is not configured yet. Please contact support."
+        )
+
+    email = request.email.lower()
+    user = db.query(models.User).filter(models.User.email == email).first()
     response = {"message": "If this email exists, password reset instructions will be sent shortly."}
 
     if not user:
@@ -188,39 +197,48 @@ def forgot_password(request: schemas.PasswordResetRequest, db: Session = Depends
 
     token = secrets.token_urlsafe(32)
     expires_at = datetime.utcnow() + timedelta(minutes=30)
-    password_reset_tokens[token] = {"email": user.email, "expires_at": expires_at}
+    reset_record = models.PasswordResetToken(
+        id=str(uuid.uuid4()),
+        user_id=user.id,
+        token_hash=hash_reset_token(token),
+        expires_at=expires_at,
+    )
+    db.add(reset_record)
+    db.commit()
 
     try:
-        sent = send_password_reset_email(user.email, token)
-        if sent:
-            logger.info(f"Password reset email sent to {user.email}")
+        send_password_reset_email(user.email, token)
+        logger.info(f"Password reset email sent to {user.email}")
     except Exception as e:
+        db.delete(reset_record)
+        db.commit()
         logger.error(f"Failed to send password reset email to {user.email}: {e}")
+        raise HTTPException(status_code=503, detail="Could not send password reset email. Please try again later.")
 
     logger.info(f"Password reset requested for {user.email}. Token expires at {expires_at.isoformat()}Z")
-    if os.getenv("PASSWORD_RESET_EXPOSE_TOKEN", "").lower() == "true":
-        response["reset_token"] = token
-
     return response
 
 @app.post("/password/reset")
 def reset_password(request: schemas.PasswordResetConfirm, db: Session = Depends(database.get_db)):
-    token_data = password_reset_tokens.get(request.token)
-    if not token_data or token_data["expires_at"] < datetime.utcnow():
-        password_reset_tokens.pop(request.token, None)
+    token_hash = hash_reset_token(request.token)
+    token_data = db.query(models.PasswordResetToken).filter(
+        models.PasswordResetToken.token_hash == token_hash,
+        models.PasswordResetToken.used_at.is_(None),
+    ).first()
+
+    if not token_data or token_data.expires_at < datetime.utcnow():
         raise HTTPException(status_code=400, detail="Invalid or expired reset token")
 
     if len(request.new_password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
 
-    user = db.query(models.User).filter(models.User.email == token_data["email"]).first()
+    user = db.query(models.User).filter(models.User.id == token_data.user_id).first()
     if not user:
-        password_reset_tokens.pop(request.token, None)
         raise HTTPException(status_code=400, detail="Invalid or expired reset token")
 
     user.hashed_password = auth.get_password_hash(request.new_password)
+    token_data.used_at = datetime.utcnow()
     db.commit()
-    password_reset_tokens.pop(request.token, None)
     return {"message": "Password reset successful. You can now log in."}
 
 @app.post("/token", response_model=schemas.Token)

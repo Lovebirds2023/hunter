@@ -60,6 +60,18 @@ class User(Base):
     case_comments = relationship("CaseComment", back_populates="author")
     case_likes = relationship("CaseLike", back_populates="user")
 
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+
+    id = Column(String, primary_key=True, index=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    token_hash = Column(String, nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    user = relationship("User")
+
 class Spotlight(Base):
     __tablename__ = "spotlight"
 

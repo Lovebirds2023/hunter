@@ -9,16 +9,11 @@ const ForgotPasswordScreen = ({ navigation }) => {
     const [email, setEmail] = useState('');
     const [resetToken, setResetToken] = useState('');
     const [newPassword, setNewPassword] = useState('');
-    const [debugToken, setDebugToken] = useState('');
     const { requestPasswordReset, resetPassword, isLoading, authNotice, clearAuthNotice } = useContext(AuthContext);
 
     const handleRequestReset = async () => {
         clearAuthNotice();
-        const result = await requestPasswordReset(email.trim().toLowerCase());
-        if (result.resetToken) {
-            setDebugToken(result.resetToken);
-            setResetToken(result.resetToken);
-        }
+        await requestPasswordReset(email.trim().toLowerCase());
     };
 
     const handleResetPassword = async () => {
@@ -67,9 +62,6 @@ const ForgotPasswordScreen = ({ navigation }) => {
                         <View style={styles.divider} />
 
                         <Text style={styles.subtitle}>Already have a reset code?</Text>
-                        {debugToken ? (
-                            <Text style={styles.debugToken}>Temporary reset code: {debugToken}</Text>
-                        ) : null}
                         <TextInput
                             style={styles.input}
                             placeholder="Reset code"
@@ -153,13 +145,6 @@ const styles = StyleSheet.create({
         color: COLORS.accent,
         fontWeight: '700',
         fontSize: 15,
-    },
-    debugToken: {
-        color: COLORS.accent,
-        fontSize: 12,
-        fontWeight: '700',
-        marginBottom: SPACING.sm,
-        textAlign: 'center',
     },
     notice: {
         borderWidth: 1,
