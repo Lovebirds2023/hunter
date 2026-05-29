@@ -10,8 +10,6 @@ import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
 
-WebBrowser.maybeCompleteAuthSession();
-
 const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 const isUsableGoogleClientId = (clientId) => {
@@ -39,6 +37,7 @@ const SocialLoginButton = ({ icon, imageUri, label, onPress, disabled, subtle })
 const GoogleSignInButton = ({ googleLogin, label, disabledLabel }) => {
     const redirectUri = makeRedirectUri({
         useProxy: false,
+        path: 'login'
     });
 
     const [request, response, promptAsync] = Google.useAuthRequest({
