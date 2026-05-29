@@ -10,23 +10,47 @@ import * as WebBrowser from 'expo-web-browser';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const LoginScreen = ({ navigation }) => {
-    const { t } = useTranslation();
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
-    const { login, devBypass, googleLogin } = useContext(AuthContext);
+const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 
+const GoogleSignInButton = ({ googleLogin, label }) => {
     const [request, response, promptAsync] = Google.useAuthRequest({
-        webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-        iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+        webClientId: googleWebClientId,
+        iosClientId: googleIosClientId,
     });
 
     React.useEffect(() => {
         if (response?.type === 'success') {
             const { authentication } = response;
-            googleLogin(authentication.idToken);
+            if (authentication?.idToken) {
+                googleLogin(authentication.idToken);
+            }
         }
-    }, [response]);
+    }, [response, googleLogin]);
+
+    return (
+        <TouchableOpacity
+            style={styles.googleBtn}
+            onPress={() => promptAsync()}
+            disabled={!request}
+        >
+            <Image
+                source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg' }}
+                style={styles.googleIcon}
+            />
+            <Text style={styles.googleBtnText}>{label}</Text>
+        </TouchableOpacity>
+    );
+};
+
+const LoginScreen = ({ navigation }) => {
+    const { t } = useTranslation();
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const { login, devBypass, googleLogin } = useContext(AuthContext);
+    const canUseGoogleAuth = Platform.OS === 'web'
+        ? Boolean(googleWebClientId)
+        : Boolean(googleIosClientId || googleWebClientId);
 
     return (
         <ThemeBackground>
@@ -61,23 +85,20 @@ const LoginScreen = ({ navigation }) => {
                         />
                         <Button title={t('login.login')} onPress={() => login(email.trim().toLowerCase(), password)} variant="gold" />
                         
-                        <View style={styles.divider}>
-                            <View style={styles.line} />
-                            <Text style={styles.dividerText}>{t('login.or')}</Text>
-                            <View style={styles.line} />
-                        </View>
+                        {canUseGoogleAuth && (
+                            <>
+                                <View style={styles.divider}>
+                                    <View style={styles.line} />
+                                    <Text style={styles.dividerText}>{t('login.or')}</Text>
+                                    <View style={styles.line} />
+                                </View>
 
-                        <TouchableOpacity 
-                            style={styles.googleBtn} 
-                            onPress={() => promptAsync()}
-                            disabled={!request}
-                        >
-                            <Image 
-                                source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg' }} 
-                                style={styles.googleIcon} 
-                            />
-                            <Text style={styles.googleBtnText}>{t('login.google_signin')}</Text>
-                        </TouchableOpacity>
+                                <GoogleSignInButton
+                                    googleLogin={googleLogin}
+                                    label={t('login.google_signin')}
+                                />
+                            </>
+                        )}
                     </View>
 
                     <TouchableOpacity onPress={() => navigation.navigate('Register')}>
