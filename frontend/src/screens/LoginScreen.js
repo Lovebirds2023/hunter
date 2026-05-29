@@ -47,10 +47,19 @@ const LoginScreen = ({ navigation }) => {
     const { t } = useTranslation();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const { login, devBypass, googleLogin } = useContext(AuthContext);
+    const { login, googleLogin, isLoading, authNotice, clearAuthNotice } = useContext(AuthContext);
     const canUseGoogleAuth = Platform.OS === 'web'
         ? Boolean(googleWebClientId)
         : Boolean(googleIosClientId || googleWebClientId);
+
+    const handleLogin = async () => {
+        clearAuthNotice();
+        const cleanEmail = email.trim().toLowerCase();
+        if (!cleanEmail || !password) {
+            return;
+        }
+        await login(cleanEmail, password);
+    };
 
     return (
         <ThemeBackground>
@@ -66,6 +75,11 @@ const LoginScreen = ({ navigation }) => {
                     />
 
                     <View style={styles.formContainer}>
+                        {authNotice && (
+                            <View style={[styles.notice, authNotice.type === 'success' && styles.noticeSuccess]}>
+                                <Text style={styles.noticeText}>{authNotice.message}</Text>
+                            </View>
+                        )}
                         <TextInput
                             style={styles.input}
                             placeholder={t('login.email')}
@@ -83,7 +97,16 @@ const LoginScreen = ({ navigation }) => {
                             onChangeText={setPassword}
                             secureTextEntry
                         />
-                        <Button title={t('login.login')} onPress={() => login(email.trim().toLowerCase(), password)} variant="gold" />
+                        <Button
+                            title={t('login.login')}
+                            onPress={handleLogin}
+                            variant="gold"
+                            loading={isLoading}
+                            disabled={!email.trim() || !password}
+                        />
+                        <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} style={styles.forgotLink}>
+                            <Text style={styles.forgotText}>Forgot password?</Text>
+                        </TouchableOpacity>
                         
                         {canUseGoogleAuth && (
                             <>
@@ -199,6 +222,33 @@ const styles = StyleSheet.create({
     googleBtnText: {
         color: '#757575',
         fontSize: 16,
+        fontWeight: '600',
+    },
+    forgotLink: {
+        alignItems: 'center',
+        paddingVertical: 8,
+    },
+    forgotText: {
+        color: COLORS.accent,
+        fontWeight: '700',
+        fontSize: 14,
+    },
+    notice: {
+        borderWidth: 1,
+        borderColor: 'rgba(255, 99, 71, 0.45)',
+        backgroundColor: 'rgba(255, 99, 71, 0.14)',
+        borderRadius: SIZES.radius,
+        padding: 12,
+        marginBottom: SPACING.md,
+    },
+    noticeSuccess: {
+        borderColor: 'rgba(76, 175, 80, 0.45)',
+        backgroundColor: 'rgba(76, 175, 80, 0.14)',
+    },
+    noticeText: {
+        color: COLORS.white,
+        fontSize: 14,
+        lineHeight: 19,
         fontWeight: '600',
     },
 });

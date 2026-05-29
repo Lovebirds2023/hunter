@@ -14,6 +14,7 @@ import UpdateModal from './src/components/UpdateModal';
 
 import LoginScreen from './src/screens/LoginScreen.js';
 import RegisterScreen from './src/screens/RegisterScreen.js';
+import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen.js';
 import { MarketplaceScreen } from './src/screens/MarketplaceScreen';
 import { DogIdentityScreen } from './src/screens/DogIdentityScreen';
 import { PayoutsScreen } from './src/screens/PayoutsScreen';
@@ -63,6 +64,7 @@ const linking = {
     config: {
         screens: {
             Login: 'login',
+            ForgotPassword: 'forgot-password',
             Onboarding: 'onboarding',
             Register: 'register',
             Main: {
@@ -184,6 +186,7 @@ function AppNavigator() {
             {!userToken ? (
                 <>
                     <Stack.Screen name="Login" component={LoginScreen} />
+                    <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
                     <Stack.Screen name="Onboarding" component={OnboardingScreen} />
                     <Stack.Screen name="Register" component={RegisterScreen} />
                 </>

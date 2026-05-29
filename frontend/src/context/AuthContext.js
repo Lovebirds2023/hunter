@@ -26,9 +26,27 @@ export const AuthProvider = ({ children }) => {
     const [userToken, setUserToken] = useState(null);
     const [userInfo, setUserInfo] = useState(null);
     const [isAdmin, setIsAdmin] = useState(false);
+    const [authNotice, setAuthNotice] = useState(null);
+
+    const clearAuthNotice = () => setAuthNotice(null);
+
+    const getFriendlyAuthError = (error, fallback) => {
+        if (error?.message === 'Network Error') {
+            return 'Could not reach the server. Check your connection and try again.';
+        }
+        const detail = error?.response?.data?.detail;
+        if (typeof detail === 'string') {
+            if (detail.toLowerCase().includes('incorrect username or password')) {
+                return 'Incorrect email or password. Please check your details and try again.';
+            }
+            return detail;
+        }
+        return fallback;
+    };
 
     const login = async (email, password) => {
         setIsLoading(true);
+        clearAuthNotice();
         try {
             // Typically URL encoded form data for OAuth2 password flow
             const formData = new URLSearchParams();
@@ -50,10 +68,14 @@ export const AuthProvider = ({ children }) => {
             setUserInfo(userRes.data);
             setIsAdmin(userRes.data.role === 'admin');
             await Storage.setItemAsync('userInfo', JSON.stringify(userRes.data));
+            return true;
 
         } catch (e) {
             if (__DEV__) console.log('Login error', e);
-            Alert.alert("Login Failed", "Invalid credentials");
+            const message = getFriendlyAuthError(e, 'Login failed. Please try again.');
+            setAuthNotice({ type: 'error', message });
+            Alert.alert("Login Failed", message);
+            return false;
         } finally {
             setIsLoading(false);
         }
@@ -61,6 +83,7 @@ export const AuthProvider = ({ children }) => {
 
     const googleLogin = async (idToken) => {
         setIsLoading(true);
+        clearAuthNotice();
         try {
             const response = await client.post('/auth/google', { id_token: idToken });
             
@@ -75,7 +98,9 @@ export const AuthProvider = ({ children }) => {
             return true;
         } catch (e) {
             if (__DEV__) console.log('Google Login error', e);
-            Alert.alert("Google Login Failed", "Something went wrong during authentication.");
+            const message = getFriendlyAuthError(e, 'Google login failed. Please try email/password or try again.');
+            setAuthNotice({ type: 'error', message });
+            Alert.alert("Google Login Failed", message);
             return false;
         } finally {
             setIsLoading(false);
@@ -84,6 +109,7 @@ export const AuthProvider = ({ children }) => {
 
     const register = async (fullName, email, password, role, phoneNumber, bio, countryCode, preferredLanguage, latitude, longitude) => {
         setIsLoading(true);
+        clearAuthNotice();
         try {
             await client.post('/register', {
                 full_name: fullName,
@@ -97,20 +123,57 @@ export const AuthProvider = ({ children }) => {
                 longitude,
                 bio
             });
+            setAuthNotice({ type: 'success', message: 'Registration successful. Please log in.' });
             Alert.alert("Success", "Registration successful. Please login.");
             return true;
         } catch (e) {
             if (__DEV__) console.log('Register error', e?.message, e?.response?.data || e);
             if (e?.message === 'Network Error') {
-                Alert.alert(
-                    "Connection Failed",
-                    "Could not reach the backend. If you are on a physical phone, 'localhost' will not work. Please update EXPO_PUBLIC_API_URL in your .env to your computer's IP address (e.g. http://192.168.x.x:8000)."
-                );
+                const message = "Could not reach the backend. Please check your connection and try again.";
+                setAuthNotice({ type: 'error', message });
+                Alert.alert("Connection Failed", message);
                 return false;
             }
-            const detail = e?.response?.data?.detail || "Something went wrong.";
-            Alert.alert("Registration Failed", typeof detail === 'string' ? detail : JSON.stringify(detail));
+            const message = getFriendlyAuthError(e, 'Registration failed. Please check your details and try again.');
+            setAuthNotice({ type: 'error', message });
+            Alert.alert("Registration Failed", message);
             return false;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const requestPasswordReset = async (email) => {
+        setIsLoading(true);
+        clearAuthNotice();
+        try {
+            const response = await client.post('/password/forgot', { email });
+            const message = response.data?.message || 'If this email exists, password reset instructions will be sent shortly.';
+            setAuthNotice({ type: 'success', message });
+            return { success: true, message, resetToken: response.data?.reset_token };
+        } catch (e) {
+            if (__DEV__) console.log('Forgot password error', e);
+            const message = getFriendlyAuthError(e, 'Could not start password reset. Please try again.');
+            setAuthNotice({ type: 'error', message });
+            return { success: false, message };
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const resetPassword = async (token, newPassword) => {
+        setIsLoading(true);
+        clearAuthNotice();
+        try {
+            const response = await client.post('/password/reset', { token, new_password: newPassword });
+            const message = response.data?.message || 'Password reset successful. You can now log in.';
+            setAuthNotice({ type: 'success', message });
+            return { success: true, message };
+        } catch (e) {
+            if (__DEV__) console.log('Reset password error', e);
+            const message = getFriendlyAuthError(e, 'Password reset failed. Check your reset code and try again.');
+            setAuthNotice({ type: 'error', message });
+            return { success: false, message };
         } finally {
             setIsLoading(false);
         }
@@ -174,7 +237,21 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     return (
-        <AuthContext.Provider value={{ login, logout, register, updateUser, googleLogin, isLoading, userToken, userInfo, isAdmin }}>
+        <AuthContext.Provider value={{
+            login,
+            logout,
+            register,
+            updateUser,
+            googleLogin,
+            requestPasswordReset,
+            resetPassword,
+            clearAuthNotice,
+            authNotice,
+            isLoading,
+            userToken,
+            userInfo,
+            isAdmin
+        }}>
             {children}
         </AuthContext.Provider>
     );

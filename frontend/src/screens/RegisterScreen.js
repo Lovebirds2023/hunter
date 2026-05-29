@@ -57,7 +57,9 @@ const RegisterScreen = ({ navigation }) => {
         }
     };
 
-    const { register, isLoading } = useContext(AuthContext);
+    const { register, isLoading, authNotice, clearAuthNotice } = useContext(AuthContext);
+
+    const validateEmail = (value) => /\S+@\S+\.\S+/.test(value);
 
     return (
         <ThemeBackground>
@@ -86,6 +88,12 @@ const RegisterScreen = ({ navigation }) => {
                         {currentStep === 2 && t('register.step2_title')}
                         {currentStep === 3 && t('register.step3_title')}
                     </Text>
+
+                    {authNotice && (
+                        <View style={[styles.notice, authNotice.type === 'success' && styles.noticeSuccess]}>
+                            <Text style={styles.noticeText}>{authNotice.message}</Text>
+                        </View>
+                    )}
 
                     {/* Step 1: Basics */}
                     {currentStep === 1 && (
@@ -135,8 +143,17 @@ const RegisterScreen = ({ navigation }) => {
 
                             <View style={{ marginTop: 25 }}>
                                 <Button title={t('register.next_step')} onPress={() => {
+                                    clearAuthNotice();
                                     if (!fullName || !email || !password) {
                                         Alert.alert("Wait", "Please complete all fields on this step.");
+                                        return;
+                                    }
+                                    if (!validateEmail(email.trim())) {
+                                        Alert.alert("Invalid email", "Please enter a valid email address.");
+                                        return;
+                                    }
+                                    if (password.length < 8) {
+                                        Alert.alert("Weak password", "Password must be at least 8 characters.");
                                         return;
                                     }
                                     setCurrentStep(2);
@@ -224,6 +241,7 @@ const RegisterScreen = ({ navigation }) => {
                                 </TouchableOpacity>
                                 <View style={{ flex: 1 }}>
                                     <Button title={t('common.continue')} onPress={() => {
+                                        clearAuthNotice();
                                         if (!phoneNumber) {
                                             Alert.alert("Wait", "Please provide a valid phone number.");
                                             return;
@@ -291,6 +309,7 @@ const RegisterScreen = ({ navigation }) => {
                                 </TouchableOpacity>
                                 <View style={{ flex: 1 }}>
                                     <Button title={t('register.register')} onPress={async () => {
+                                        clearAuthNotice();
                                         if (!locationAllowed) {
                                             Alert.alert("Required", t('register.location_denied_error'));
                                             return;
@@ -575,6 +594,24 @@ const styles = StyleSheet.create({
         color: 'rgba(255,255,255,0.8)',
         fontWeight: 'bold',
         fontSize: 15,
+    },
+    notice: {
+        borderWidth: 1,
+        borderColor: 'rgba(255, 99, 71, 0.45)',
+        backgroundColor: 'rgba(255, 99, 71, 0.14)',
+        borderRadius: SIZES.radius,
+        padding: 12,
+        marginBottom: SPACING.md,
+    },
+    noticeSuccess: {
+        borderColor: 'rgba(76, 175, 80, 0.45)',
+        backgroundColor: 'rgba(76, 175, 80, 0.14)',
+    },
+    noticeText: {
+        color: COLORS.white,
+        fontSize: 14,
+        lineHeight: 19,
+        fontWeight: '600',
     },
 });
 
