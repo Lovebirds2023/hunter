@@ -60,7 +60,7 @@ const CaseStack = createNativeStackNavigator();
 
 // Web URL → Screen linking configuration
 const linking = {
-    prefixes: ['https://lovedogs360.com', 'http://localhost:19006', 'lovedogs360://'],
+    prefixes: ['https://hunter-k9lr.vercel.app', 'https://lovedogs360.com', 'http://localhost:19006', 'lovedogs360://'],
     config: {
         screens: {
             Login: 'login',
