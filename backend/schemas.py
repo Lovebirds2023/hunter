@@ -335,6 +335,32 @@ class NotificationResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class AppVersionCreate(BaseModel):
+    version: str
+    platform: str  # "android", "ios", or "all"
+    release_notes: Optional[str] = None
+    download_url: Optional[str] = None
+    is_required: bool = False
+
+class AppVersionUpdate(BaseModel):
+    release_notes: Optional[str] = None
+    download_url: Optional[str] = None
+    is_required: Optional[bool] = None
+    is_active: Optional[bool] = None
+
+class AppVersionResponse(BaseModel):
+    id: str
+    version: str
+    platform: str
+    release_notes: Optional[str]
+    download_url: Optional[str]
+    is_required: bool
+    is_active: bool
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
+    class Config:
+        from_attributes = True
+
 class HealthRecordCreate(BaseModel):
     record_type: str
     date: str # ISO format

@@ -4,7 +4,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SHADOWS } from '../constants/theme';
 import client from '../api/client';
 import { useTranslation } from 'react-i18next';
-import { Image, ScrollView } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
+import { decode } from 'base64-arraybuffer';
+import { supabase } from '../../supabase';
+import { Image } from 'react-native';
 
 export const SupportScreen = ({ navigation }) => {
     const { t } = useTranslation();
@@ -15,7 +19,9 @@ export const SupportScreen = ({ navigation }) => {
     // Form state
     const [subject, setSubject] = useState('');
     const [message, setMessage] = useState('');
+    const [images, setImages] = useState([]);
     const [showForm, setShowForm] = useState(false);
+    const [uploading, setUploading] = useState(false);
 
     useEffect(() => {
         fetchTickets();
@@ -29,6 +35,82 @@ export const SupportScreen = ({ navigation }) => {
             console.warn(e);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const pickImage = async () => {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert("Permission Denied", "We need your permission to access your gallery.");
+            return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            quality: 0.7,
+        });
+
+        if (!result.canceled) {
+            setImages([...images, result.assets[0].uri]);
+        }
+    };
+
+    const takePhoto = async () => {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert("Permission Denied", "We need your permission to access your camera.");
+            return;
+        }
+
+        const result = await ImagePicker.launchCameraAsync({
+            allowsEditing: true,
+            quality: 0.7,
+        });
+
+        if (!result.canceled) {
+            setImages([...images, result.assets[0].uri]);
+        }
+    };
+
+    const removeImage = (index) => {
+        const newImages = [...images];
+        newImages.splice(index, 1);
+        setImages(newImages);
+    };
+
+    const uploadImages = async () => {
+        setUploading(true);
+        const uploadedUrls = [];
+
+        try {
+            for (const uri of images) {
+                const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
+                const filePath = `support/${fileName}`;
+
+                const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+                const { data, error } = await supabase.storage
+                    .from('support_images')
+                    .upload(filePath, decode(base64), {
+                        contentType: 'image/jpeg',
+                        upsert: true
+                    });
+
+                if (error) throw error;
+
+                const { data: { publicUrl } } = supabase.storage
+                    .from('support_images')
+                    .getPublicUrl(filePath);
+
+                uploadedUrls.push(publicUrl);
+            }
+            return uploadedUrls;
+        } catch (error) {
+            console.error('Upload error:', error);
+            Alert.alert("Upload Failed", "Failed to upload one or more images.");
+            return null;
+        } finally {
+            setUploading(false);
         }
     };
 
@@ -152,12 +234,39 @@ export const SupportScreen = ({ navigation }) => {
                                 placeholderTextColor="#999"
                             />
 
+                            {/* Image Picker Section */}
+                            <View style={styles.imagePickerContainer}>
+                                <TouchableOpacity style={styles.attachmentBtn} onPress={pickImage}>
+                                    <Ionicons name="images-outline" size={24} color={COLORS.primary} />
+                                    <Text style={styles.attachmentText}>Gallery</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.attachmentBtn} onPress={takePhoto}>
+                                    <Ionicons name="camera-outline" size={24} color={COLORS.primary} />
+                                    <Text style={styles.attachmentText}>Camera</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            {images.length > 0 && (
+                                <View style={styles.previewsContainer}>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                        {images.map((uri, index) => (
+                                            <View key={index} style={styles.previewWrapper}>
+                                                <Image source={{ uri }} style={styles.previewImage} />
+                                                <TouchableOpacity style={styles.removeBtn} onPress={() => removeImage(index)}>
+                                                    <Ionicons name="close-circle" size={20} color="#FF6B6B" />
+                                                </TouchableOpacity>
+                                            </View>
+                                        ))}
+                                    </ScrollView>
+                                </View>
+                            )}
+
                             <TouchableOpacity 
-                                style={[styles.submitBtn, submitting && { opacity: 0.7 }]} 
+                                style={[styles.submitBtn, (submitting || uploading) && { opacity: 0.7 }]} 
                                 onPress={handleSubmit} 
-                                disabled={submitting}
+                                disabled={submitting || uploading}
                             >
-                                {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Submit Ticket</Text>}
+                                {(submitting || uploading) ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Submit Ticket</Text>}
                             </TouchableOpacity>
                         </View>
                     )}
