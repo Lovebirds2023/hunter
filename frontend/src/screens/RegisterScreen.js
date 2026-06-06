@@ -90,8 +90,20 @@ const RegisterScreen = ({ navigation }) => {
                     </Text>
 
                     {authNotice && (
-                        <View style={[styles.notice, authNotice.type === 'success' && styles.noticeSuccess]}>
-                            <Text style={styles.noticeText}>{authNotice.message}</Text>
+                        <View style={[
+                            styles.notice,
+                            authNotice.type === 'error' && styles.noticeError,
+                            authNotice.type === 'success' && styles.noticeSuccess,
+                        ]}>
+                            <View style={styles.noticeContent}>
+                                <Text style={styles.noticeIcon}>
+                                    {authNotice.type === 'success' && '✓'}
+                                    {authNotice.type === 'error' && '✕'}
+                                </Text>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.noticeText}>{authNotice.message}</Text>
+                                </View>
+                            </View>
                         </View>
                     )}
 
@@ -596,16 +608,37 @@ const styles = StyleSheet.create({
         fontSize: 15,
     },
     notice: {
-        borderWidth: 1,
-        borderColor: 'rgba(255, 99, 71, 0.45)',
-        backgroundColor: 'rgba(255, 99, 71, 0.14)',
+        borderWidth: 2,
+        borderColor: 'rgba(255, 99, 71, 0.6)',
+        backgroundColor: 'rgba(255, 99, 71, 0.25)',
         borderRadius: SIZES.radius,
-        padding: 12,
+        padding: 14,
         marginBottom: SPACING.md,
+        shadowColor: 'rgba(255, 99, 71, 0.4)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 3,
+        elevation: 4,
+    },
+    noticeError: {
+        borderColor: 'rgba(255, 70, 70, 0.7)',
+        backgroundColor: 'rgba(255, 70, 70, 0.28)',
+        shadowColor: 'rgba(255, 70, 70, 0.5)',
     },
     noticeSuccess: {
-        borderColor: 'rgba(76, 175, 80, 0.45)',
-        backgroundColor: 'rgba(76, 175, 80, 0.14)',
+        borderColor: 'rgba(76, 175, 80, 0.65)',
+        backgroundColor: 'rgba(76, 175, 80, 0.28)',
+        shadowColor: 'rgba(76, 175, 80, 0.4)',
+    },
+    noticeContent: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 10,
+    },
+    noticeIcon: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        marginTop: 2,
     },
     noticeText: {
         color: COLORS.white,

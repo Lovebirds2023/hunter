@@ -106,10 +106,20 @@ const LoginScreen = ({ navigation }) => {
                         {visibleNotice && (
                             <View style={[
                                 styles.notice,
+                                visibleNotice.type === 'error' && styles.noticeError,
                                 visibleNotice.type === 'success' && styles.noticeSuccess,
                                 visibleNotice.type === 'info' && styles.noticeInfo,
                             ]}>
-                                <Text style={styles.noticeText}>{visibleNotice.message}</Text>
+                                <View style={styles.noticeContent}>
+                                    <Text style={styles.noticeIcon}>
+                                        {visibleNotice.type === 'success' && '✓'}
+                                        {visibleNotice.type === 'error' && '✕'}
+                                        {visibleNotice.type === 'info' && 'ℹ'}
+                                    </Text>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.noticeText}>{visibleNotice.message}</Text>
+                                    </View>
+                                </View>
                             </View>
                         )}
 
@@ -324,20 +334,42 @@ const styles = StyleSheet.create({
         marginTop: SPACING.sm,
     },
     notice: {
-        borderWidth: 1,
-        borderColor: 'rgba(255, 99, 71, 0.45)',
-        backgroundColor: 'rgba(255, 99, 71, 0.14)',
+        borderWidth: 2,
+        borderColor: 'rgba(255, 99, 71, 0.6)',
+        backgroundColor: 'rgba(255, 99, 71, 0.25)',
         borderRadius: SIZES.radius,
-        padding: 12,
+        padding: 14,
         marginBottom: SPACING.md,
+        shadowColor: 'rgba(255, 99, 71, 0.4)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 3,
+        elevation: 4,
+    },
+    noticeError: {
+        borderColor: 'rgba(255, 70, 70, 0.7)',
+        backgroundColor: 'rgba(255, 70, 70, 0.28)',
+        shadowColor: 'rgba(255, 70, 70, 0.5)',
     },
     noticeSuccess: {
-        borderColor: 'rgba(76, 175, 80, 0.45)',
-        backgroundColor: 'rgba(76, 175, 80, 0.14)',
+        borderColor: 'rgba(76, 175, 80, 0.65)',
+        backgroundColor: 'rgba(76, 175, 80, 0.28)',
+        shadowColor: 'rgba(76, 175, 80, 0.4)',
     },
     noticeInfo: {
-        borderColor: 'rgba(255,215,0,0.45)',
-        backgroundColor: 'rgba(255,215,0,0.12)',
+        borderColor: 'rgba(255,215,0,0.55)',
+        backgroundColor: 'rgba(255,215,0,0.20)',
+        shadowColor: 'rgba(255,215,0,0.3)',
+    },
+    noticeContent: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 10,
+    },
+    noticeIcon: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        marginTop: 2,
     },
     noticeText: {
         color: COLORS.white,
