@@ -11,6 +11,10 @@ import { SyncProvider } from './src/context/SyncContext';
 import { CurrencyProvider } from './src/context/CurrencyContext';
 import { useAppUpdateCheck } from './src/hooks/useAppUpdateCheck';
 import UpdateModal from './src/components/UpdateModal';
+import * as WebBrowser from 'expo-web-browser';
+
+// Intercept auth redirects globally
+WebBrowser.maybeCompleteAuthSession();
 
 import LoginScreen from './src/screens/LoginScreen.js';
 import RegisterScreen from './src/screens/RegisterScreen.js';
@@ -60,7 +64,7 @@ const CaseStack = createNativeStackNavigator();
 
 // Web URL → Screen linking configuration
 const linking = {
-    prefixes: ['https://lovedogs360.com', 'http://localhost:19006', 'lovedogs360://'],
+    prefixes: ['https://hunter-k9lr.vercel.app', 'https://lovedogs360.com', 'http://localhost:19006', 'lovedogs360://'],
     config: {
         screens: {
             Login: 'login',

@@ -8,8 +8,7 @@ import { COLORS, SPACING, SIZES } from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
-
-WebBrowser.maybeCompleteAuthSession();
+import { makeRedirectUri } from 'expo-auth-session';
 
 const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
@@ -36,9 +35,15 @@ const SocialLoginButton = ({ icon, imageUri, label, onPress, disabled, subtle })
 );
 
 const GoogleSignInButton = ({ googleLogin, label, disabledLabel }) => {
+    const redirectUri = makeRedirectUri({
+        useProxy: false,
+        path: 'login'
+    });
+
     const [request, response, promptAsync] = Google.useAuthRequest({
         webClientId: googleWebClientId,
         iosClientId: googleIosClientId,
+        redirectUri,
     });
 
     React.useEffect(() => {

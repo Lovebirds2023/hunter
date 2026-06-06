@@ -162,6 +162,7 @@ app.add_middleware(
     allow_origins=[
         "https://lovedogs360.com",
         "https://admin.lovedogs360.com",
+        "https://hunter-k9lr.vercel.app",
         "http://localhost:3000",
         "http://localhost:8081",
         "http://localhost:19006",
