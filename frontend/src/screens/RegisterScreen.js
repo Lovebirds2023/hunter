@@ -1,5 +1,5 @@
 import React, { useContext, useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Button } from '../components/Button';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +10,16 @@ import * as Location from 'expo-location';
 import { Picker } from '@react-native-picker/picker';
 import { Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Google from 'expo-auth-session/providers/google';
+import { makeRedirectUri } from 'expo-auth-session';
+
+const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+const isUsableGoogleClientId = (clientId) => {
+    if (!clientId) return false;
+    const normalized = clientId.trim().toLowerCase();
+    return normalized.endsWith('.apps.googleusercontent.com') && !normalized.startsWith('your-');
+};
 
 const RegisterScreen = ({ navigation }) => {
     const { t } = useTranslation();
@@ -57,9 +67,34 @@ const RegisterScreen = ({ navigation }) => {
         }
     };
 
-    const { register, isLoading, authNotice, clearAuthNotice } = useContext(AuthContext);
+    const { register, googleLogin, isLoading, authNotice, clearAuthNotice } = useContext(AuthContext);
 
     const validateEmail = (value) => /\S+@\S+\.\S+/.test(value);
+
+    // Google Sign-Up setup
+    const canUseGoogleAuth = Platform.OS === 'web'
+        ? isUsableGoogleClientId(googleWebClientId)
+        : Boolean(isUsableGoogleClientId(googleIosClientId) || isUsableGoogleClientId(googleWebClientId));
+
+    const redirectUri = makeRedirectUri({
+        useProxy: false,
+        path: 'register'
+    });
+
+    const [googleRequest, googleResponse, promptGoogleAsync] = Google.useAuthRequest({
+        webClientId: googleWebClientId,
+        iosClientId: googleIosClientId,
+        redirectUri,
+    });
+
+    React.useEffect(() => {
+        if (googleResponse?.type === 'success') {
+            const { authentication } = googleResponse;
+            if (authentication?.idToken) {
+                googleLogin(authentication.idToken);
+            }
+        }
+    }, [googleResponse, googleLogin]);
 
     return (
         <ThemeBackground>
@@ -105,6 +140,29 @@ const RegisterScreen = ({ navigation }) => {
                                 </View>
                             </View>
                         </View>
+                    )}
+
+                    {/* Google Sign-Up Button (All Steps) */}
+                    {canUseGoogleAuth && (
+                        <>
+                            <TouchableOpacity
+                                style={styles.googleSignUpBtn}
+                                onPress={() => promptGoogleAsync()}
+                                disabled={!googleRequest}
+                                activeOpacity={0.8}
+                            >
+                                <Image 
+                                    source={{ uri: "https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" }}
+                                    style={styles.googleIcon}
+                                />
+                                <Text style={styles.googleSignUpText}>Sign up with Google</Text>
+                            </TouchableOpacity>
+                            <View style={styles.divider}>
+                                <View style={styles.line} />
+                                <Text style={styles.dividerText}>OR</Text>
+                                <View style={styles.line} />
+                            </View>
+                        </>
                     )}
 
                     {/* Step 1: Basics */}
@@ -645,6 +703,46 @@ const styles = StyleSheet.create({
         fontSize: 14,
         lineHeight: 19,
         fontWeight: '600',
+    },
+    googleSignUpBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: COLORS.white,
+        borderRadius: 28,
+        paddingVertical: 15,
+        paddingHorizontal: 18,
+        width: '100%',
+        marginBottom: SPACING.md,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.2)',
+    },
+    googleIcon: {
+        width: 24,
+        height: 24,
+        marginRight: 10,
+    },
+    googleSignUpText: {
+        color: COLORS.primary,
+        fontSize: 16,
+        fontWeight: '700',
+        letterSpacing: 0.5,
+    },
+    divider: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginVertical: SPACING.md,
+    },
+    line: {
+        flex: 1,
+        height: 1,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+    },
+    dividerText: {
+        color: 'rgba(255,255,255,0.78)',
+        marginHorizontal: SPACING.md,
+        fontSize: 13,
+        fontWeight: '800',
     },
 });
 

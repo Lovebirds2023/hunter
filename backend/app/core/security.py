@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta
-from typing import Any, Union
+from typing import Any, Union, Optional, Dict
 from jose import jwt
 from passlib.context import CryptContext
 from app.core.config import settings
+from google.oauth2 import id_token
+from google.auth.transport import requests
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -16,7 +18,26 @@ def create_access_token(subject: Union[str, Any], expires_delta: timedelta = Non
     return encoded_jwt
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    if not hashed_password:
+        return False
     return pwd_context.verify(plain_password, hashed_password)
 
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
+
+def verify_google_token(token: str) -> Optional[Dict[str, Any]]:
+    """
+    Verify Google OAuth token and return user info.
+    Tries both web and iOS client IDs.
+    """
+    try:
+        # Try web client ID first
+        idinfo = id_token.verify_oauth2_token(token, requests.Request(), settings.GOOGLE_CLIENT_ID)
+        return idinfo
+    except ValueError:
+        # Try iOS client ID if web fails
+        try:
+            idinfo = id_token.verify_oauth2_token(token, requests.Request(), settings.GOOGLE_IOS_CLIENT_ID)
+            return idinfo
+        except ValueError:
+            return None

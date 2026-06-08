@@ -106,7 +106,6 @@ const LoginScreen = ({ navigation }) => {
 
                     <View style={styles.formContainer}>
                         <Text style={styles.title}>Log in or sign up</Text>
-                        <Text style={styles.subtitle}>Access your pet services, health records, events, and Lovedogs360 community.</Text>
 
                         {visibleNotice && (
                             <View style={[
@@ -188,8 +187,6 @@ const LoginScreen = ({ navigation }) => {
                         <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} style={styles.forgotLink}>
                             <Text style={styles.forgotText}>Forgot password?</Text>
                         </TouchableOpacity>
-
-                        <Text style={styles.adminHint}>Admin accounts open the control center automatically after login.</Text>
                     </View>
 
                     <TouchableOpacity onPress={() => navigation.navigate('Register')}>

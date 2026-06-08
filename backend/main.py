@@ -137,6 +137,42 @@ try:
     models.Base.metadata.create_all(bind=database.engine)
     logger.info("Successfully initialized database tables")
     bootstrap_admin_user()
+    
+    # Run OAuth migrations
+    db = database.SessionLocal()
+    try:
+        migration_statements = [
+            """ALTER TABLE "user" 
+               ADD COLUMN IF NOT EXISTS auth_provider VARCHAR(50) DEFAULT 'email';""",
+            """ALTER TABLE "user" 
+               ADD COLUMN IF NOT EXISTS google_id VARCHAR(255) UNIQUE;""",
+            """ALTER TABLE "user" 
+               ALTER COLUMN hashed_password DROP NOT NULL;""",
+            """ALTER TABLE "user" 
+               ALTER COLUMN full_name DROP NOT NULL;""",
+            """CREATE INDEX IF NOT EXISTS idx_user_google_id ON "user"(google_id);""",
+            """CREATE INDEX IF NOT EXISTS idx_user_auth_provider ON "user"(auth_provider);""",
+            """CREATE INDEX IF NOT EXISTS idx_user_email ON "user"(email);""",
+        ]
+        
+        for i, stmt in enumerate(migration_statements, 1):
+            try:
+                db.execute(text(stmt))
+                logger.info(f"✅ OAuth migration step {i} completed")
+            except Exception as e:
+                error_msg = str(e).lower()
+                if any(skip in error_msg for skip in ["already exists", "duplicate", "constraint"]):
+                    logger.info(f"⚠️  OAuth migration step {i} skipped (already exists)")
+                else:
+                    logger.warning(f"⚠️  OAuth migration step {i}: {str(e)[:100]}")
+        
+        db.commit()
+        logger.info("✅ Google OAuth database migrations completed")
+    except Exception as e:
+        logger.warning(f"⚠️  OAuth migrations warning: {str(e)[:150]}")
+    finally:
+        db.close()
+        
 except Exception as e:
     logger.error(f"Error initializing database tables: {e}")
 

@@ -8,11 +8,17 @@ class UserRole(str, enum.Enum):
     PROVIDER = "provider"
     ADMIN = "admin"
 
+class AuthProvider(str, enum.Enum):
+    EMAIL = "email"
+    GOOGLE = "google"
+
 class User(Base):
     id = Column(Integer, primary_key=True, index=True)
-    full_name = Column(String, index=True)
+    full_name = Column(String, index=True, nullable=True)
     email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
+    hashed_password = Column(String, nullable=True)  # Nullable for OAuth users
+    auth_provider = Column(Enum(AuthProvider), default=AuthProvider.EMAIL)  # Track signup method
+    google_id = Column(String, unique=True, nullable=True, index=True)  # Store Google's unique ID
     role = Column(Enum(UserRole), default=UserRole.OWNER)
     is_active = Column(Boolean(), default=True)
     is_verified = Column(Boolean(), default=False) # For providers/admin approval
