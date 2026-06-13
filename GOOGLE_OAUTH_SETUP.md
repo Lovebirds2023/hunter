@@ -53,7 +53,32 @@ Your `.env` file (frontend/) should already have Google Client IDs from your .en
 ```
 EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=616203224372-756q5k5ujlqnaaekeo9pgb2pqai3ussf.apps.googleusercontent.com
 EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=616203224372-o8137t06ph20itjsfqvec0envtllto8j.apps.googleusercontent.com
+EXPO_PUBLIC_GOOGLE_REDIRECT_PATH=auth/google
 ```
+
+### Google Cloud Console Redirect URIs
+
+In Google Cloud Console, open **APIs & Services > Credentials > OAuth 2.0 Client IDs > Web client** and add these under **Authorized redirect URIs**:
+
+```text
+https://hunter-k9lr.vercel.app/auth/google
+https://lovedogs360.com/auth/google
+http://localhost:19006/auth/google
+http://localhost:8081/auth/google
+http://localhost:8082/auth/google
+```
+
+Also add these under **Authorized JavaScript origins**:
+
+```text
+https://hunter-k9lr.vercel.app
+https://lovedogs360.com
+http://localhost:19006
+http://localhost:8081
+http://localhost:8082
+```
+
+If Google still shows `redirect_uri_mismatch`, expand the error details and copy the exact `redirect_uri` value into **Authorized redirect URIs**.
 
 ---
 

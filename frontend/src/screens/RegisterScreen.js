@@ -11,10 +11,13 @@ import { Picker } from '@react-native-picker/picker';
 import { Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Google from 'expo-auth-session/providers/google';
-import { makeRedirectUri } from 'expo-auth-session';
+import * as WebBrowser from 'expo-web-browser';
+import { getGoogleRedirectUri } from '../api/googleAuthConfig';
 
 const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+WebBrowser.maybeCompleteAuthSession();
+
 const isUsableGoogleClientId = (clientId) => {
     if (!clientId) return false;
     const normalized = clientId.trim().toLowerCase();
@@ -76,10 +79,7 @@ const RegisterScreen = ({ navigation }) => {
         ? isUsableGoogleClientId(googleWebClientId)
         : Boolean(isUsableGoogleClientId(googleIosClientId) || isUsableGoogleClientId(googleWebClientId));
 
-    const redirectUri = makeRedirectUri({
-        useProxy: false,
-        path: 'register'
-    });
+    const redirectUri = getGoogleRedirectUri();
 
     const [googleRequest, googleResponse, promptGoogleAsync] = Google.useAuthRequest({
         webClientId: googleWebClientId,
