@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getSavedEvents, toggleSaveEvent } from '../api/events';
 import moment from 'moment';
 
 const SavedEventsScreen = ({ navigation }) => {
+    const { t } = useTranslation();
     const [savedEvents, setSavedEvents] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -66,7 +68,7 @@ const SavedEventsScreen = ({ navigation }) => {
                 </View>
 
                 <View style={styles.footerRow}>
-                    <Text style={styles.savedDateText}>Saved {moment(item.created_at).fromNow()}</Text>
+                    <Text style={styles.savedDateText}>{t('saved_events.saved_ago', { time: moment(item.created_at).fromNow() })}</Text>
                     <View style={styles.chip}>
                         <Text style={styles.chipText}>{event.category || 'Event'}</Text>
                     </View>
@@ -87,8 +89,8 @@ const SavedEventsScreen = ({ navigation }) => {
                 ListEmptyComponent={
                     <View style={styles.emptyContainer}>
                         <Ionicons name="heart-outline" size={64} color="#ccc" />
-                        <Text style={styles.emptyText}>No saved events</Text>
-                        <Text style={styles.emptySubtext}>Events you save will appear here for easy access.</Text>
+                        <Text style={styles.emptyText}>{t('events.no_saved_events')}</Text>
+                        <Text style={styles.emptySubtext}>{t('saved_events.empty_subtitle')}</Text>
                     </View>
                 }
             />

@@ -1,11 +1,13 @@
 import React, { useContext, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, KeyboardAvoidingView, ScrollView, Platform } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Button } from '../components/Button';
 import { AuthContext } from '../context/AuthContext';
 import { ThemeBackground } from '../components/ThemeBackground';
 import { COLORS, SPACING, SIZES } from '../constants/theme';
 
 const ForgotPasswordScreen = ({ navigation }) => {
+    const { t } = useTranslation();
     const [email, setEmail] = useState('');
     const [resetToken, setResetToken] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -33,8 +35,8 @@ const ForgotPasswordScreen = ({ navigation }) => {
             >
                 <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
                     <View style={styles.formContainer}>
-                        <Text style={styles.title}>Reset Password</Text>
-                        <Text style={styles.subtitle}>Enter your account email to start a password reset.</Text>
+                        <Text style={styles.title}>{t('forgot_password.title')}</Text>
+                        <Text style={styles.subtitle}>{t('forgot_password.subtitle')}</Text>
 
                         {authNotice && (
                             <View style={[styles.notice, authNotice.type === 'success' && styles.noticeSuccess]}>
@@ -44,7 +46,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
 
                         <TextInput
                             style={styles.input}
-                            placeholder="Email address"
+                            placeholder={t('forgot_password.email')}
                             placeholderTextColor="rgba(255,255,255,0.65)"
                             value={email}
                             onChangeText={setEmail}
@@ -52,7 +54,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
                             keyboardType="email-address"
                         />
                         <Button
-                            title="Send reset instructions"
+                            title={t('forgot_password.send_instructions')}
                             onPress={handleRequestReset}
                             variant="gold"
                             loading={isLoading}
@@ -61,10 +63,10 @@ const ForgotPasswordScreen = ({ navigation }) => {
 
                         <View style={styles.divider} />
 
-                        <Text style={styles.subtitle}>Already have a reset code?</Text>
+                        <Text style={styles.subtitle}>{t('forgot_password.have_code')}</Text>
                         <TextInput
                             style={styles.input}
-                            placeholder="Reset code"
+                            placeholder={t('forgot_password.reset_code')}
                             placeholderTextColor="rgba(255,255,255,0.65)"
                             value={resetToken}
                             onChangeText={setResetToken}
@@ -72,14 +74,14 @@ const ForgotPasswordScreen = ({ navigation }) => {
                         />
                         <TextInput
                             style={styles.input}
-                            placeholder="New password"
+                            placeholder={t('forgot_password.new_password')}
                             placeholderTextColor="rgba(255,255,255,0.65)"
                             value={newPassword}
                             onChangeText={setNewPassword}
                             secureTextEntry
                         />
                         <Button
-                            title="Update password"
+                            title={t('forgot_password.update_password')}
                             onPress={handleResetPassword}
                             variant="gold"
                             loading={isLoading}
@@ -87,7 +89,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
                         />
 
                         <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.backLink}>
-                            <Text style={styles.backText}>Back to login</Text>
+                            <Text style={styles.backText}>{t('forgot_password.back_to_login')}</Text>
                         </TouchableOpacity>
                     </View>
                 </ScrollView>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, StyleSheet, Button, ScrollView, Alert, Modal, TouchableOpacity } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +12,7 @@ import { Picker } from '@react-native-picker/picker';
 import { Switch, TextInput } from 'react-native';
 
 export const EventDetailScreen = ({ route, navigation }) => {
+    const { t } = useTranslation();
     const { eventId } = route.params;
     const { userInfo: user } = useAuth();
     const [event, setEvent] = useState(null);
@@ -53,7 +55,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
 
         } catch (error) {
             console.error(error);
-            Alert.alert("Error", "Failed to load event details");
+            Alert.alert(t('common.error'), t('event_detail.load_error'));
             navigation.goBack();
         } finally {
             setLoading(false);
@@ -82,7 +84,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
         // Validate custom fields
         for (const field of formFields) {
             if (field.is_required && !formResponses[field.id]) {
-                Alert.alert('Validation Error', `Please answer the required question: "${field.label}"`);
+                Alert.alert(t('event_detail.validation_error'), t('event_detail.required_question', { label: field.label }));
                 return;
             }
         }
@@ -100,15 +102,15 @@ export const EventDetailScreen = ({ route, navigation }) => {
                 share_phone: sharePhone,
                 form_responses: formattedResponses
             });
-            Alert.alert("Success", "You have registered for this event!");
+            Alert.alert(t('common.success'), t('event_detail.register_success'));
             setModalVisible(false);
             loadData(); // Refresh to show Check-in button
         } catch (error) {
-            Alert.alert("Error", error.response?.data?.detail || "Registration failed");
+            Alert.alert(t('common.error'), error.response?.data?.detail || t('event_detail.registration_failed'));
         }
     };
 
-    if (loading || !event) return <View style={styles.center}><Text>Loading...</Text></View>;
+    if (loading || !event) return <View style={styles.center}><Text>{t('common.loading')}</Text></View>;
 
     return (
         <View style={{ flex: 1, backgroundColor: 'white' }}>
@@ -116,7 +118,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Event Details</Text>
+                <Text style={styles.headerTitle}>{t('event_detail.title')}</Text>
                 <TouchableOpacity onPress={handleToggleSave} style={styles.saveButton}>
                     <Ionicons name={isSaved ? "heart" : "heart-outline"} size={26} color={isSaved ? "#D4AF37" : COLORS.primary} />
                 </TouchableOpacity>
@@ -130,8 +132,8 @@ export const EventDetailScreen = ({ route, navigation }) => {
                 <View style={styles.footer}>
                     {myRegistration ? (
                         <View style={styles.ticketContainer}>
-                            <Text style={styles.ticketTitle}>Your Event Ticket</Text>
-                            <Text style={styles.ticketSub}>Present this QR code at the venue</Text>
+                            <Text style={styles.ticketTitle}>{t('event_detail.ticket_title')}</Text>
+                            <Text style={styles.ticketSub}>{t('event_detail.ticket_subtitle')}</Text>
                             
                             <View style={styles.qrCodeWrapper}>
                                 {myRegistration.ticket_token ? (
@@ -144,36 +146,36 @@ export const EventDetailScreen = ({ route, navigation }) => {
                                         />
                                     </View>
                                 ) : (
-                                    <Text style={{ color: '#999' }}>Generating ticket...</Text>
+                                    <Text style={{ color: '#999' }}>{t('event_detail.generating_ticket')}</Text>
                                 )}
                                 
                                 {myRegistration.status === 'checked-in' && (
                                     <View style={styles.usedBadge}>
-                                        <Text style={styles.usedBadgeText}>SCANNED</Text>
+                                        <Text style={styles.usedBadgeText}>{t('event_detail.scanned')}</Text>
                                     </View>
                                 )}
                             </View>
                             
                             <Text style={styles.ticketStatus}>
-                                Status: {myRegistration.status === 'checked-in' ? 'Checked In ✅' : 'Valid'}
+                                {t('event_detail.status')}: {myRegistration.status === 'checked-in' ? t('event_detail.checked_in') : t('event_detail.valid')}
                             </Text>
                         </View>
                     ) : (
-                        <Button title="Register Now" onPress={() => setModalVisible(true)} color={COLORS.primary} />
+                        <Button title={t('event_detail.register_now')} onPress={() => setModalVisible(true)} color={COLORS.primary} />
                     )}
                 </View>
 
                 {/* Organizer/Admin Actions */}
                 {user?.role === 'admin' && (
                     <View style={styles.adminSection}>
-                        <Text style={styles.adminTitle}>Organizer Tools</Text>
+                        <Text style={styles.adminTitle}>{t('event_detail.organizer_tools')}</Text>
                         <TouchableOpacity style={styles.adminBtn} onPress={() => navigation.navigate('EventFormBuilder', { eventId: event.id, eventTitle: event.title })}>
                             <Ionicons name="create-outline" size={20} color="#fff" />
-                            <Text style={styles.adminBtnText}>Edit Registration Form</Text>
+                            <Text style={styles.adminBtnText}>{t('event_detail.edit_registration_form')}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.adminBtn, { backgroundColor: '#4a90e2', marginTop: 10 }]} onPress={() => navigation.navigate('EventResponses', { eventId: event.id, eventTitle: event.title })}>
                             <Ionicons name="people-outline" size={20} color="#fff" />
-                            <Text style={styles.adminBtnText}>View Responses</Text>
+                            <Text style={styles.adminBtnText}>{t('event_detail.view_responses')}</Text>
                         </TouchableOpacity>
                     </View>
                 )}
@@ -188,28 +190,28 @@ export const EventDetailScreen = ({ route, navigation }) => {
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalView}>
                         <ScrollView showsVerticalScrollIndicator={false} style={{ width: '100%' }}>
-                            <Text style={styles.modalTitle}>Event Registration</Text>
+                            <Text style={styles.modalTitle}>{t('event_detail.registration_title')}</Text>
                             
                             <View style={styles.profileSection}>
-                                <Text style={styles.sectionTitle}>Profile Details</Text>
-                                <Text style={styles.profileText}>Name: {user?.full_name || 'N/A'}</Text>
-                                <Text style={styles.profileText}>Email: {user?.email || 'N/A'}</Text>
+                                <Text style={styles.sectionTitle}>{t('event_detail.profile_details')}</Text>
+                                <Text style={styles.profileText}>{t('event_detail.name')}: {user?.full_name || t('common.na')}</Text>
+                                <Text style={styles.profileText}>{t('event_detail.email')}: {user?.email || t('common.na')}</Text>
                                 
                                 <View style={styles.switchRow}>
-                                    <Text style={styles.profileText}>Share Phone Number?</Text>
+                                    <Text style={styles.profileText}>{t('event_detail.share_phone')}</Text>
                                     <Switch
                                         value={sharePhone}
                                         onValueChange={setSharePhone}
                                         trackColor={{ true: '#D4AF37', false: '#eee' }}
                                     />
                                 </View>
-                                {sharePhone && <Text style={styles.optionalText}>Your phone: {user?.phone_number || 'Not provided in profile'}</Text>}
+                                {sharePhone && <Text style={styles.optionalText}>{t('event_detail.your_phone')}: {user?.phone_number || t('event_detail.phone_not_provided')}</Text>}
                             </View>
 
                             <View style={styles.profileSection}>
-                                <Text style={styles.sectionTitle}>Attending Dog (Optional)</Text>
+                                <Text style={styles.sectionTitle}>{t('event_detail.attending_dog')}</Text>
                                 {dogs.length === 0 ? (
-                                    <Text style={styles.optionalText}>No dogs in your profile.</Text>
+                                    <Text style={styles.optionalText}>{t('event_detail.no_dogs')}</Text>
                                 ) : (
                                     dogs.map(dog => (
                                         <TouchableOpacity
@@ -228,7 +230,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
 
                             {formFields.length > 0 && (
                                 <View style={styles.profileSection}>
-                                    <Text style={styles.sectionTitle}>Questions from Organizer</Text>
+                                    <Text style={styles.sectionTitle}>{t('event_detail.organizer_questions')}</Text>
                                     {formFields.map((field) => (
                                         <View key={field.id} style={styles.questionBlock}>
                                             <Text style={styles.questionLabel}>
@@ -238,7 +240,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
                                             {(field.field_type === 'short_answer' || field.field_type === 'scale') && (
                                                 <TextInput
                                                     style={styles.textInput}
-                                                    placeholder={field.field_type === 'scale' ? "1 - 10" : "Your answer"}
+                                                    placeholder={field.field_type === 'scale' ? "1 - 10" : t('event_detail.your_answer')}
                                                     keyboardType={field.field_type === 'scale' ? "numeric" : "default"}
                                                     value={formResponses[field.id] || ''}
                                                     onChangeText={(t) => setFormResponses(prev => ({...prev, [field.id]: t}))}
@@ -249,7 +251,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
                                                 <TextInput
                                                     style={[styles.textInput, { height: 80, textAlignVertical: 'top' }]}
                                                     multiline
-                                                    placeholder="Your answer"
+                                                    placeholder={t('event_detail.your_answer')}
                                                     value={formResponses[field.id] || ''}
                                                     onChangeText={(t) => setFormResponses(prev => ({...prev, [field.id]: t}))}
                                                 />
@@ -261,7 +263,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
                                                         selectedValue={formResponses[field.id] || ''}
                                                         onValueChange={(val) => setFormResponses(prev => ({...prev, [field.id]: val}))}
                                                     >
-                                                        <Picker.Item label="Select an option..." value="" />
+                                                        <Picker.Item label={t('event_detail.select_option')} value="" />
                                                         {field.options?.map((opt, i) => (
                                                             <Picker.Item key={i} label={opt.value} value={opt.value} />
                                                         ))}
@@ -275,10 +277,10 @@ export const EventDetailScreen = ({ route, navigation }) => {
 
                             <View style={styles.modalActions}>
                                 <TouchableOpacity style={styles.submitBtn} onPress={handleRegister}>
-                                    <Text style={styles.submitBtnText}>Complete Registration</Text>
+                                    <Text style={styles.submitBtnText}>{t('event_detail.complete_registration')}</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
-                                    <Text style={styles.cancelBtnText}>Cancel</Text>
+                                    <Text style={styles.cancelBtnText}>{t('common.cancel')}</Text>
                                 </TouchableOpacity>
                             </View>
                         </ScrollView>

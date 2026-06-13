@@ -73,7 +73,7 @@ const ReportCaseScreen = ({ navigation, route }) => {
 
     const pickImageFromGallery = async () => {
         if (images.length >= MAX_IMAGES) {
-            Alert.alert("Limit Reached", `You can only add up to ${MAX_IMAGES} photos per report.`);
+            Alert.alert(t('report.form.alerts.limit_reached'), t('report.form.alerts.photo_limit', { count: MAX_IMAGES }));
             return;
         }
 
@@ -90,7 +90,7 @@ const ReportCaseScreen = ({ navigation, route }) => {
 
     const takePhoto = async () => {
         if (images.length >= MAX_IMAGES) {
-            Alert.alert("Limit Reached", `You can only add up to ${MAX_IMAGES} photos per report.`);
+            Alert.alert(t('report.form.alerts.limit_reached'), t('report.form.alerts.photo_limit', { count: MAX_IMAGES }));
             return;
         }
 
@@ -239,7 +239,7 @@ const ReportCaseScreen = ({ navigation, route }) => {
                                 {color === 'Other' && (
                                     <TextInput
                                         style={[styles.input, { marginTop: 10 }]}
-                                        placeholder="Describe the dog's color..."
+                                        placeholder={t('report.labels.describe_color')}
                                         placeholderTextColor="rgba(255,255,255,0.4)"
                                         value={customColor}
                                         onChangeText={setCustomColor}
@@ -304,7 +304,7 @@ const ReportCaseScreen = ({ navigation, route }) => {
                                 disabled={images.length >= MAX_IMAGES}
                             >
                                 <Ionicons name="camera" size={32} color={COLORS.accent} />
-                                <Text style={styles.addImageText}>Take Photo</Text>
+                                <Text style={styles.addImageText}>{t('report.form.buttons.camera')}</Text>
                             </TouchableOpacity>
                             
                             <TouchableOpacity 
@@ -313,7 +313,7 @@ const ReportCaseScreen = ({ navigation, route }) => {
                                 disabled={images.length >= MAX_IMAGES}
                             >
                                 <Ionicons name="images" size={32} color={COLORS.accent} />
-                                <Text style={styles.addImageText}>Gallery</Text>
+                                <Text style={styles.addImageText}>{t('report.form.buttons.gallery')}</Text>
                             </TouchableOpacity>
 
                             {images.map((img, idx) => (

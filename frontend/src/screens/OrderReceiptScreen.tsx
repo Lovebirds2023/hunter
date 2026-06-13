@@ -71,7 +71,7 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
         // Validate required fields
         for (const field of formFields) {
             if (field.is_required && !answers[field.id]) {
-                Alert.alert("Required Field", `Please answer: ${field.label}`);
+                Alert.alert(t('checkout.required_field'), t('checkout.required_answer', { label: field.label }));
                 return;
             }
         }
@@ -116,15 +116,15 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
                     // After returning from Pesapal, show success screen
                     setStep('success');
                 } else {
-                    Alert.alert("Error", "Unable to open payment page. Please try again.");
+                    Alert.alert(t('common.error'), t('checkout.payment_open_error'));
                 }
             } else {
-                throw new Error("No payment URL received from server");
+                throw new Error(t('checkout.no_payment_url'));
             }
         } catch (error: any) {
             console.error('Order/Payment creation error:', error);
-            const detail = error.response?.data?.detail || "Could not process payment. Please try again.";
-            Alert.alert("Payment Failed", typeof detail === 'string' ? detail : JSON.stringify(detail));
+            const detail = error.response?.data?.detail || t('checkout.process_failed');
+            Alert.alert(t('checkout.payment_failed'), typeof detail === 'string' ? detail : JSON.stringify(detail));
         } finally {
             setSubmitting(false);
         }
@@ -142,10 +142,10 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
             if (downloadRes.status === 200) {
                 await Sharing.shareAsync(fileUri);
             } else {
-                Alert.alert(t('common.error'), t('orders.error_download'));
+                Alert.alert(t('common.error'), t('marketplace.orders.error_download'));
             }
         } catch (error) {
-            Alert.alert(t('common.error'), t('orders.error_download_failed'));
+            Alert.alert(t('common.error'), t('marketplace.orders.error_download_failed'));
         } finally {
             setIsDownloading(false);
         }
@@ -162,9 +162,9 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
                 comment: comment
             });
             setRated(true);
-            Alert.alert(t('common.success'), t('orders.success_rating'));
+            Alert.alert(t('common.success'), t('marketplace.orders.success_rating'));
         } catch (error) {
-            Alert.alert(t('common.error'), t('orders.error_rating'));
+            Alert.alert(t('common.error'), t('marketplace.orders.error_rating'));
         } finally {
             setSubmitting(false);
         }
@@ -186,7 +186,7 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
                         numberOfLines={3}
                         value={val}
                         onChangeText={(text) => setAnswers({...answers, [field.id]: text})}
-                        placeholder="Your answer..."
+                        placeholder={t('checkout.your_answer')}
                     />
                 ) : field.field_type === 'dropdown' || field.field_type === 'multiple_choice' ? (
                     <View style={styles.optionsWrapper}>
@@ -222,7 +222,7 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
                         style={styles.input}
                         value={val}
                         onChangeText={(text) => setAnswers({...answers, [field.id]: text})}
-                        placeholder="Your answer..."
+                        placeholder={t('checkout.your_answer')}
                     />
                 )}
             </View>
@@ -243,20 +243,20 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
                     <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                         <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Registration Info</Text>
+                    <Text style={styles.headerTitle}>{t('checkout.registration_info')}</Text>
                     <View style={{ width: 40 }} />
                 </View>
                 <ScrollView contentContainerStyle={styles.scrollContent}>
                     <View style={styles.formIntro}>
                         <Ionicons name="information-circle-outline" size={40} color={COLORS.primary} />
                         <Text style={styles.formIntroTitle}>{service.title}</Text>
-                        <Text style={styles.formIntroSubtitle}>The organizer requires the following information to process your booking.</Text>
+                        <Text style={styles.formIntroSubtitle}>{t('checkout.registration_intro')}</Text>
                     </View>
                     
                     {formFields.map(renderFormField)}
                     
                     <Button 
-                        title="Continue to Checkout" 
+                        title={t('checkout.continue_checkout')}
                         onPress={handleFormSubmit}
                         style={{ marginTop: 20, marginBottom: 40 }}
                     />
@@ -273,7 +273,7 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
                     <TouchableOpacity onPress={() => setFormFields.length > 0 ? setStep('form') : navigation.goBack()} style={styles.backButton}>
                         <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Review & Pay</Text>
+                    <Text style={styles.headerTitle}>{t('checkout.review_pay')}</Text>
                     <View style={{ width: 40 }} />
                 </View>
                 <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -284,7 +284,7 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
                         <View style={styles.divider} />
                         
                         <View style={styles.priceRow}>
-                            <Text style={styles.priceLabel}>Amount</Text>
+                            <Text style={styles.priceLabel}>{t('checkout.amount')}</Text>
                             <Text style={styles.priceValue}>
                                 {formatCurrency(convertPrice(service.price, service.currency || 'KES', preferredCurrency), preferredCurrency)}
                             </Text>
@@ -292,8 +292,8 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
                         
                         <View style={styles.privacyRow}>
                             <View style={{ flex: 1 }}>
-                                <Text style={styles.privacyTitle}>Share Phone Number</Text>
-                                <Text style={styles.privacySubtitle}>Allow provider to contact you for service updates.</Text>
+                                <Text style={styles.privacyTitle}>{t('checkout.share_phone')}</Text>
+                                <Text style={styles.privacySubtitle}>{t('checkout.share_phone_subtitle')}</Text>
                             </View>
                             <Switch 
                                 value={sharePhone}
@@ -307,23 +307,23 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
                     <View style={styles.securityCard}>
                         <View style={styles.securityHeader}>
                             <Ionicons name="shield-checkmark" size={20} color={COLORS.primary} />
-                            <Text style={styles.securityTitle}>Secure Card Payments</Text>
+                            <Text style={styles.securityTitle}>{t('checkout.secure_card')}</Text>
                         </View>
                         <Text style={styles.securityText}>
-                            Card details are entered securely at checkout through Pesapal's encrypted payment page. We never store your card number, CVV, or expiry date on our servers.
+                            {t('checkout.secure_text')}
                         </Text>
-                        <Text style={styles.securityBadge}>🔒 PCI-DSS Compliant via Pesapal</Text>
+                        <Text style={styles.securityBadge}>{t('checkout.pci_badge')}</Text>
                     </View>
 
                     <Button 
-                        title={submitting ? "Processing..." : `Proceed to Secure Checkout`}
+                        title={submitting ? t('checkout.processing') : t('checkout.proceed_secure')}
                         onPress={handlePlaceOrder}
                         loading={submitting}
                         style={{ marginTop: 10 }}
                     />
                     
                     <Text style={styles.termsText}>
-                        By clicking proceed, you will be redirected to Pesapal's secure payment gateway. Your card information is encrypted and never stored on our servers.
+                        {t('checkout.terms')}
                     </Text>
                 </ScrollView>
             </SafeAreaView>
@@ -338,37 +338,37 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
                     <TouchableOpacity onPress={() => navigation.replace('Marketplace')} style={styles.backButton}>
                         <Ionicons name="close" size={24} color={COLORS.primary} />
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle}>{t('orders.summary')}</Text>
+                    <Text style={styles.headerTitle}>{t('marketplace.orders.summary')}</Text>
                     <View style={{ width: 40 }} />
                 </View>
 
                 <ScrollView contentContainerStyle={styles.scrollContent}>
                     <View style={styles.successIcon}>
                         <Ionicons name="checkmark-circle" size={80} color={COLORS.primary} />
-                        <Text style={styles.successText}>{t('orders.success')}</Text>
+                        <Text style={styles.successText}>{t('marketplace.orders.success')}</Text>
                     </View>
 
                     <View style={styles.receiptCard}>
                         <Text style={styles.receiptTitle}>{service.title}</Text>
-                        <Text style={styles.receiptOrderId}>{t('orders.id')} {orderId}</Text>
+                        <Text style={styles.receiptOrderId}>{t('marketplace.orders.id')} {orderId}</Text>
 
                         <View style={styles.divider} />
 
                         <View style={styles.row}>
-                            <Text style={styles.rowLabel}>{t('orders.item_price')}</Text>
+                            <Text style={styles.rowLabel}>{t('marketplace.orders.item_price')}</Text>
                             <Text style={styles.rowValue}>
                                 {formatCurrency(convertPrice((service.price / 1.235), service.currency || 'KES', preferredCurrency), preferredCurrency)}
                             </Text>
                         </View>
                         <View style={styles.row}>
-                            <Text style={styles.rowLabel}>{t('orders.fee')}</Text>
+                            <Text style={styles.rowLabel}>{t('marketplace.orders.fee')}</Text>
                             <Text style={styles.rowValue}>
                                 {formatCurrency(convertPrice((service.price - (service.price / 1.235)), service.currency || 'KES', preferredCurrency), preferredCurrency)}
                             </Text>
                         </View>
 
                         <View style={[styles.row, { marginTop: 10 }]}>
-                            <Text style={styles.totalLabel}>{t('orders.total')}</Text>
+                            <Text style={styles.totalLabel}>{t('marketplace.orders.total')}</Text>
                             <Text style={styles.totalValue}>
                                 {formatCurrency(convertPrice(service.price, service.currency || 'KES', preferredCurrency), preferredCurrency)}
                             </Text>
@@ -376,7 +376,7 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
                     </View>
 
                     <Button
-                        title={isDownloading ? t('orders.downloading') : t('orders.download')}
+                        title={isDownloading ? t('marketplace.orders.downloading') : t('marketplace.orders.download')}
                         onPress={downloadReceipt}
                         variant="primary"
                         style={styles.downloadBtn}
@@ -385,7 +385,7 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
 
                     {!rated ? (
                         <View style={styles.ratingSection}>
-                            <Text style={styles.ratingTitle}>{t('orders.rating_title')}</Text>
+                            <Text style={styles.ratingTitle}>{t('marketplace.orders.rating_title')}</Text>
                             <View style={styles.starRow}>
                                 {[1, 2, 3, 4, 5].map((s) => (
                                     <TouchableOpacity key={s} onPress={() => setRating(s)}>
@@ -394,7 +394,7 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
                                 ))}
                             </View>
                             <Button
-                                title={t('orders.submit_rating')}
+                                title={t('marketplace.orders.submit_rating')}
                                 onPress={submitRating}
                                 variant="outline"
                                 style={styles.submitBtn}
@@ -403,7 +403,7 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
                         </View>
                     ) : (
                         <View style={styles.ratingSection}>
-                            <Text style={styles.thanksText}>{t('orders.thanks')}</Text>
+                            <Text style={styles.thanksText}>{t('marketplace.orders.thanks')}</Text>
                         </View>
                     )}
                 </ScrollView>

@@ -29,22 +29,22 @@ export const HealthPassportScreen = ({ route, navigation }: any) => {
             setRecords(recordsRes.data);
         } catch (e) {
             console.error("Failed to fetch passport data", e);
-            Alert.alert("Error", "Could not load health passport");
+            Alert.alert(t('common.error'), t('health_passport.load_error'));
         } finally {
             setLoading(false);
         }
     };
 
     const getHealthStatus = () => {
-        if (records.length === 0) return { status: 'Unknown', color: '#9E9E9E', icon: 'help-circle' };
+        if (records.length === 0) return { status: t('health_passport.status.unknown'), color: '#9E9E9E', icon: 'help-circle' };
         
         const vaccinationRecords = records.filter(r => r.record_type === 'vaccination');
         const overdue = vaccinationRecords.filter(r => r.next_due_date && new Date(r.next_due_date) < new Date());
         
         if (overdue.length > 0) {
-            return { status: 'Action Needed', color: '#D32F2F', icon: 'alert-circle' };
+            return { status: t('health_passport.status.action_needed'), color: '#D32F2F', icon: 'alert-circle' };
         }
-        return { status: 'Healthy', color: '#388E3C', icon: 'checkmark-circle' };
+        return { status: t('health_passport.status.healthy'), color: '#388E3C', icon: 'checkmark-circle' };
     };
 
     const getNextDueDates = () => {
@@ -62,16 +62,22 @@ export const HealthPassportScreen = ({ route, navigation }: any) => {
             const nextDue = getNextDueDates();
             const nextDueText = nextDue.length > 0 
                 ? nextDue.map(d => `${d.type.toUpperCase()}: ${d.date.toLocaleDateString()}`).join('\n')
-                : 'All up to date';
+                : t('health_passport.all_up_to_date');
             
-            const message = `Lovedogs 360 Health Passport\n\nDog: ${dog?.name || 'Unknown'}\nBreed: ${dog?.breed || 'Unknown'}\nWeight: ${dog?.weight || '?'}kg\nHealth Status: ${healthStatus.status}\n\nNext Due:\n${nextDueText}`;
+            const message = t('health_passport.share_message', {
+                name: dog?.name || t('health_passport.unknown'),
+                breed: dog?.breed || t('health_passport.unknown'),
+                weight: dog?.weight || '?',
+                status: healthStatus.status,
+                nextDue: nextDueText,
+            });
             
             await Share.share({
-                title: `${dog.name} Health Passport`,
+                title: t('health_passport.share_title', { name: dog.name }),
                 message: message,
             });
         } catch (error) {
-            Alert.alert('Export Failed', 'Could not generate shareable report.');
+            Alert.alert(t('health_passport.export_failed'), t('health_passport.export_failed_msg'));
         }
     };
 
@@ -88,9 +94,9 @@ export const HealthPassportScreen = ({ route, navigation }: any) => {
         return (
             <SafeAreaView style={styles.safeArea}>
                 <View style={styles.center}>
-                    <Text style={styles.emptyText}>Unable to load health passport.</Text>
+                    <Text style={styles.emptyText}>{t('health_passport.unable_load')}</Text>
                     <TouchableOpacity onPress={fetchPassportData} style={styles.retryBtn}>
-                        <Text style={styles.retryText}>Retry</Text>
+                        <Text style={styles.retryText}>{t('common.retry')}</Text>
                     </TouchableOpacity>
                 </View>
             </SafeAreaView>
@@ -106,7 +112,7 @@ export const HealthPassportScreen = ({ route, navigation }: any) => {
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
                     <Ionicons name="close" size={24} color={COLORS.primary} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Digital Health Passport</Text>
+                <Text style={styles.headerTitle}>{t('health_passport.title')}</Text>
                 <TouchableOpacity onPress={handleExport} style={styles.backBtn}>
                     <Ionicons name="share-outline" size={24} color={COLORS.primary} />
                 </TouchableOpacity>
@@ -121,22 +127,22 @@ export const HealthPassportScreen = ({ route, navigation }: any) => {
                         </View>
                         <View style={styles.idMeta}>
                             <Text style={styles.dogName}>{dog.name}</Text>
-                            <Text style={styles.dogBreed}>{dog.breed || 'Unknown Breed'}</Text>
+                            <Text style={styles.dogBreed}>{dog.breed || t('health_passport.unknown_breed')}</Text>
                         </View>
                     </View>
                     <View style={styles.idStats}>
                         <View style={styles.idStatItem}>
-                            <Text style={styles.statLabel}>AGE</Text>
-                            <Text style={styles.statValue}>{dog.age || '?'} Years</Text>
+                            <Text style={styles.statLabel}>{t('health_passport.age')}</Text>
+                            <Text style={styles.statValue}>{dog.age || '?'} {t('health_passport.years')}</Text>
                         </View>
                         <View style={styles.idStatDivider} />
                         <View style={styles.idStatItem}>
-                            <Text style={styles.statLabel}>WEIGHT</Text>
+                            <Text style={styles.statLabel}>{t('health_passport.weight')}</Text>
                             <Text style={styles.statValue}>{dog.weight || '?'} kg</Text>
                         </View>
                         <View style={styles.idStatDivider} />
                         <View style={styles.idStatItem}>
-                            <Text style={styles.statLabel}>GENDER</Text>
+                            <Text style={styles.statLabel}>{t('health_passport.gender')}</Text>
                             <Text style={styles.statValue}>{dog.gender || 'M'}</Text>
                         </View>
                     </View>
@@ -144,7 +150,7 @@ export const HealthPassportScreen = ({ route, navigation }: any) => {
 
                 {/* HEALTH STATUS SECTION */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Current Health Status</Text>
+                    <Text style={styles.sectionTitle}>{t('health_passport.current_status')}</Text>
                     <View style={styles.statusBox}>
                         <View style={[styles.statusIndicator, { backgroundColor: healthStatus.color }]}>
                             <Ionicons name={healthStatus.icon as any} size={28} color={COLORS.white} />
@@ -155,10 +161,10 @@ export const HealthPassportScreen = ({ route, navigation }: any) => {
 
                 {/* NEXT DUE DATES SECTION */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Next Due Dates</Text>
+                    <Text style={styles.sectionTitle}>{t('health_passport.next_due_dates')}</Text>
                     {nextDueDates.length === 0 ? (
                         <View style={styles.recordItem}>
-                            <Text style={styles.emptyText}>All records up to date</Text>
+                            <Text style={styles.emptyText}>{t('health_passport.all_records_current')}</Text>
                         </View>
                     ) : (
                         nextDueDates.map((due, idx) => (
@@ -180,7 +186,7 @@ export const HealthPassportScreen = ({ route, navigation }: any) => {
                 {/* DISCLAIMER */}
                 <View style={styles.section}>
                     <View style={[styles.recordItem, styles.infoBox]}>
-                        <Text style={styles.infoText}>This passport is a digital verification of records provided through the Lovedogs 360 platform.</Text>
+                        <Text style={styles.infoText}>{t('health_passport.info_text')}</Text>
                     </View>
                 </View>
             </ScrollView>

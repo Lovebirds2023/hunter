@@ -144,12 +144,12 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                               (item.item_type === 'services' && (item.is_busy || item.slots_available === 0 || item.slots_available === null));
 
         const remainingText = item.item_type === 'products' 
-            ? `${item.stock_count || 0} left` 
-            : `${item.slots_available || 0} slots left`;
+            ? t('marketplace.left_count', { count: item.stock_count || 0 })
+            : t('marketplace.slots_left', { count: item.slots_available || 0 });
 
         const handleBookPress = async () => {
             if (isUnavailable) {
-                Alert.alert('Unavailable', 'This item is currently out of stock or the provider is busy.');
+                Alert.alert(t('marketplace.unavailable'), t('marketplace.unavailable_msg'));
                 return;
             }
             setOrderLoading(item.id);
@@ -157,8 +157,8 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                 const orderRes = await client.post('/orders', { service_id: item.id, share_phone: false });
                 navigation.navigate('OrderReceipt', { orderId: orderRes.data.id, service: item });
             } catch (e: any) {
-                const detail = e?.response?.data?.detail || 'Failed to create order. Please try again.';
-                Alert.alert('Error', typeof detail === 'string' ? detail : JSON.stringify(detail));
+                const detail = e?.response?.data?.detail || t('marketplace.order_create_error');
+                Alert.alert(t('common.error'), typeof detail === 'string' ? detail : JSON.stringify(detail));
             } finally {
                 setOrderLoading(null);
             }
@@ -189,7 +189,7 @@ export const MarketplaceScreen = ({ navigation }: any) => {
 
                     <View style={styles.cardBadges}>
                         <View style={styles.categoryBadge}>
-                            <Text style={styles.categoryBadgeText}>{item.category || 'General'}</Text>
+                            <Text style={styles.categoryBadgeText}>{item.category || t('marketplace.general')}</Text>
                         </View>
                         {isClosest && (
                             <View style={styles.recommendedBadge}>
@@ -198,7 +198,7 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                             </View>
                         )}
                         <View style={[styles.availabilityBadge, isUnavailable && { backgroundColor: 'rgba(211, 47, 47, 0.8)' }]}>
-                            <Text style={styles.availabilityText}>{isUnavailable ? 'Sold Out' : remainingText}</Text>
+                            <Text style={styles.availabilityText}>{isUnavailable ? t('marketplace.sold_out') : remainingText}</Text>
                         </View>
                         {isOwner && (
                             <View style={styles.ownerActions}>
@@ -237,7 +237,7 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                     <Text style={styles.serviceTitle} numberOfLines={1}>{item.title}</Text>
                     <View style={styles.ratingRow}>
                         <Ionicons name="person-circle-outline" size={16} color={COLORS.textSecondary} />
-                        <Text style={styles.providerName} numberOfLines={1}> {item.provider?.full_name || 'Verified Provider'}</Text>
+                        <Text style={styles.providerName} numberOfLines={1}> {item.provider?.full_name || t('marketplace.verified_provider')}</Text>
                     </View>
 
                     {item.distance !== undefined && (
@@ -258,7 +258,7 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                             disabled={orderLoading === item.id}
                         >
                             <Text style={[styles.actionBtnText, isUnavailable && { color: '#888' }]}>
-                                {isUnavailable ? 'Unavailable' : (item.item_type === 'products' ? t('marketplace.actions.buy_now') : t('marketplace.actions.book_now'))}
+                                {isUnavailable ? t('marketplace.unavailable') : (item.item_type === 'products' ? t('marketplace.actions.buy_now') : t('marketplace.actions.book_now'))}
                             </Text>
                         </TouchableOpacity>
                     </View>
@@ -287,7 +287,7 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                     styles.pillText,
                     isSelected && styles.pillTextSelected
                 ]}>
-                    {cat.value === 'rehoming' ? 'Rehoming' : t(`marketplace.categories.${cat.value.split(' ')[0].split('/')[0].trim()}`)}
+                    {cat.value === 'rehoming' ? t('marketplace.categories.rehoming') : t(`marketplace.categories.${cat.value.split(' ')[0].split('/')[0].trim()}`)}
                 </Text>
             </TouchableOpacity>
         );
@@ -388,7 +388,7 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                                         key={item.id}
                                         coordinate={{ latitude: item.latitude, longitude: item.longitude }}
                                         title={item.title}
-                                        description={`$${item.price} - ${item.distance || ''} km away`}
+                                        description={t('marketplace.map_description', { price: item.price, distance: item.distance || '' })}
                                     >
                                         <Callout onPress={() => navigation.navigate('OrderReceipt', { orderId: 'MOCK-' + item.id, service: item })}>
                                             <View style={styles.callout}>
@@ -428,7 +428,7 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                                     {selectedCategory === 'all'
                                         ? t('marketplace.featured', { type: t(`marketplace.tabs.${activeTab}`) })
                                         : t('marketplace.featured_cat', {
-                                            category: selectedCategory === 'rehoming' ? 'Rehoming' : t(`marketplace.categories.${selectedCategory.split(' ')[0].split('/')[0].trim()}`),
+                                            category: selectedCategory === 'rehoming' ? t('marketplace.categories.rehoming') : t(`marketplace.categories.${selectedCategory.split(' ')[0].split('/')[0].trim()}`),
                                             type: t(`marketplace.tabs.${activeTab}`)
                                         })}
                                 </Text>

@@ -145,7 +145,7 @@ const HomeScreen = ({ navigation }) => {
                                 </Text>
                             ) : healthSummary?.has_data ? (
                                 <Text style={[styles.healthText, { color: '#2E7D32' }]}>
-                                    All your dogs are healthy! Overall Wellness: {healthSummary.overall_score}%
+                                    {t('home.all_healthy', { score: healthSummary.overall_score })}
                                 </Text>
                             ) : (
                                 <Text style={styles.healthText}>{t('home.health_status')}</Text>
@@ -254,23 +254,23 @@ const HomeScreen = ({ navigation }) => {
                                     {spotlightItems[currentIndex].is_case ? (
                                         <View style={styles.urgentBadge}>
                                             <Ionicons name="alert-circle" size={12} color="#fff" />
-                                            <Text style={styles.urgentBadgeText}>URGENT</Text>
+                                            <Text style={styles.urgentBadgeText}>{t('home.urgent')}</Text>
                                         </View>
                                     ) : spotlightItems[currentIndex].target_route === 'EventDetail' ? (
                                         <View style={styles.eventBadge}>
                                             <Ionicons name="calendar" size={12} color="#fff" />
-                                            <Text style={styles.eventBadgeText}>EVENT</Text>
+                                            <Text style={styles.eventBadgeText}>{t('home.event')}</Text>
                                         </View>
                                     ) : (
                                         <View style={styles.featuredBadge}>
                                             <Ionicons name="star" size={12} color={COLORS.primaryDark} />
-                                            <Text style={styles.featuredBadgeText}>FEATURED</Text>
+                                            <Text style={styles.featuredBadgeText}>{t('home.featured')}</Text>
                                         </View>
                                     )}
                                     {/* AD transparency label */}
                                     {!spotlightItems[currentIndex].is_case && (
                                         <View style={styles.adLabel}>
-                                            <Text style={styles.adLabelText}>AD</Text>
+                                            <Text style={styles.adLabelText}>{t('home.ad')}</Text>
                                         </View>
                                     )}
                                 </View>
@@ -285,12 +285,12 @@ const HomeScreen = ({ navigation }) => {
                                         <View style={styles.spotlightLocationRow}>
                                             <Ionicons name="location" size={12} color="rgba(255,255,255,0.7)" />
                                             <Text style={styles.spotlightLocationText} numberOfLines={1}>
-                                                {spotlightItems[currentIndex].location || (spotlightItems[currentIndex].is_case ? 'Community Report' : 'Marketplace')}
+                                                {spotlightItems[currentIndex].location || (spotlightItems[currentIndex].is_case ? t('home.community_report') : t('home.marketplace'))}
                                             </Text>
                                         </View>
                                         <View style={styles.ctaButton}>
                                             <Text style={styles.ctaText}>
-                                                {spotlightItems[currentIndex].is_case ? 'Help Now' : 'View Details'}
+                                                {spotlightItems[currentIndex].is_case ? t('home.help_now') : t('common.view_details')}
                                             </Text>
                                             <Ionicons name="arrow-forward" size={14} color={COLORS.primaryDark} />
                                         </View>
@@ -301,7 +301,7 @@ const HomeScreen = ({ navigation }) => {
                             {/* Sponsored Tag + Navigation Dots */}
                             <View style={styles.spotlightMeta}>
                                 {!spotlightItems[currentIndex].is_case ? (
-                                    <Text style={styles.sponsoredTag}>Sponsored · Lovedogs 360</Text>
+                                    <Text style={styles.sponsoredTag}>{t('home.sponsored')}</Text>
                                 ) : (
                                     <View />
                                 )}

@@ -104,7 +104,7 @@ const LoginScreen = ({ navigation }) => {
                     />
 
                     <View style={styles.formContainer}>
-                        <Text style={styles.title}>Log in or sign up</Text>
+                        <Text style={styles.title}>{t('login.title')}</Text>
 
                         {visibleNotice && (
                             <View style={[
@@ -129,28 +129,28 @@ const LoginScreen = ({ navigation }) => {
                         {canUseGoogleAuth ? (
                             <GoogleSignInButton
                                 googleLogin={googleLogin}
-                                label="Continue with Google"
-                                disabledLabel="Google login unavailable"
+                                label={t('login.continue_google')}
+                                disabledLabel={t('login.google_unavailable')}
                             />
                         ) : (
                             <SocialLoginButton
                                 imageUri="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg"
-                                label="Set up Google login"
-                                onPress={() => showUnavailableNotice('Google login needs a real Google Web Client ID in Vercel and Railway. The current value is still a placeholder.')}
+                                label={t('login.setup_google')}
+                                onPress={() => showUnavailableNotice(t('login.google_setup_notice'))}
                             />
                         )}
 
                         <SocialLoginButton
                             icon="logo-apple"
-                            label="Continue with Apple"
+                            label={t('login.continue_apple')}
                             subtle
-                            onPress={() => showUnavailableNotice('Apple login needs an Apple Developer account and an Apple Services ID before it can authenticate users.')}
+                            onPress={() => showUnavailableNotice(t('login.apple_unavailable_notice'))}
                         />
                         <SocialLoginButton
                             icon="call-outline"
-                            label="Continue with phone"
+                            label={t('login.continue_phone')}
                             subtle
-                            onPress={() => showUnavailableNotice('Phone login needs an SMS provider such as Twilio or Firebase phone auth before codes can be sent.')}
+                            onPress={() => showUnavailableNotice(t('login.phone_unavailable_notice'))}
                         />
 
                         <View style={styles.divider}>
@@ -184,7 +184,7 @@ const LoginScreen = ({ navigation }) => {
                             disabled={!email.trim() || !password}
                         />
                         <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} style={styles.forgotLink}>
-                            <Text style={styles.forgotText}>Forgot password?</Text>
+                            <Text style={styles.forgotText}>{t('login.forgot_password')}</Text>
                         </TouchableOpacity>
                     </View>
 

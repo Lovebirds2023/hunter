@@ -159,7 +159,7 @@ function MainTabs() {
             <Tab.Screen name="Marketplace" component={MarketplaceScreen} options={{ tabBarLabel: t('navigation.marketplace') }} />
             <Tab.Screen name="Events" component={EventsStackScreen} options={{ tabBarLabel: t('navigation.events') }} />
             <Tab.Screen name="Report" component={CaseStackScreen} options={{ tabBarLabel: t('navigation.report') }} />
-            <Tab.Screen name="Community" component={CommunityHubScreen} options={{ tabBarLabel: 'Community' }} />
+            <Tab.Screen name="Community" component={CommunityHubScreen} options={{ tabBarLabel: t('navigation.community') }} />
             <Tab.Screen name="Payouts" component={PayoutsScreen} options={{ tabBarLabel: t('navigation.payouts') }} />
 
             <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: t('navigation.profile') }} />
@@ -224,6 +224,7 @@ function AppNavigator() {
 }
 
 export default function App() {
+    const { t } = useTranslation();
     const [updateModalVisible, setUpdateModalVisible] = useState(false);
     const [updateInfo, setUpdateInfo] = useState(null);
     const [isRequiredUpdate, setIsRequiredUpdate] = useState(false);
@@ -247,9 +248,9 @@ export default function App() {
             
             // Alert user for critical updates
             Alert.alert(
-                'Critical Update Required',
-                'You must update the app to continue using it.',
-                [{ text: 'OK' }],
+                t('app_update.critical_required'),
+                t('app_update.critical_required_message'),
+                [{ text: t('common.ok') }],
                 { cancelable: false }
             );
         }

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     Modal,
     View,
@@ -21,6 +22,7 @@ const DISCLAIMER_KEY = 'ld360_disclaimer_accepted_v1';
  * Required for Google Play and Apple App Store compliance.
  */
 export const PlatformDisclaimerModal = () => {
+    const { t } = useTranslation();
     const [visible, setVisible] = useState(false);
 
     useEffect(() => {
@@ -66,36 +68,36 @@ export const PlatformDisclaimerModal = () => {
                         </View>
                     </View>
 
-                    <Text style={styles.title}>Welcome to Lovedogs 360</Text>
-                    <Text style={styles.subtitle}>Before you start, please read this</Text>
+                    <Text style={styles.title}>{t('disclaimer.title')}</Text>
+                    <Text style={styles.subtitle}>{t('disclaimer.subtitle')}</Text>
 
                     <ScrollView style={styles.bodyScroll} showsVerticalScrollIndicator={false}>
                         {/* Main disclaimer */}
                         <View style={styles.disclaimerBox}>
                             <Ionicons name="information-circle" size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
                             <Text style={styles.disclaimerText}>
-                                Lovedogs 360 is a <Text style={styles.bold}>connection and coordination platform</Text> that links dog owners with independently licensed professionals and community members.
+                                {t('disclaimer.connection_prefix')} <Text style={styles.bold}>{t('disclaimer.connection_bold')}</Text> {t('disclaimer.connection_suffix')}
                             </Text>
                         </View>
 
                         <View style={styles.disclaimerBox}>
                             <Ionicons name="medkit-outline" size={20} color="#D32F2F" style={{ marginRight: 8 }} />
                             <Text style={styles.disclaimerText}>
-                                <Text style={styles.bold}>This app does not provide veterinary diagnosis, medical advice, prescriptions, or treatment.</Text> It serves as a platform to connect users with independently licensed professionals who operate outside the app.
+                                <Text style={styles.bold}>{t('disclaimer.no_medical_bold')}</Text> {t('disclaimer.no_medical_suffix')}
                             </Text>
                         </View>
 
                         <View style={styles.disclaimerBox}>
                             <Ionicons name="shield-checkmark-outline" size={20} color="#388E3C" style={{ marginRight: 8 }} />
                             <Text style={styles.disclaimerText}>
-                                All veterinary professionals listed on the platform are independently licensed and verified. Always consult a qualified veterinarian directly for any medical concerns about your pet.
+                                {t('disclaimer.vet_professionals')}
                             </Text>
                         </View>
 
                         <View style={styles.disclaimerBox}>
                             <Ionicons name="people-outline" size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
                             <Text style={styles.disclaimerText}>
-                                Community features are for peer support and sharing. They are not a substitute for professional veterinary care.
+                                {t('disclaimer.community_features')}
                             </Text>
                         </View>
                     </ScrollView>
@@ -105,7 +107,7 @@ export const PlatformDisclaimerModal = () => {
                         onPress={handleAccept}
                         activeOpacity={0.85}
                     >
-                        <Text style={styles.acceptBtnText}>I Understand — Continue</Text>
+                        <Text style={styles.acceptBtnText}>{t('disclaimer.accept')}</Text>
                     </TouchableOpacity>
                 </View>
             </View>

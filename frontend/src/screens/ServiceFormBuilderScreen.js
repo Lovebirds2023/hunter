@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Switch, Alert, ActivityIndicator, ScrollView, SafeAreaView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getServiceFormFields, saveServiceFormFields } from '../api/marketplace';
 import { COLORS, SPACING } from '../constants/theme';
 
 const FIELD_TYPES = [
-    { label: 'Short Answer', value: 'short_answer' },
-    { label: 'Long Answer', value: 'long_answer' },
-    { label: 'Dropdown', value: 'dropdown' },
-    { label: 'Multiple Choice', value: 'multiple_choice' },
-    { label: 'Scale 1-10', value: 'scale' },
+    { labelKey: 'form_builder.types.short_answer', value: 'short_answer' },
+    { labelKey: 'form_builder.types.long_answer', value: 'long_answer' },
+    { labelKey: 'form_builder.types.dropdown', value: 'dropdown' },
+    { labelKey: 'form_builder.types.multiple_choice', value: 'multiple_choice' },
+    { labelKey: 'form_builder.types.scale', value: 'scale' },
 ];
 
 const ServiceFormBuilderScreen = ({ route, navigation }) => {
+    const { t } = useTranslation();
     const { serviceId, serviceTitle, initialFields, onSaveFields } = route.params;
     const [fields, setFields] = useState(initialFields || []);
     const [loading, setLoading] = useState(false); // No need to load if we have initialFields
@@ -31,7 +33,7 @@ const ServiceFormBuilderScreen = ({ route, navigation }) => {
             setFields(data || []);
         } catch (error) {
             console.error('Error fetching form fields:', error);
-            Alert.alert('Error', 'Failed to load form fields');
+            Alert.alert(t('common.error'), t('form_builder.load_error'));
         } finally {
             setLoading(false);
         }
@@ -41,7 +43,7 @@ const ServiceFormBuilderScreen = ({ route, navigation }) => {
         // Validate
         for (let i = 0; i < fields.length; i++) {
             if (!fields[i].label.trim()) {
-                Alert.alert('Validation Error', `Question ${i + 1} is missing a label.`);
+                Alert.alert(t('form_builder.validation_error'), t('form_builder.missing_label', { number: i + 1 }));
                 return;
             }
         }
@@ -58,7 +60,7 @@ const ServiceFormBuilderScreen = ({ route, navigation }) => {
             // Creation mode: Pass back to parent
             if (onSaveFields) {
                 onSaveFields(fieldsToSave);
-                Alert.alert('Success', 'Registration form draft curated!');
+                Alert.alert(t('common.success'), t('form_builder.draft_saved'));
                 navigation.goBack();
             }
             return;
@@ -68,11 +70,11 @@ const ServiceFormBuilderScreen = ({ route, navigation }) => {
         setSaving(true);
         try {
             await saveServiceFormFields(serviceId, fieldsToSave);
-            Alert.alert('Success', 'Registration form curated successfully!');
+            Alert.alert(t('common.success'), t('form_builder.curated_saved'));
             navigation.goBack();
         } catch (error) {
             console.error('Error saving form:', error);
-            Alert.alert('Error', 'Failed to save form fields');
+            Alert.alert(t('common.error'), t('form_builder.save_error'));
         } finally {
             setSaving(false);
         }
@@ -107,7 +109,7 @@ const ServiceFormBuilderScreen = ({ route, navigation }) => {
 
         return (
             <View style={styles.optionsContainer}>
-                <Text style={styles.optionsLabel}>Options:</Text>
+                <Text style={styles.optionsLabel}>{t('form_builder.options')}</Text>
                 {field.options && field.options.map((opt, optIndex) => (
                     <View key={optIndex} style={styles.optionRow}>
                         <View style={styles.optionDot} />
@@ -119,7 +121,7 @@ const ServiceFormBuilderScreen = ({ route, navigation }) => {
                                 newFields[index].options[optIndex].value = text;
                                 setFields(newFields);
                             }}
-                            placeholder={`Option ${optIndex + 1}`}
+                            placeholder={t('form_builder.option_placeholder', { number: optIndex + 1 })}
                         />
                         <TouchableOpacity onPress={() => {
                             const newFields = [...fields];
@@ -140,7 +142,7 @@ const ServiceFormBuilderScreen = ({ route, navigation }) => {
                     }}
                 >
                     <Ionicons name="add" size={16} color={COLORS.primary} />
-                    <Text style={styles.addOptionText}>Add Option</Text>
+                    <Text style={styles.addOptionText}>{t('form_builder.add_option')}</Text>
                 </TouchableOpacity>
             </View>
         );
@@ -149,7 +151,7 @@ const ServiceFormBuilderScreen = ({ route, navigation }) => {
     const renderField = ({ item, index }) => (
         <View style={styles.fieldCard}>
             <View style={styles.fieldHeader}>
-                <Text style={styles.fieldNumber}>Question {index + 1}</Text>
+                <Text style={styles.fieldNumber}>{t('form_builder.question_number', { number: index + 1 })}</Text>
                 <TouchableOpacity onPress={() => deleteField(index)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                     <Ionicons name="trash-outline" size={20} color={COLORS.error} />
                 </TouchableOpacity>
@@ -157,13 +159,13 @@ const ServiceFormBuilderScreen = ({ route, navigation }) => {
 
             <TextInput
                 style={styles.questionInput}
-                placeholder="Question Label (e.g. What is your role?)"
+                placeholder={t('form_builder.question_placeholder')}
                 value={item.label}
                 onChangeText={(text) => updateField(index, 'label', text)}
             />
 
             <View style={styles.typeContainer}>
-                <Text style={styles.typeLabel}>Type:</Text>
+                <Text style={styles.typeLabel}>{t('form_builder.type')}</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.typeList}>
                     {FIELD_TYPES.map(type => (
                         <TouchableOpacity
@@ -183,7 +185,7 @@ const ServiceFormBuilderScreen = ({ route, navigation }) => {
                                 styles.typeChipText,
                                 item.field_type === type.value && styles.typeChipTextActive
                             ]}>
-                                {type.label}
+                                {t(type.labelKey)}
                             </Text>
                         </TouchableOpacity>
                     ))}
@@ -193,7 +195,7 @@ const ServiceFormBuilderScreen = ({ route, navigation }) => {
             {renderOptionsBuilder(item, index)}
 
             <View style={styles.requiredRow}>
-                <Text style={styles.requiredLabel}>Required Question</Text>
+                <Text style={styles.requiredLabel}>{t('form_builder.required_question')}</Text>
                 <Switch
                     value={item.is_required}
                     onValueChange={(val) => updateField(index, 'is_required', val)}
@@ -206,7 +208,7 @@ const ServiceFormBuilderScreen = ({ route, navigation }) => {
     if (loading) return (
         <View style={styles.center}>
             <ActivityIndicator size="large" color={COLORS.primary} />
-            <Text style={{ marginTop: 10, color: COLORS.textSecondary }}>Loading form curated questions...</Text>
+            <Text style={{ marginTop: 10, color: COLORS.textSecondary }}>{t('form_builder.loading_questions')}</Text>
         </View>
     );
 
@@ -218,7 +220,7 @@ const ServiceFormBuilderScreen = ({ route, navigation }) => {
                         <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
                     </TouchableOpacity>
                     <View style={{ flex: 1 }}>
-                        <Text style={styles.headerTitle}>Registration Form Builder</Text>
+                        <Text style={styles.headerTitle}>{t('form_builder.registration_title')}</Text>
                         <Text style={styles.headerSubtitle} numberOfLines={1}>{serviceTitle}</Text>
                     </View>
                 </View>
@@ -231,14 +233,14 @@ const ServiceFormBuilderScreen = ({ route, navigation }) => {
                     ListEmptyComponent={
                         <View style={styles.emptyContainer}>
                             <Ionicons name="document-text-outline" size={64} color="#ccc" />
-                            <Text style={styles.emptyText}>No questions added yet.</Text>
-                            <Text style={styles.emptySubtext}>Curate custom questions for participants.</Text>
+                            <Text style={styles.emptyText}>{t('form_builder.no_questions')}</Text>
+                            <Text style={styles.emptySubtext}>{t('marketplace.create.curate_questions')}</Text>
                         </View>
                     }
                     ListFooterComponent={
                         <TouchableOpacity style={styles.addFieldBtn} onPress={addField}>
                             <Ionicons name="add-circle-outline" size={24} color="#fff" />
-                            <Text style={styles.addFieldBtnText}>Add Question</Text>
+                            <Text style={styles.addFieldBtnText}>{t('form_builder.add_question')}</Text>
                         </TouchableOpacity>
                     }
                 />
@@ -252,7 +254,7 @@ const ServiceFormBuilderScreen = ({ route, navigation }) => {
                         {saving ? (
                             <ActivityIndicator color="#fff" />
                         ) : (
-                            <Text style={styles.saveBtnText}>Save Form Structure</Text>
+                            <Text style={styles.saveBtnText}>{t('form_builder.save_structure')}</Text>
                         )}
                     </TouchableOpacity>
                 </View>

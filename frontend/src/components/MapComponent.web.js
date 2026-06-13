@@ -1,12 +1,16 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, StyleSheet } from 'react-native';
 
-const MapView = ({ style }) => (
-    <View style={[style, styles.placeholder]}>
-        <Text style={styles.text}>Map View is not available on Web</Text>
-        <Text style={styles.subtext}>Native maps use features not supported in the browser.</Text>
-    </View>
-);
+const MapView = ({ style }) => {
+    const { t } = useTranslation();
+    return (
+        <View style={[style, styles.placeholder]}>
+            <Text style={styles.text}>{t('map.web_unavailable')}</Text>
+            <Text style={styles.subtext}>{t('map.web_subtitle')}</Text>
+        </View>
+    );
+};
 
 export const Marker = () => null;
 export const Callout = () => null;

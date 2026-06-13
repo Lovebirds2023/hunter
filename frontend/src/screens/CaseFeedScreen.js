@@ -97,13 +97,13 @@ const CaseFeedScreen = ({ navigation }) => {
 
     const handleReport = (reportId) => {
         Alert.alert(
-            'Report Post',
-            'Why are you reporting this post?',
+            t('case_actions.report_post'),
+            t('case_actions.report_reason'),
             [
-                { text: 'Spam or misleading', onPress: () => submitReport(reportId, 'spam') },
-                { text: 'Harmful or abusive', onPress: () => submitReport(reportId, 'harmful') },
-                { text: 'Incorrect information', onPress: () => submitReport(reportId, 'misinformation') },
-                { text: 'Cancel', style: 'cancel' },
+                { text: t('case_actions.spam'), onPress: () => submitReport(reportId, 'spam') },
+                { text: t('case_actions.harmful'), onPress: () => submitReport(reportId, 'harmful') },
+                { text: t('case_actions.incorrect'), onPress: () => submitReport(reportId, 'misinformation') },
+                { text: t('common.cancel'), style: 'cancel' },
             ],
             { cancelable: true }
         );
@@ -112,30 +112,30 @@ const CaseFeedScreen = ({ navigation }) => {
     const submitReport = async (reportId, reason) => {
         try {
             await client.post(`/cases/${reportId}/flag`, { reason });
-            Alert.alert('Report Submitted', 'Thank you. Our moderation team will review this post.');
+            Alert.alert(t('case_actions.report_submitted'), t('case_actions.report_submitted_msg'));
         } catch {
-            Alert.alert('Error', 'Could not submit report. Please try again.');
+            Alert.alert(t('common.error'), t('case_actions.report_error'));
         }
     };
 
     const handleBlock = (authorId, authorName) => {
         Alert.alert(
-            `Block ${authorName || 'User'}?`,
-            'Blocked users cannot contact you or see your posts. You can unblock them anytime from your settings.',
+            t('case_actions.block_title', { name: authorName || t('case_actions.user') }),
+            t('case_actions.block_msg'),
             [
                 {
-                    text: 'Block',
+                    text: t('case_actions.block'),
                     style: 'destructive',
                     onPress: async () => {
                         try {
                             await client.post(`/users/${authorId}/block`);
-                            Alert.alert('User Blocked', `${authorName || 'This user'} has been blocked.`);
+                            Alert.alert(t('case_actions.user_blocked'), t('case_actions.user_blocked_msg', { name: authorName || t('case_actions.this_user') }));
                         } catch {
-                            Alert.alert('Error', 'Could not block user. Please try again.');
+                            Alert.alert(t('common.error'), t('case_actions.block_error'));
                         }
                     },
                 },
-                { text: 'Cancel', style: 'cancel' },
+                { text: t('common.cancel'), style: 'cancel' },
             ]
         );
     };
@@ -191,13 +191,13 @@ const CaseFeedScreen = ({ navigation }) => {
                     <View style={styles.metaRow}>
                         {item.breed && (
                             <View style={styles.metaBadge}>
-                                <Text style={styles.metaLabel}>Breed:</Text>
+                                <Text style={styles.metaLabel}>{t('dog_details.breed')}:</Text>
                                 <Text style={styles.metaValue}>{item.breed}</Text>
                             </View>
                         )}
                         {item.color && (
                             <View style={styles.metaBadge}>
-                                <Text style={styles.metaLabel}>Color:</Text>
+                                <Text style={styles.metaLabel}>{t('dog_details.color')}:</Text>
                                 <Text style={styles.metaValue}>{item.color}</Text>
                             </View>
                         )}
@@ -257,12 +257,12 @@ const CaseFeedScreen = ({ navigation }) => {
                     <TouchableOpacity
                         style={[styles.actionBtn, { marginLeft: 'auto', marginRight: 0 }]}
                         onPress={() => Alert.alert(
-                            'Options',
+                            t('case_actions.options'),
                             '',
                             [
-                                { text: 'Report Post', onPress: () => handleReport(item.id) },
-                                { text: 'Block User', onPress: () => handleBlock(item.author?.id, item.author?.full_name) },
-                                { text: 'Cancel', style: 'cancel' },
+                                { text: t('case_actions.report_post'), onPress: () => handleReport(item.id) },
+                                { text: t('case_actions.block_user'), onPress: () => handleBlock(item.author?.id, item.author?.full_name) },
+                                { text: t('common.cancel'), style: 'cancel' },
                             ]
                         )}
                     >
@@ -328,8 +328,8 @@ const CaseFeedScreen = ({ navigation }) => {
                         {Platform.OS === 'web' ? (
                             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, backgroundColor: 'rgba(255,255,255,0.05)' }}>
                                 <Ionicons name="map-outline" size={60} color={COLORS.accent} style={{ marginBottom: 20 }} />
-                                <Text style={{ color: COLORS.white, fontSize: 18, textAlign: 'center', fontWeight: 'bold' }}>Map Unavailable on Web</Text>
-                                <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 14, textAlign: 'center', marginTop: 10 }}>Please switch to 'List' view above or use your mobile device!</Text>
+                                <Text style={{ color: COLORS.white, fontSize: 18, textAlign: 'center', fontWeight: 'bold' }}>{t('case_actions.map_unavailable_web')}</Text>
+                                <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 14, textAlign: 'center', marginTop: 10 }}>{t('case_actions.switch_to_list')}</Text>
                             </View>
                         ) : (
                             <MapView

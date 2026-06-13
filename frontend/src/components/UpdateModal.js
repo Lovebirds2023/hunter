@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -19,9 +20,10 @@ const UpdateModal = ({
   onClose,
   onUpdate
 }) => {
+  const { t } = useTranslation();
   const handleOpenStore = async () => {
     if (!versionInfo?.download_url) {
-      Alert.alert('Error', 'Download URL not available');
+      Alert.alert(t('common.error'), t('app_update.download_url_missing'));
       return;
     }
 
@@ -31,11 +33,11 @@ const UpdateModal = ({
         await Linking.openURL(versionInfo.download_url);
         onUpdate?.();
       } else {
-        Alert.alert('Error', 'Unable to open app store');
+        Alert.alert(t('common.error'), t('app_update.open_store_error'));
       }
     } catch (error) {
       console.error('Error opening store:', error);
-      Alert.alert('Error', 'Failed to open app store');
+      Alert.alert(t('common.error'), t('app_update.open_store_failed'));
     }
   };
 
@@ -60,22 +62,22 @@ const UpdateModal = ({
               />
             </View>
             <Text style={styles.title}>
-              {isRequired ? '⚠️ Critical Update' : '🚀 Update Available'}
+              {isRequired ? t('app_update.critical_update') : t('app_update.update_available')}
             </Text>
-            <Text style={styles.version}>Version {versionInfo.version}</Text>
+            <Text style={styles.version}>{t('app_update.version', { version: versionInfo.version })}</Text>
           </View>
 
           {/* Content */}
           <ScrollView style={styles.content}>
             <Text style={styles.subtitle}>
               {isRequired
-                ? 'This update is required to use the app'
-                : 'A new version is available with improvements and bug fixes'}
+                ? t('app_update.required_subtitle')
+                : t('app_update.available_subtitle')}
             </Text>
 
             {versionInfo.release_notes && (
               <View style={styles.notesContainer}>
-                <Text style={styles.notesTitle}>What's New:</Text>
+                <Text style={styles.notesTitle}>{t('app_update.whats_new')}</Text>
                 <Text style={styles.releaseNotes}>{versionInfo.release_notes}</Text>
               </View>
             )}
@@ -88,7 +90,7 @@ const UpdateModal = ({
                 style={styles.infoIcon}
               />
               <Text style={styles.infoText}>
-                Safe and secure download from official app store
+                {t('app_update.safe_download')}
               </Text>
             </View>
           </ScrollView>
@@ -100,7 +102,7 @@ const UpdateModal = ({
                 style={[styles.button, styles.laterButton]}
                 onPress={onClose}
               >
-                <Text style={styles.laterButtonText}>Later</Text>
+                <Text style={styles.laterButtonText}>{t('app_update.later')}</Text>
               </TouchableOpacity>
             )}
 
@@ -114,7 +116,7 @@ const UpdateModal = ({
                 color="white"
                 style={styles.buttonIcon}
               />
-              <Text style={styles.updateButtonText}>Update Now</Text>
+              <Text style={styles.updateButtonText}>{t('app_update.update_now')}</Text>
             </TouchableOpacity>
           </View>
         </View>

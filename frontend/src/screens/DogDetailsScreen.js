@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, FlatList, Alert, Modal, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS, SPACING } from '../constants/theme';
@@ -8,6 +9,7 @@ import client from '../api/client';
 import { useFocusEffect } from '@react-navigation/native';
 
 export const DogDetailsScreen = ({ route, navigation }) => {
+    const { t } = useTranslation();
     const { dog: initialDog } = route.params;
     const [dog, setDog] = useState(initialDog);
     const [healthRecords, setHealthRecords] = useState([]);
@@ -53,10 +55,10 @@ export const DogDetailsScreen = ({ route, navigation }) => {
             });
             setDog(res.data);
             setIsEditing(false);
-            Alert.alert("Success", "Dog details updated!");
+            Alert.alert(t('common.success'), t('dog_details.updated'));
         } catch (e) {
             if (__DEV__) console.log("Error updating dog", e);
-            Alert.alert("Error", "Could not update dog details");
+            Alert.alert(t('common.error'), t('dog_details.update_error'));
         }
     };
 
@@ -67,7 +69,7 @@ export const DogDetailsScreen = ({ route, navigation }) => {
                 <Text style={styles.recordDate}>{new Date(item.date).toLocaleDateString()}</Text>
             </View>
             {item.next_due_date && (
-                <Text style={styles.dueDate}>Next Due: {new Date(item.next_due_date).toLocaleDateString()}</Text>
+                <Text style={styles.dueDate}>{t('dog_details.next_due')}: {new Date(item.next_due_date).toLocaleDateString()}</Text>
             )}
             {item.notes && <Text style={styles.notes}>{item.notes}</Text>}
         </View>
@@ -89,27 +91,27 @@ export const DogDetailsScreen = ({ route, navigation }) => {
                 <View style={styles.imageGallery}>
                     <View style={styles.mainImageContainer}>
                         <Image source={dog.body_image ? { uri: dog.body_image } : require('../../assets/dog_placeholder.png')} style={styles.mainImage} />
-                        <Text style={styles.imageLabel}>Body</Text>
+                        <Text style={styles.imageLabel}>{t('dog_details.body')}</Text>
                     </View>
                     <View style={styles.smallImages}>
                         <View style={styles.smallImageContainer}>
                             <Image source={dog.nose_print_image ? { uri: dog.nose_print_image } : require('../../assets/dog_placeholder.png')} style={styles.smallImage} />
-                            <Text style={styles.imageLabel}>Nose Print</Text>
+                            <Text style={styles.imageLabel}>{t('dog_details.nose_print')}</Text>
                         </View>
                         <View style={styles.smallImageContainer}>
                             <Image source={dog.birthmark_image ? { uri: dog.birthmark_image } : require('../../assets/dog_placeholder.png')} style={styles.smallImage} />
-                            <Text style={styles.imageLabel}>Birth Mark</Text>
+                            <Text style={styles.imageLabel}>{t('dog_details.birth_mark')}</Text>
                         </View>
                     </View>
                 </View>
 
                 <View style={styles.infoSection}>
-                    <Text style={styles.infoText}>Breed: <Text style={styles.infoValue}>{dog.breed}</Text></Text>
-                    <Text style={styles.infoText}>Color: <Text style={styles.infoValue}>{dog.color}</Text></Text>
-                    <Text style={styles.infoText}>Size: <Text style={styles.infoValue}>{dog.body_structure}</Text></Text>
+                    <Text style={styles.infoText}>{t('dog_details.breed')}: <Text style={styles.infoValue}>{dog.breed}</Text></Text>
+                    <Text style={styles.infoText}>{t('dog_details.color')}: <Text style={styles.infoValue}>{dog.color}</Text></Text>
+                    <Text style={styles.infoText}>{t('dog_details.size')}: <Text style={styles.infoValue}>{dog.body_structure}</Text></Text>
                     {dog.bio && (
                         <View style={styles.bioContainer}>
-                            <Text style={styles.bioLabel}>About {dog.name}:</Text>
+                            <Text style={styles.bioLabel}>{t('dog_details.about_pet', { name: dog.name })}</Text>
                             <Text style={styles.bioText}>{dog.bio}</Text>
                         </View>
                     )}
@@ -117,14 +119,14 @@ export const DogDetailsScreen = ({ route, navigation }) => {
 
                 <View style={styles.healthSection}>
                     <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Health Records</Text>
+                        <Text style={styles.sectionTitle}>{t('dog_details.health_records')}</Text>
                         <TouchableOpacity onPress={() => navigation.navigate('AddHealthRecord', { dogId: dog.id, dogName: dog.name })}>
-                            <Text style={styles.addButton}>+ Add Record</Text>
+                            <Text style={styles.addButton}>{t('dog_details.add_record')}</Text>
                         </TouchableOpacity>
                     </View>
 
                     {healthRecords.length === 0 ? (
-                        <Text style={styles.emptyText}>No health records found.</Text>
+                        <Text style={styles.emptyText}>{t('dog_details.no_records')}</Text>
                     ) : (
                         healthRecords.map(item => (
                             <View key={item.id} style={styles.recordWrapper}>
@@ -138,22 +140,22 @@ export const DogDetailsScreen = ({ route, navigation }) => {
             <Modal visible={isEditing} animationType="slide" transparent>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Edit {dog.name}</Text>
-                        <Text style={styles.label}>Bio / Notes</Text>
+                        <Text style={styles.modalTitle}>{t('dog_details.edit_pet', { name: dog.name })}</Text>
+                        <Text style={styles.label}>{t('dog_details.bio_notes')}</Text>
                         <TextInput
                             style={[styles.input, styles.textArea]}
                             value={editBio}
                             onChangeText={setEditBio}
                             multiline
                             numberOfLines={4}
-                            placeholder="Tell us about your dog..."
+                            placeholder={t('dog_details.bio_placeholder')}
                         />
                         <View style={styles.modalButtons}>
                             <TouchableOpacity style={styles.cancelBtn} onPress={() => setIsEditing(false)}>
-                                <Text style={styles.btnText}>Cancel</Text>
+                                <Text style={styles.btnText}>{t('common.cancel')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity style={styles.saveBtn} onPress={handleSaveDog}>
-                                <Text style={[styles.btnText, { color: 'white' }]}>Save</Text>
+                                <Text style={[styles.btnText, { color: 'white' }]}>{t('common.save')}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>

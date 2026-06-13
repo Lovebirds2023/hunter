@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { COLORS, SPACING, SIZES } from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
 export const EventCalendarView = ({ events, onEventPress }) => {
+    const { t, i18n } = useTranslation();
     const today = new Date();
     const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
 
@@ -13,8 +15,10 @@ export const EventCalendarView = ({ events, onEventPress }) => {
     const daysInMonth = getDaysInMonth(viewDate.getFullYear(), viewDate.getMonth());
     const firstDay = getFirstDayOfMonth(viewDate.getFullYear(), viewDate.getMonth());
 
-    const monthNames = ["January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December"];
+    const locale = i18n.language || 'en';
+    const weekDays = Array.from({ length: 7 }, (_, index) =>
+        new Date(2024, 0, 7 + index).toLocaleDateString(locale, { weekday: 'short' }).charAt(0)
+    );
 
     const renderDays = () => {
         const days = [];
@@ -63,7 +67,7 @@ export const EventCalendarView = ({ events, onEventPress }) => {
                     <Ionicons name="chevron-back" size={24} color={COLORS.white} />
                 </TouchableOpacity>
                 <Text style={styles.monthTitle}>
-                    {monthNames[viewDate.getMonth()]} {viewDate.getFullYear()}
+                    {viewDate.toLocaleDateString(locale, { month: 'long', year: 'numeric' })}
                 </Text>
                 <TouchableOpacity onPress={() => changeMonth(1)}>
                     <Ionicons name="chevron-forward" size={24} color={COLORS.white} />
@@ -71,7 +75,7 @@ export const EventCalendarView = ({ events, onEventPress }) => {
             </View>
 
             <View style={styles.weekDays}>
-                {["S", "M", "T", "W", "T", "F", "S"].map((day, i) => (
+                {weekDays.map((day, i) => (
                     <Text key={i} style={styles.weekDayText}>{day}</Text>
                 ))}
             </View>
@@ -82,7 +86,7 @@ export const EventCalendarView = ({ events, onEventPress }) => {
             
             <View style={styles.legend}>
                 <View style={styles.eventDot} />
-                <Text style={styles.legendText}>Scheduled Event</Text>
+                <Text style={styles.legendText}>{t('events.scheduled_event')}</Text>
             </View>
         </View>
     );

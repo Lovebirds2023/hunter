@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, SafeAreaView, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SHADOWS } from '../constants/theme';
 import client from '../api/client';
 
 export const InboxScreen = ({ navigation }) => {
+    const { t } = useTranslation();
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -108,7 +110,7 @@ export const InboxScreen = ({ navigation }) => {
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Inbox & Notifications</Text>
+                <Text style={styles.headerTitle}>{t('inbox.title')}</Text>
                 <View style={{ width: 40 }} />
             </View>
 
@@ -126,7 +128,7 @@ export const InboxScreen = ({ navigation }) => {
                     ListEmptyComponent={
                         <View style={styles.emptyContainer}>
                             <Ionicons name="mail-open-outline" size={60} color="#ddd" />
-                            <Text style={styles.emptyText}>Your inbox is empty.</Text>
+                            <Text style={styles.emptyText}>{t('inbox.empty')}</Text>
                         </View>
                     }
                 />

@@ -84,7 +84,7 @@ const CreateServiceScreen = ({ route, navigation }) => {
 
     const pickImage = async () => {
         if (images.length >= 5) {
-            Alert.alert(t('common.error') || 'Error', 'Maximum 5 images allowed.');
+            Alert.alert(t('common.error'), t('marketplace.create.max_images'));
             return;
         }
         let result = await ImagePicker.launchImageLibraryAsync({
@@ -196,7 +196,7 @@ const CreateServiceScreen = ({ route, navigation }) => {
                         <Text style={styles.label}>{t('marketplace.create.images', {defaultValue: 'Images'})} ({images.length}/5)</Text>
                         {images.length < 5 && (
                             <TouchableOpacity onPress={pickImage}>
-                                <Text style={{color: COLORS.primary, fontWeight: 'bold'}}>+ Add</Text>
+                                <Text style={{color: COLORS.primary, fontWeight: 'bold'}}>{t('marketplace.create.add_image')}</Text>
                             </TouchableOpacity>
                         )}
                     </View>
@@ -213,7 +213,7 @@ const CreateServiceScreen = ({ route, navigation }) => {
                         {images.length === 0 && (
                             <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
                                 <Ionicons name="images-outline" size={32} color={COLORS.primary} />
-                                <Text style={styles.imagePlaceholderText}>Upload up to 5 photos</Text>
+                                <Text style={styles.imagePlaceholderText}>{t('marketplace.create.upload_limit')}</Text>
                             </TouchableOpacity>
                         )}
                     </ScrollView>
@@ -222,12 +222,12 @@ const CreateServiceScreen = ({ route, navigation }) => {
                     <Text style={styles.label}>{t('report.form.labels.title')}</Text>
                     <TextInput
                         style={styles.input}
-                        placeholder={itemType === 'services' ? "e.g., Dog Walking, Behavior Training" : "e.g., Organic Dog Food, Chew Toy"}
+                        placeholder={itemType === 'services' ? t('marketplace.create.service_title_placeholder') : t('marketplace.create.product_title_placeholder')}
                         value={title}
                         onChangeText={setTitle}
                     />
 
-                    <Text style={styles.label}>Category</Text>
+                    <Text style={styles.label}>{t('marketplace.category')}</Text>
                     <View style={styles.pickerContainer}>
                         <Picker selectedValue={category} onValueChange={setCategory}>
                             {currentCategories.map(cat => (
@@ -238,7 +238,7 @@ const CreateServiceScreen = ({ route, navigation }) => {
 
                     <View style={{flexDirection: 'row', gap: 10}}>
                         <View style={{flex: 1}}>
-                            <Text style={styles.label}>Currency</Text>
+                            <Text style={styles.label}>{t('marketplace.create.currency')}</Text>
                             <View style={styles.pickerContainer}>
                                 <Picker selectedValue={currency} onValueChange={setCurrency}>
                                     <Picker.Item label="KES" value="KES" />
@@ -264,10 +264,10 @@ const CreateServiceScreen = ({ route, navigation }) => {
                     {/* Pricing Helper Text */}
                     {price ? (
                         <View style={styles.feeBreakdown}>
-                            <Text style={styles.feeText}>Base Price you receive: <Text style={{fontWeight: 'bold'}}>{currency} {parseFloat(price).toFixed(2)}</Text></Text>
-                            <Text style={styles.feeText}>Marketplace mark-up (23.5%): {currency} {(parseFloat(price) * 0.235).toFixed(2)}</Text>
+                            <Text style={styles.feeText}>{t('marketplace.create.base_price')}: <Text style={{fontWeight: 'bold'}}>{currency} {parseFloat(price).toFixed(2)}</Text></Text>
+                            <Text style={styles.feeText}>{t('marketplace.create.markup')}: {currency} {(parseFloat(price) * 0.235).toFixed(2)}</Text>
                             <Text style={styles.totalPriceText}>
-                                Final listing price: {currency} {(parseFloat(price || 0) * 1.235).toFixed(2)}
+                                {t('marketplace.create.final_price')}: {currency} {(parseFloat(price || 0) * 1.235).toFixed(2)}
                             </Text>
                         </View>
                     ) : null}
@@ -275,10 +275,10 @@ const CreateServiceScreen = ({ route, navigation }) => {
                     {/* Inventory / Stock */}
                     {itemType === 'products' ? (
                         <View>
-                            <Text style={styles.label}>Stock Available</Text>
+                            <Text style={styles.label}>{t('marketplace.create.stock_available')}</Text>
                             <TextInput
                                 style={styles.input}
-                                placeholder="Number of items"
+                                placeholder={t('marketplace.create.stock_placeholder')}
                                 value={stockCount}
                                 onChangeText={setStockCount}
                                 keyboardType="numeric"
@@ -286,10 +286,10 @@ const CreateServiceScreen = ({ route, navigation }) => {
                         </View>
                     ) : (
                         <View>
-                            <Text style={styles.label}>Available Items/ Slots / Capacity</Text>
+                            <Text style={styles.label}>{t('marketplace.create.capacity')}</Text>
                             <TextInput
                                 style={styles.input}
-                                placeholder="e.g., 5 dogs per day"
+                                placeholder={t('marketplace.create.capacity_placeholder')}
                                 value={slotsAvailable}
                                 onChangeText={setSlotsAvailable}
                                 keyboardType="numeric"
@@ -297,8 +297,8 @@ const CreateServiceScreen = ({ route, navigation }) => {
                             
                             <View style={styles.publishContainer}>
                                 <View>
-                                    <Text style={styles.publishLabel}>Mark as Busy</Text>
-                                    <Text style={styles.publishSubtitle}>Pause new bookings temporarily</Text>
+                                    <Text style={styles.publishLabel}>{t('marketplace.create.mark_busy')}</Text>
+                                    <Text style={styles.publishSubtitle}>{t('marketplace.create.pause_bookings')}</Text>
                                 </View>
                                 <Switch
                                     value={isBusy}
@@ -313,7 +313,7 @@ const CreateServiceScreen = ({ route, navigation }) => {
                     <Text style={styles.label}>{t('report.form.labels.description')}</Text>
                     <TextInput
                         style={[styles.input, styles.textArea]}
-                        placeholder="Describe your offering..."
+                        placeholder={t('marketplace.create.description_placeholder')}
                         value={description}
                         onChangeText={setDescription}
                         multiline
@@ -324,7 +324,7 @@ const CreateServiceScreen = ({ route, navigation }) => {
                     <View style={styles.locationBox}>
                         <TextInput
                             style={[styles.input, { backgroundColor: 'white', marginBottom: 15 }]}
-                            placeholder="Landmark (Optional e.g. Near Westgate Mall)"
+                            placeholder={t('marketplace.create.landmark_placeholder')}
                             value={locationLandmark}
                             onChangeText={setLocationLandmark}
                         />
@@ -344,7 +344,7 @@ const CreateServiceScreen = ({ route, navigation }) => {
                             <View style={styles.locationInfo}>
                                 <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
                                 <Text style={styles.locationInfoText} numberOfLines={2}>
-                                    {address || `Coords: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`}
+                                    {address || t('marketplace.create.coords', { latitude: latitude.toFixed(4), longitude: longitude.toFixed(4) })}
                                 </Text>
                             </View>
                         )}
@@ -368,9 +368,9 @@ const CreateServiceScreen = ({ route, navigation }) => {
                         <View style={styles.registrationBox}>
                             <View style={styles.registrationHeader}>
                                 <Ionicons name="document-text-outline" size={24} color={COLORS.primary} />
-                                <Text style={styles.registrationTitle}>Registration Form (Optional)</Text>
+                                <Text style={styles.registrationTitle}>{t('marketplace.create.registration_form_optional')}</Text>
                             </View>
-                            <Text style={styles.registrationSubtitle}>Curate custom questions for participants.</Text>
+                            <Text style={styles.registrationSubtitle}>{t('marketplace.create.curate_questions')}</Text>
                             
                             {isEditing ? (
                                 <TouchableOpacity 
@@ -380,7 +380,7 @@ const CreateServiceScreen = ({ route, navigation }) => {
                                         serviceTitle: title 
                                     })}
                                 >
-                                    <Text style={styles.registrationBtnText}>Edit Registration Questions</Text>
+                                    <Text style={styles.registrationBtnText}>{t('marketplace.create.edit_registration_questions')}</Text>
                                     <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />
                                 </TouchableOpacity>
                             ) : (
@@ -395,7 +395,7 @@ const CreateServiceScreen = ({ route, navigation }) => {
                                     <View style={{flexDirection: 'row', alignItems: 'center'}}>
                                         {formFields.length > 0 && <Ionicons name="checkmark-circle" size={18} color="#38b2ac" style={{marginRight: 8}} />}
                                         <Text style={[styles.registrationBtnText, formFields.length > 0 && {color: '#38b2ac'}]}>
-                                            {formFields.length > 0 ? `${formFields.length} Questions Curated` : "Curate Registration Form"}
+                                            {formFields.length > 0 ? t('marketplace.create.questions_curated', { count: formFields.length }) : t('marketplace.create.curate_registration_form')}
                                         </Text>
                                     </View>
                                     <Ionicons name="chevron-forward" size={18} color={formFields.length > 0 ? '#38b2ac' : COLORS.primary} />

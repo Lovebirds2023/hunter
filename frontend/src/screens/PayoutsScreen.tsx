@@ -86,13 +86,13 @@ export const PayoutsScreen = () => {
     const getEscrowStyle = (status: string) => {
         switch (status) {
             case 'in_escrow':
-                return { color: '#999', icon: 'lock-closed' as const, label: 'In Escrow', bg: '#f5f5f5', border: '#e0e0e0' };
+                return { color: '#999', icon: 'lock-closed' as const, label: t('payouts.status.in_escrow'), bg: '#f5f5f5', border: '#e0e0e0' };
             case 'available':
-                return { color: '#2E7D32', icon: 'checkmark-circle' as const, label: 'Available', bg: '#E8F5E9', border: '#A5D6A7' };
+                return { color: '#2E7D32', icon: 'checkmark-circle' as const, label: t('payouts.status.available'), bg: '#E8F5E9', border: '#A5D6A7' };
             case 'settled':
-                return { color: COLORS.primary, icon: 'wallet' as const, label: 'Withdrawn', bg: '#EDE7F6', border: '#B39DDB' };
+                return { color: COLORS.primary, icon: 'wallet' as const, label: t('payouts.status.withdrawn'), bg: '#EDE7F6', border: '#B39DDB' };
             default:
-                return { color: '#999', icon: 'help-circle' as const, label: 'Unknown', bg: '#f5f5f5', border: '#e0e0e0' };
+                return { color: '#999', icon: 'help-circle' as const, label: t('payouts.status.unknown'), bg: '#f5f5f5', border: '#e0e0e0' };
         }
     };
 
@@ -100,15 +100,15 @@ export const PayoutsScreen = () => {
         const s = (status || '').toLowerCase();
         switch (s) {
             case 'pending':
-                return { color: '#EF6C00', bg: '#FFF3E0', label: 'Awaiting Payment', icon: 'time-outline' as const };
+                return { color: '#EF6C00', bg: '#FFF3E0', label: t('payouts.status.awaiting_payment'), icon: 'time-outline' as const };
             case 'paid':
-                return { color: '#2E7D32', bg: '#E8F5E9', label: '✓ Payment Done', icon: 'checkmark-circle' as const };
+                return { color: '#2E7D32', bg: '#E8F5E9', label: t('payouts.status.payment_done'), icon: 'checkmark-circle' as const };
             case 'completed':
-                return { color: COLORS.primary, bg: '#EDE7F6', label: 'Service Delivered', icon: 'checkmark-done' as const };
+                return { color: COLORS.primary, bg: '#EDE7F6', label: t('payouts.status.service_delivered'), icon: 'checkmark-done' as const };
             case 'settled':
-                return { color: '#1565C0', bg: '#E3F2FD', label: 'Completed', icon: 'shield-checkmark' as const };
+                return { color: '#1565C0', bg: '#E3F2FD', label: t('payouts.status.completed'), icon: 'shield-checkmark' as const };
             case 'cancelled':
-                return { color: '#C62828', bg: '#FFEBEE', label: 'Cancelled', icon: 'close-circle' as const };
+                return { color: '#C62828', bg: '#FFEBEE', label: t('payouts.status.cancelled'), icon: 'close-circle' as const };
             default:
                 return { color: '#999', bg: '#f5f5f5', label: status, icon: 'help-circle' as const };
         }
@@ -120,7 +120,7 @@ export const PayoutsScreen = () => {
                 <SafeAreaView style={styles.container}>
                     <View style={styles.loadingContainer}>
                         <ActivityIndicator size="large" color={COLORS.accent} />
-                        <Text style={styles.loadingText}>Loading...</Text>
+                        <Text style={styles.loadingText}>{t('common.loading')}</Text>
                     </View>
                 </SafeAreaView>
             </ThemeBackground>
@@ -134,7 +134,7 @@ export const PayoutsScreen = () => {
                     <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 15 }}>
                         <Ionicons name="arrow-back" size={24} color={COLORS.white} />
                     </TouchableOpacity>
-                    <Text style={styles.title}>{isProvider ? 'My Earnings' : 'My Orders'}</Text>
+                    <Text style={styles.title}>{isProvider ? t('payouts.my_earnings') : t('payouts.my_orders')}</Text>
                 </View>
 
                 <ScrollView
@@ -158,7 +158,7 @@ export const PayoutsScreen = () => {
                                 style={styles.walletCard}
                             >
                                 <View style={styles.walletHeader}>
-                                    <Text style={styles.walletLabel}>TOTAL EARNED</Text>
+                                    <Text style={styles.walletLabel}>{t('payouts.total_earned')}</Text>
                                     <Ionicons name="wallet" size={22} color={COLORS.accent} />
                                 </View>
                                 <Text style={styles.walletTotal}>KES {wallet.total_earned.toLocaleString()}</Text>
@@ -171,7 +171,7 @@ export const PayoutsScreen = () => {
                                             <Text style={[styles.walletStatAmount, { opacity: 0.4 }]}>
                                                 KES {wallet.in_escrow.toLocaleString()}
                                             </Text>
-                                            <Text style={styles.walletStatLabel}>In Escrow</Text>
+                                            <Text style={styles.walletStatLabel}>{t('payouts.status.in_escrow')}</Text>
                                         </View>
                                     </View>
 
@@ -182,7 +182,7 @@ export const PayoutsScreen = () => {
                                             <Text style={[styles.walletStatAmount, { color: '#4CAF50' }]}>
                                                 KES {wallet.available.toLocaleString()}
                                             </Text>
-                                            <Text style={styles.walletStatLabel}>Available</Text>
+                                            <Text style={styles.walletStatLabel}>{t('payouts.status.available')}</Text>
                                         </View>
                                     </View>
 
@@ -193,7 +193,7 @@ export const PayoutsScreen = () => {
                                             <Text style={[styles.walletStatAmount, { color: COLORS.accent }]}>
                                                 KES {wallet.settled.toLocaleString()}
                                             </Text>
-                                            <Text style={styles.walletStatLabel}>Settled</Text>
+                                            <Text style={styles.walletStatLabel}>{t('payouts.status.settled')}</Text>
                                         </View>
                                     </View>
                                 </View>
@@ -203,14 +203,14 @@ export const PayoutsScreen = () => {
                             <View style={styles.infoBanner}>
                                 <Ionicons name="information-circle" size={18} color={COLORS.accent} />
                                 <Text style={styles.infoBannerText}>
-                                    Funds are held in escrow until the buyer confirms delivery. Once confirmed, the amount highlights and becomes available for withdrawal.
+                                    {t('payouts.escrow_info')}
                                 </Text>
                             </View>
 
                             {/* Earnings List */}
                             {earnings.length > 0 && (
                                 <>
-                                    <Text style={styles.sectionTitle}>Earnings History</Text>
+                                    <Text style={styles.sectionTitle}>{t('payouts.earnings_history')}</Text>
                                     {earnings.map((item) => {
                                         const escrow = getEscrowStyle(item.escrow_status);
                                         const isEscrowed = item.escrow_status === 'in_escrow';
@@ -235,25 +235,25 @@ export const PayoutsScreen = () => {
                                                 <Text style={[styles.earningTitle, isEscrowed && { color: '#999' }]}>
                                                     {item.service_title}
                                                 </Text>
-                                                <Text style={styles.earningBuyer}>Buyer: {item.buyer_name}</Text>
+                                                <Text style={styles.earningBuyer}>{t('payouts.buyer', { name: item.buyer_name })}</Text>
 
                                                 {/* Financial Grid */}
                                                 <View style={styles.gridContainer}>
                                                     <View style={styles.gridColumn}>
-                                                        <Text style={styles.gridHeader}>GROSS</Text>
+                                                        <Text style={styles.gridHeader}>{t('payouts.grid.gross')}</Text>
                                                         <Text style={[styles.gridValue, isEscrowed && { color: '#bbb' }]}>
                                                             KES {(item.gross_amount || 0).toLocaleString()}
                                                         </Text>
                                                     </View>
                                                     <View style={[styles.gridColumn, styles.gridBorder]}>
-                                                        <Text style={styles.gridHeader}>COMMISSION</Text>
+                                                        <Text style={styles.gridHeader}>{t('payouts.grid.commission')}</Text>
                                                         <Text style={[styles.gridValue, { color: '#E53935' }]}>
                                                             -{(item.commission || 0).toLocaleString()}
                                                         </Text>
                                                     </View>
                                                     <View style={styles.gridColumn}>
                                                         <Text style={[styles.gridHeader, { fontWeight: 'bold' }]}>
-                                                            YOUR PAYOUT
+                                                            {t('payouts.grid.your_payout')}
                                                         </Text>
                                                         <Text style={[
                                                             styles.gridValue,
@@ -272,7 +272,7 @@ export const PayoutsScreen = () => {
                                                     <View style={styles.escrowNote}>
                                                         <Ionicons name="lock-closed" size={12} color="#999" />
                                                         <Text style={styles.escrowNoteText}>
-                                                            Held until buyer confirms delivery
+                                                            {t('payouts.held_until_confirmed')}
                                                         </Text>
                                                     </View>
                                                 )}
@@ -291,7 +291,7 @@ export const PayoutsScreen = () => {
                             {earnings.length === 0 && (
                                 <View style={styles.emptySection}>
                                     <Ionicons name="trending-up-outline" size={32} color="rgba(255,255,255,0.4)" />
-                                    <Text style={styles.emptySectionText}>No earnings yet</Text>
+                                    <Text style={styles.emptySectionText}>{t('payouts.no_earnings')}</Text>
                                 </View>
                             )}
 
@@ -308,7 +308,7 @@ export const PayoutsScreen = () => {
                     {buyerOrders.length > 0 && (
                         <>
                             <Text style={styles.sectionTitle}>
-                                {isProvider ? 'My Purchases (as buyer)' : 'My Purchases'}
+                                {isProvider ? t('payouts.my_purchases_buyer') : t('payouts.my_purchases')}
                             </Text>
                             {buyerOrders.map((order) => {
                                 const statusStyle = getBuyerStatusStyle(order.status);
@@ -325,12 +325,12 @@ export const PayoutsScreen = () => {
 
                                         {/* Service Info */}
                                         <Text style={styles.buyerOrderTitle}>{order.service_title}</Text>
-                                        <Text style={styles.buyerOrderProvider}>Seller: {order.provider_name}</Text>
+                                        <Text style={styles.buyerOrderProvider}>{t('payouts.seller', { name: order.provider_name })}</Text>
 
                                         {/* Amount & Payment */}
                                         <View style={styles.buyerAmountRow}>
                                             <View>
-                                                <Text style={styles.buyerAmountLabel}>Amount Paid</Text>
+                                                <Text style={styles.buyerAmountLabel}>{t('payouts.amount_paid')}</Text>
                                                 <Text style={styles.buyerAmountValue}>
                                                     KES {(order.amount || 0).toLocaleString()}
                                                 </Text>
@@ -338,7 +338,7 @@ export const PayoutsScreen = () => {
                                             {(order.status || '').toLowerCase() !== 'pending' && (
                                                 <View style={styles.paymentConfirm}>
                                                     <Ionicons name="checkmark-circle" size={16} color="#2E7D32" />
-                                                    <Text style={styles.paymentConfirmText}>Payment Done</Text>
+                                                    <Text style={styles.paymentConfirmText}>{t('payouts.status.payment_done')}</Text>
                                                 </View>
                                             )}
                                         </View>
@@ -360,9 +360,9 @@ export const PayoutsScreen = () => {
                             <View style={styles.iconCircle}>
                                 <Ionicons name="wallet-outline" size={48} color={COLORS.white} style={{ opacity: 0.7 }} />
                             </View>
-                            <Text style={styles.emptyTitle}>No Transactions Yet</Text>
+                            <Text style={styles.emptyTitle}>{t('payouts.no_transactions')}</Text>
                             <Text style={styles.emptySubtitle}>
-                                Your purchase history will appear here once you buy services or products from the marketplace.
+                                {t('payouts.no_transactions_subtitle')}
                             </Text>
                         </View>
                     )}

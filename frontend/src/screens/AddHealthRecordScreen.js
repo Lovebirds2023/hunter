@@ -84,19 +84,19 @@ export const AddHealthRecordScreen = ({ route, navigation }) => {
                 
                 // 2. 7 Days before
                 if (remind7Days) {
-                    await scheduleNotification(nextDueDate, recordType, 7, `${dogName} is due for ${t(`health.types.${recordType}`)} in 7 days.`);
+                    await scheduleNotification(nextDueDate, recordType, 7, t('health.reminder_days_before', { name: dogName, type: t(`health.types.${recordType}`), count: 7 }));
                 }
                 
                 // 3. 1 Day before
                 if (remind1Day) {
-                    await scheduleNotification(nextDueDate, recordType, 1, `${dogName}'s ${t(`health.types.${recordType}`)} is tomorrow.`);
+                    await scheduleNotification(nextDueDate, recordType, 1, t('health.reminder_tomorrow', { name: dogName, type: t(`health.types.${recordType}`) }));
                 }
 
                 // 4. Custom
                 if (customReminderDays) {
                     const days = parseInt(customReminderDays);
                     if (!isNaN(days)) {
-                        await scheduleNotification(nextDueDate, recordType, days, `${dogName}'s health milestone is in ${days} days.`);
+                        await scheduleNotification(nextDueDate, recordType, days, t('health.reminder_custom', { name: dogName, count: days }));
                     }
                 }
             }
@@ -153,23 +153,23 @@ export const AddHealthRecordScreen = ({ route, navigation }) => {
                     {/* REMINDER OPTIONS */}
                     {nextDueDate !== '' && (
                         <View style={styles.remindersSection}>
-                            <Text style={styles.label}>Smart Reminders</Text>
+                            <Text style={styles.label}>{t('health.smart_reminders')}</Text>
                             <View style={styles.reminderRow}>
                                 <TouchableOpacity 
                                     style={[styles.chip, remind7Days && styles.chipActive]} 
                                     onPress={() => setRemind7Days(!remind7Days)}
                                 >
-                                    <Text style={[styles.chipText, remind7Days && styles.chipTextActive]}>7 Days Before</Text>
+                                    <Text style={[styles.chipText, remind7Days && styles.chipTextActive]}>{t('health.days_before', { count: 7 })}</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity 
                                     style={[styles.chip, remind1Day && styles.chipActive]} 
                                     onPress={() => setRemind1Day(!remind1Day)}
                                 >
-                                    <Text style={[styles.chipText, remind1Day && styles.chipTextActive]}>1 Day Before</Text>
+                                    <Text style={[styles.chipText, remind1Day && styles.chipTextActive]}>{t('health.days_before', { count: 1 })}</Text>
                                 </TouchableOpacity>
                             </View>
                             <View style={styles.customReminderRow}>
-                                <Text style={styles.subLabel}>Custom (days before):</Text>
+                                <Text style={styles.subLabel}>{t('health.custom_days_before')}</Text>
                                 <TextInput
                                     style={styles.smallInput}
                                     value={customReminderDays}

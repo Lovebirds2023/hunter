@@ -1,10 +1,12 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, StyleSheet, TouchableOpacity, ImageBackground } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, SIZES, SHADOWS } from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
 export const FeaturedEventCard = ({ item, onPress }) => {
+    const { t } = useTranslation();
     const date = new Date(item.start_time);
     const isFull = item.capacity > 0 && item.registrant_count >= item.capacity;
     
@@ -21,7 +23,7 @@ export const FeaturedEventCard = ({ item, onPress }) => {
             >
                 <View style={styles.content}>
                     <View style={[styles.badge, isFull && { backgroundColor: '#ff4d4d' }]}>
-                        <Text style={[styles.badgeText, isFull && { color: 'white' }]}>{isFull ? 'FULL' : 'FEATURED'}</Text>
+                        <Text style={[styles.badgeText, isFull && { color: 'white' }]}>{isFull ? t('events.full') : t('home.featured')}</Text>
                     </View>
                     
                     <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
@@ -40,7 +42,7 @@ export const FeaturedEventCard = ({ item, onPress }) => {
                     </View>
                     
                     <View style={styles.footer}>
-                        <Text style={styles.actionText}>Learn More</Text>
+                        <Text style={styles.actionText}>{t('events.learn_more')}</Text>
                         <Ionicons name="arrow-forward-circle" size={24} color={COLORS.accent} />
                     </View>
                 </View>

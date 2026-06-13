@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Image, Alert, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +20,7 @@ if (Platform.OS !== 'web') {
 }
 
 export const DogIdentityScreen = ({ navigation }: any) => {
+    const { t } = useTranslation();
     const [permission, requestPermission] = useCameraPermissions();
     const [cameraRef, setCameraRef] = useState<any | null>(null);
 
@@ -44,10 +46,10 @@ export const DogIdentityScreen = ({ navigation }: any) => {
     const [capturedImages, setCapturedImages] = useState<string[]>([]);
 
     const steps = [
-        { title: isDog ? 'Canine Bio' : 'Feline Bio', instruction: `Enter your ${isDog ? "dog" : "cat"}'s basic characteristics`, icon: 'list' },
-        { title: isDog ? 'Nose Print' : 'Nose Print', instruction: `Align ${isDog ? "nose" : "nose"} print here (Biometric ID)`, icon: 'medical' },
-        { title: 'Full Body', instruction: `Capture full body of the ${isDog ? "dog" : "cat"} (Visual ID)`, icon: 'fitness' },
-        { title: 'Unique Marks', instruction: 'Capture any birth marks or scars (Special ID)', icon: 'heart' }
+        { title: isDog ? t('dog_identity.canine_bio') : t('dog_identity.feline_bio'), instruction: t('dog_identity.bio_instruction', { pet: isDog ? t('dog_identity.dog') : t('dog_identity.cat') }), icon: 'list' },
+        { title: t('dog_identity.nose_print'), instruction: t('dog_identity.nose_instruction'), icon: 'medical' },
+        { title: t('dog_identity.full_body'), instruction: t('dog_identity.full_body_instruction', { pet: isDog ? t('dog_identity.dog') : t('dog_identity.cat') }), icon: 'fitness' },
+        { title: t('dog_identity.unique_marks'), instruction: t('dog_identity.unique_marks_instruction'), icon: 'heart' }
     ];
 
     if (Platform.OS !== 'web') {
@@ -57,8 +59,8 @@ export const DogIdentityScreen = ({ navigation }: any) => {
                 <ThemeBackground>
                     <SafeAreaView style={styles.container}>
                         <View style={styles.permissionContainer}>
-                            <Text style={styles.message}>We need your permission to show the camera</Text>
-                            <Button onPress={requestPermission} title="grant permission" />
+                            <Text style={styles.message}>{t('dog_identity.camera_permission')}</Text>
+                            <Button onPress={requestPermission} title={t('dog_identity.grant_permission')} />
                         </View>
                     </SafeAreaView>
                 </ThemeBackground>
@@ -69,15 +71,15 @@ export const DogIdentityScreen = ({ navigation }: any) => {
     const nextStep = () => {
         if (currentStep === 0) {
             if (!dogName || !breed || !color) {
-                Alert.alert("Missing Info", "Please provide Name, Breed and Color to proceed.");
+                Alert.alert(t('dog_identity.missing_info'), t('dog_identity.missing_name_breed_color'));
                 return;
             }
             if (breed === 'Other' && !customBreed.trim()) {
-                Alert.alert("Missing Info", "Please specify the custom breed.");
+                Alert.alert(t('dog_identity.missing_info'), t('dog_identity.specify_breed'));
                 return;
             }
             if (color === 'Other' && !customColor.trim()) {
-                Alert.alert("Missing Info", "Please specify the custom color.");
+                Alert.alert(t('dog_identity.missing_info'), t('dog_identity.specify_color'));
                 return;
             }
         }
@@ -141,13 +143,13 @@ export const DogIdentityScreen = ({ navigation }: any) => {
             await client.post('/dogs', payload);
 
             Alert.alert(
-                `${isDog ? 'Dog' : 'Cat'} Registered!`, 
-                `The ${isDog ? 'canine' : 'feline'} passport has been created successfully. Proximity matching is now active.`,
-                [{ text: "Great", onPress: () => navigation.goBack() }]
+                isDog ? t('dog_identity.dog_registered') : t('dog_identity.cat_registered'),
+                t('dog_identity.registered_msg', { pet: isDog ? t('dog_identity.canine') : t('dog_identity.feline') }),
+                [{ text: t('dog_identity.great'), onPress: () => navigation.goBack() }]
             );
         } catch (error) {
             console.error("Registration error", error);
-            Alert.alert("Error", "Failed to register dog. Please try again.");
+            Alert.alert(t('common.error'), t('dog_identity.failed_register'));
         } finally {
             setIsSubmitting(false);
         }
@@ -155,36 +157,36 @@ export const DogIdentityScreen = ({ navigation }: any) => {
 
     const renderBioForm = () => (
         <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
-            <Text style={styles.formSectionTitle}>What are you registering?</Text>
+            <Text style={styles.formSectionTitle}>{t('dog_identity.what_registering')}</Text>
             <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20 }}>
                 <TouchableOpacity
                     style={[styles.petTypeBtn, isDog && styles.petTypeBtnActive]}
                     onPress={() => setPetType('dog')}
                 >
                     <Text style={{ fontSize: 28 }}>🐕</Text>
-                    <Text style={[styles.petTypeBtnText, isDog && styles.petTypeBtnTextActive]}>Dog</Text>
+                    <Text style={[styles.petTypeBtnText, isDog && styles.petTypeBtnTextActive]}>{t('dog_identity.dog')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                     style={[styles.petTypeBtn, !isDog && styles.petTypeBtnActive]}
                     onPress={() => setPetType('cat')}
                 >
                     <Text style={{ fontSize: 28 }}>🐱</Text>
-                    <Text style={[styles.petTypeBtnText, !isDog && styles.petTypeBtnTextActive]}>Cat</Text>
+                    <Text style={[styles.petTypeBtnText, !isDog && styles.petTypeBtnTextActive]}>{t('dog_identity.cat')}</Text>
                 </TouchableOpacity>
             </View>
 
-            <Text style={styles.formSectionTitle}>Identification Details</Text>
+            <Text style={styles.formSectionTitle}>{t('dog_identity.identification_details')}</Text>
             
-            <Text style={styles.label}>{isDog ? "Dog's Name" : "Cat's Name"}</Text>
+            <Text style={styles.label}>{isDog ? t('dog_identity.dog_name') : t('dog_identity.cat_name')}</Text>
             <TextInput 
                 style={styles.input} 
                 value={dogName} 
                 onChangeText={setDogName} 
-                placeholder={isDog ? "e.g. Buddy" : "e.g. Whiskers"}
+                placeholder={isDog ? t('dog_identity.dog_name_placeholder') : t('dog_identity.cat_name_placeholder')}
                 placeholderTextColor="rgba(255,255,255,0.4)"
             />
 
-            <Text style={styles.label}>Breed</Text>
+            <Text style={styles.label}>{t('dog_identity.breed')}</Text>
             <View style={styles.pickerWrapper}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     {BREEDS.map(b => (
@@ -202,14 +204,14 @@ export const DogIdentityScreen = ({ navigation }: any) => {
             {breed === 'Other' && (
                 <TextInput
                     style={styles.input}
-                    placeholder="Specify breed..."
+                    placeholder={t('dog_identity.specify_breed_placeholder')}
                     placeholderTextColor="rgba(255,255,255,0.4)"
                     value={customBreed}
                     onChangeText={setCustomBreed}
                 />
             )}
 
-            <Text style={styles.label}>Primary Color</Text>
+            <Text style={styles.label}>{t('dog_identity.primary_color')}</Text>
             <View style={styles.colorGrid}>
                 {COLORS_DESC.map(c => (
                     <TouchableOpacity
@@ -227,7 +229,7 @@ export const DogIdentityScreen = ({ navigation }: any) => {
             {color === 'Other' && (
                 <TextInput
                     style={[styles.input, { marginTop: 10 }]}
-                    placeholder="Describe color..."
+                    placeholder={t('dog_identity.describe_color')}
                     placeholderTextColor="rgba(255,255,255,0.4)"
                     value={customColor}
                     onChangeText={setCustomColor}
@@ -236,7 +238,7 @@ export const DogIdentityScreen = ({ navigation }: any) => {
 
             <View style={styles.row}>
                 <View style={{ flex: 1, marginRight: 10 }}>
-                    <Text style={styles.label}>Approx. Age (Years)</Text>
+                    <Text style={styles.label}>{t('dog_identity.approx_age')}</Text>
                     <TextInput 
                         style={styles.input} 
                         value={age} 
@@ -247,7 +249,7 @@ export const DogIdentityScreen = ({ navigation }: any) => {
                     />
                 </View>
                 <View style={{ flex: 1 }}>
-                    <Text style={styles.label}>Approx. Weight (KG)</Text>
+                    <Text style={styles.label}>{t('dog_identity.approx_weight')}</Text>
                     <TextInput 
                         style={styles.input} 
                         value={weight} 
@@ -259,19 +261,19 @@ export const DogIdentityScreen = ({ navigation }: any) => {
                 </View>
             </View>
 
-            <Text style={styles.label}>Unique Identifiers (Description)</Text>
+            <Text style={styles.label}>{t('dog_identity.unique_identifiers')}</Text>
             <TextInput 
                 style={[styles.input, styles.textArea]} 
                 value={description} 
                 onChangeText={setDescription} 
-                placeholder="Describe any unique birthmarks, scars, or characteristics that can help identify your dog if lost (e.g. 'White spot on left paw', 'Torn right ear')..." 
+                placeholder={t('dog_identity.unique_placeholder')}
                 placeholderTextColor="rgba(255,255,255,0.4)"
                 multiline
                 numberOfLines={5}
             />
 
             <Button 
-                title="PROCEED TO BIOMETRICS" 
+                title={t('dog_identity.proceed_biometrics')}
                 onPress={nextStep} 
                 style={{ marginTop: 20 }}
                 variant="gold"
@@ -288,11 +290,11 @@ export const DogIdentityScreen = ({ navigation }: any) => {
                         <Ionicons name={steps[currentStep].icon as any} size={56} color={COLORS.accent} />
                         <Text style={styles.webUploadTitle}>{steps[currentStep].title}</Text>
                         <Text style={styles.webUploadSubtitle}>{steps[currentStep].instruction}</Text>
-                        <Text style={styles.webUploadNote}>Camera capture is available on mobile. On web, please upload from your gallery.</Text>
+                        <Text style={styles.webUploadNote}>{t('dog_identity.web_upload_note')}</Text>
                     </View>
                     <View style={styles.actions}>
                         <Button
-                            title="UPLOAD FROM GALLERY"
+                            title={t('dog_identity.upload_gallery')}
                             onPress={pickImage}
                             variant="gold"
                             disabled={isSubmitting}
@@ -319,14 +321,14 @@ export const DogIdentityScreen = ({ navigation }: any) => {
 
                 <View style={styles.actions}>
                     <Button
-                        title={`CAPTURE ${steps[currentStep].title.toUpperCase()}`}
+                        title={t('dog_identity.capture_title', { title: steps[currentStep].title.toUpperCase() })}
                         onPress={takePicture}
                         style={styles.mainBtn}
                         variant="gold"
                         loading={isSubmitting}
                     />
                     <Button
-                        title="UPLOAD FROM GALLERY"
+                        title={t('dog_identity.upload_gallery')}
                         onPress={pickImage}
                         variant="outline"
                         disabled={isSubmitting}
@@ -347,13 +349,13 @@ export const DogIdentityScreen = ({ navigation }: any) => {
                         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                             <Ionicons name="arrow-back" size={24} color={COLORS.accent} />
                         </TouchableOpacity>
-                        <Text style={styles.headerTitle}>Pet Identity</Text>
+                        <Text style={styles.headerTitle}>{t('dog_identity.title')}</Text>
                         <View style={{ width: 40 }} />
                     </View>
 
                     <View style={styles.content}>
                         <View style={styles.header}>
-                            <Text style={styles.stepTitle}>STEP {currentStep + 1}: {steps[currentStep].title}</Text>
+                            <Text style={styles.stepTitle}>{t('dog_identity.step_title', { step: currentStep + 1, title: steps[currentStep].title })}</Text>
                             <Text style={styles.subtitle}>{steps[currentStep].instruction}</Text>
                         </View>
 
@@ -373,7 +375,7 @@ export const DogIdentityScreen = ({ navigation }: any) => {
                         </View>
 
                         <View style={styles.guaranteed}>
-                            <Text style={styles.guaranteedText}>Powered by Lovedogs Biometrics & Similarity Engine</Text>
+                            <Text style={styles.guaranteedText}>{t('dog_identity.powered_by')}</Text>
                     </View>
                 </View>
             </KeyboardAvoidingView>

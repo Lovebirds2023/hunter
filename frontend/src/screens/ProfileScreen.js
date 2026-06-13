@@ -159,11 +159,11 @@ export const ProfileScreen = ({ navigation }) => {
                     <Text style={styles.petCardName}>{item.name}</Text>
                     <View style={[styles.petTypeBadge, { backgroundColor: item.pet_type === 'cat' ? '#F3E5F5' : '#E8F5E9' }]}>
                         <Text style={{ fontSize: 12 }}>{item.pet_type === 'cat' ? '🐱' : '🐕'}</Text>
-                        <Text style={[styles.petTypeBadgeText, { color: item.pet_type === 'cat' ? '#7B1FA2' : '#2E7D32' }]}>{item.pet_type === 'cat' ? 'Cat' : 'Dog'}</Text>
+                        <Text style={[styles.petTypeBadgeText, { color: item.pet_type === 'cat' ? '#7B1FA2' : '#2E7D32' }]}>{item.pet_type === 'cat' ? t('dog_identity.cat') : t('dog_identity.dog')}</Text>
                     </View>
                 </View>
-                <Text style={styles.petCardBreed}>{item.breed || 'Unknown breed'}</Text>
-                {item.age ? <Text style={styles.petCardAge}>{item.age} years old</Text> : null}
+                <Text style={styles.petCardBreed}>{item.breed || t('health_passport.unknown_breed')}</Text>
+                {item.age ? <Text style={styles.petCardAge}>{t('profile_screen.years_old', { count: item.age })}</Text> : null}
             </View>
             <Ionicons name="chevron-forward" size={20} color={COLORS.gray} />
         </TouchableOpacity>
@@ -176,7 +176,7 @@ export const ProfileScreen = ({ navigation }) => {
                     <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 15 }}>
                         <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
                     </TouchableOpacity>
-                    <Text style={styles.title}>Account Dashboard</Text>
+                    <Text style={styles.title}>{t('profile_screen.account_dashboard')}</Text>
                 </View>
                 <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
                     <Ionicons name="log-out-outline" size={18} color={COLORS.error} />
@@ -344,7 +344,7 @@ export const ProfileScreen = ({ navigation }) => {
                                     {paymentMethod === 'mpesa' && mpesaPhone
                                         ? `M-PESA • ${mpesaPhone}`
                                         : paymentMethod === 'card'
-                                        ? 'Card • Paid via Pesapal'
+                                        ? t('profile_screen.card_paid_pesapal')
                                         : t('profile_screen.not_configured')}
                                 </Text>
                             </View>
@@ -494,7 +494,7 @@ export const ProfileScreen = ({ navigation }) => {
                         <View style={styles.paymentOptionsGrid}>
                             {[
                                 { id: 'mpesa', label: 'M-Pesa', icon: 'phone-portrait-outline' },
-                                { id: 'card', label: 'Card / Bank', icon: 'card-outline' },
+                                { id: 'card', label: t('profile_screen.card_bank'), icon: 'card-outline' },
                             ].map((opt) => (
                                 <TouchableOpacity 
                                     key={opt.id}
@@ -519,21 +519,21 @@ export const ProfileScreen = ({ navigation }) => {
                                 />
                                 <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
                                     <Ionicons name="shield-checkmark" size={14} color="#2E7D32" />
-                                    <Text style={{ fontSize: 12, color: '#2E7D32', marginLeft: 6, fontWeight: '600' }}>Your phone number is stored securely.</Text>
+                                    <Text style={{ fontSize: 12, color: '#2E7D32', marginLeft: 6, fontWeight: '600' }}>{t('profile_screen.phone_secure')}</Text>
                                 </View>
                             </>
                         ) : paymentMethod === 'card' ? (
                             <View style={{ padding: 16, backgroundColor: '#f0f9ff', borderRadius: 14, marginTop: 8 }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                                     <Ionicons name="lock-closed" size={18} color={COLORS.primary} />
-                                    <Text style={{ marginLeft: 8, fontWeight: 'bold', color: COLORS.primaryDark, fontSize: 15 }}>Secure Card Payments</Text>
+                                    <Text style={{ marginLeft: 8, fontWeight: 'bold', color: COLORS.primaryDark, fontSize: 15 }}>{t('checkout.secure_card')}</Text>
                                 </View>
                                 <Text style={{ color: COLORS.gray, fontSize: 13, lineHeight: 20 }}>
-                                    Card details are entered securely at checkout through Pesapal's encrypted payment page. We never store your card number, CVV, or expiry date on our servers.
+                                    {t('checkout.secure_text')}
                                 </Text>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12 }}>
                                     <Ionicons name="checkmark-circle" size={14} color="#2E7D32" />
-                                    <Text style={{ fontSize: 12, color: '#2E7D32', marginLeft: 6, fontWeight: '600' }}>PCI-DSS Compliant via Pesapal</Text>
+                                    <Text style={{ fontSize: 12, color: '#2E7D32', marginLeft: 6, fontWeight: '600' }}>{t('checkout.pci_badge')}</Text>
                                 </View>
                             </View>
                         ) : null}

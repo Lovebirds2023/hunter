@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { getMyRegistrations } from '../api/events';
 
 export const MyRegistrationsScreen = ({ navigation }) => {
+    const { t } = useTranslation();
     const [registrations, setRegistrations] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -25,13 +27,13 @@ export const MyRegistrationsScreen = ({ navigation }) => {
 
     const renderItem = ({ item }) => (
         <View style={styles.card}>
-            <Text style={styles.title}>Registration #{item.id.slice(0, 8)}</Text>
-            <Text style={styles.detail}>Event ID: {item.event_id}</Text>
-            <Text style={styles.detail}>Status: <Text style={{ fontWeight: 'bold', color: item.status === 'registered' ? 'green' : 'gray' }}>{item.status}</Text></Text>
-            <Text style={styles.detail}>Role: {item.role}</Text>
-            {item.dog_id && <Text style={styles.detail}>Dog ID: {item.dog_id.slice(0, 8)}...</Text>}
+            <Text style={styles.title}>{t('my_registrations.registration_number', { id: item.id.slice(0, 8) })}</Text>
+            <Text style={styles.detail}>{t('my_registrations.event_id', { id: item.event_id })}</Text>
+            <Text style={styles.detail}>{t('my_registrations.status')}: <Text style={{ fontWeight: 'bold', color: item.status === 'registered' ? 'green' : 'gray' }}>{item.status}</Text></Text>
+            <Text style={styles.detail}>{t('my_registrations.role', { role: item.role })}</Text>
+            {item.dog_id && <Text style={styles.detail}>{t('my_registrations.dog_id', { id: item.dog_id.slice(0, 8) })}</Text>}
             <View style={styles.qrPlaceholder}>
-                <Text style={{ textAlign: 'center', color: '#888' }}>QR Code (Coming Soon)</Text>
+                <Text style={{ textAlign: 'center', color: '#888' }}>{t('my_registrations.qr_coming_soon')}</Text>
             </View>
         </View>
     );
@@ -44,11 +46,11 @@ export const MyRegistrationsScreen = ({ navigation }) => {
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>My Registrations</Text>
+                <Text style={styles.headerTitle}>{t('my_registrations.title')}</Text>
                 <View style={{ width: 24 }} />
             </View>
             {registrations.length === 0 ? (
-                <Text style={styles.emptyText}>You have no registrations yet.</Text>
+                <Text style={styles.emptyText}>{t('my_registrations.empty')}</Text>
             ) : (
                 <FlatList
                     data={registrations}

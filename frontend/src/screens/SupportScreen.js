@@ -41,7 +41,7 @@ export const SupportScreen = ({ navigation }) => {
     const pickImage = async () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
-            Alert.alert("Permission Denied", "We need your permission to access your gallery.");
+            Alert.alert(t('common.permission_denied'), t('support.gallery_permission'));
             return;
         }
 
@@ -59,7 +59,7 @@ export const SupportScreen = ({ navigation }) => {
     const takePhoto = async () => {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') {
-            Alert.alert("Permission Denied", "We need your permission to access your camera.");
+            Alert.alert(t('common.permission_denied'), t('support.camera_permission'));
             return;
         }
 
@@ -107,7 +107,7 @@ export const SupportScreen = ({ navigation }) => {
             return uploadedUrls;
         } catch (error) {
             console.error('Upload error:', error);
-            Alert.alert("Upload Failed", "Failed to upload one or more images.");
+            Alert.alert(t('support.upload_failed'), t('support.upload_failed_msg'));
             return null;
         } finally {
             setUploading(false);
@@ -116,7 +116,7 @@ export const SupportScreen = ({ navigation }) => {
 
     const handleSubmit = async () => {
         if (!subject.trim() || !message.trim()) {
-            Alert.alert("Error", "Please enter a subject and message");
+            Alert.alert(t('common.error'), t('support.validation_msg'));
             return;
         }
         setSubmitting(true);
@@ -133,14 +133,14 @@ export const SupportScreen = ({ navigation }) => {
                 images: uploadedUrls
             });
 
-            Alert.alert("Success", "Support ticket submitted. We will get back to you soon!");
+            Alert.alert(t('common.success'), t('support.success_msg'));
             setSubject('');
             setMessage('');
             setImages([]);
             setShowForm(false);
             fetchTickets();
         } catch (e) {
-            Alert.alert("Error", "Failed to submit ticket");
+            Alert.alert(t('common.error'), t('support.error_msg'));
         } finally {
             setSubmitting(false);
         }
@@ -160,7 +160,7 @@ export const SupportScreen = ({ navigation }) => {
             
             {item.admin_reply && (
                 <View style={styles.replyBox}>
-                    <Text style={styles.replyLabel}>Admin Reply:</Text>
+                    <Text style={styles.replyLabel}>{t('support.admin_reply')}</Text>
                     <Text style={styles.replyText}>{item.admin_reply}</Text>
                 </View>
             )}
@@ -183,7 +183,7 @@ export const SupportScreen = ({ navigation }) => {
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Contact Support</Text>
+                <Text style={styles.headerTitle}>{t('support.contact_support')}</Text>
                 <View style={{ width: 40 }} />
             </View>
 
@@ -198,34 +198,34 @@ export const SupportScreen = ({ navigation }) => {
                         contentContainerStyle={styles.listContent}
                         ListHeaderComponent={
                             <View style={styles.listHeaderContainer}>
-                                <Text style={styles.sectionTitle}>My Tickets</Text>
+                                <Text style={styles.sectionTitle}>{t('support.my_tickets')}</Text>
                                 <TouchableOpacity 
                                     style={styles.newTicketBtn} 
                                     onPress={() => setShowForm(!showForm)}
                                 >
                                     <Ionicons name={showForm ? "close" : "add"} size={20} color="#fff" />
-                                    <Text style={styles.newTicketText}>{showForm ? "Cancel" : "New Ticket"}</Text>
+                                    <Text style={styles.newTicketText}>{showForm ? t('common.cancel') : t('support.new_ticket')}</Text>
                                 </TouchableOpacity>
                             </View>
                         }
                         ListEmptyComponent={
-                            !showForm ? <Text style={styles.emptyText}>You don't have any support tickets yet.</Text> : null
+                            !showForm ? <Text style={styles.emptyText}>{t('support.no_tickets')}</Text> : null
                         }
                     />
 
                     {showForm && (
                         <View style={styles.formContainer}>
-                            <Text style={styles.formTitle}>How can we help?</Text>
+                            <Text style={styles.formTitle}>{t('support.form_title')}</Text>
                             <TextInput
                                 style={styles.input}
-                                placeholder="Subject"
+                                placeholder={t('support.subject')}
                                 value={subject}
                                 onChangeText={setSubject}
                                 placeholderTextColor="#999"
                             />
                             <TextInput
                                 style={[styles.input, styles.textArea]}
-                                placeholder="Describe your issue..."
+                                placeholder={t('support.describe_issue')}
                                 value={message}
                                 onChangeText={setMessage}
                                 multiline
@@ -238,11 +238,11 @@ export const SupportScreen = ({ navigation }) => {
                             <View style={styles.imagePickerContainer}>
                                 <TouchableOpacity style={styles.attachmentBtn} onPress={pickImage}>
                                     <Ionicons name="images-outline" size={24} color={COLORS.primary} />
-                                    <Text style={styles.attachmentText}>Gallery</Text>
+                                    <Text style={styles.attachmentText}>{t('support.gallery')}</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity style={styles.attachmentBtn} onPress={takePhoto}>
                                     <Ionicons name="camera-outline" size={24} color={COLORS.primary} />
-                                    <Text style={styles.attachmentText}>Camera</Text>
+                                    <Text style={styles.attachmentText}>{t('support.camera')}</Text>
                                 </TouchableOpacity>
                             </View>
 
@@ -266,7 +266,7 @@ export const SupportScreen = ({ navigation }) => {
                                 onPress={handleSubmit} 
                                 disabled={submitting || uploading}
                             >
-                                {(submitting || uploading) ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Submit Ticket</Text>}
+                                {(submitting || uploading) ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>{t('support.submit_ticket')}</Text>}
                             </TouchableOpacity>
                         </View>
                     )}

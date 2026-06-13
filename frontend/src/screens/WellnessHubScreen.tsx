@@ -81,11 +81,11 @@ export const WellnessHubScreen = ({ navigation }: any) => {
     const handleAddRecord = (defaultType = '') => {
         if (!activeDog) {
             Alert.alert(
-                "Dog Profile Required",
-                "Please add a dog to your profile before tracking health records.",
+                t('wellness.dog_required_title'),
+                t('wellness.dog_required_records'),
                 [
-                    { text: "Cancel", style: "cancel" },
-                    { text: "Add Dog", onPress: () => navigation.navigate("DogRegistration") }
+                    { text: t('common.cancel'), style: "cancel" },
+                    { text: t('wellness.add_pet'), onPress: () => navigation.navigate("DogRegistration") }
                 ]
             );
             return;
@@ -95,9 +95,9 @@ export const WellnessHubScreen = ({ navigation }: any) => {
 
     const handlePassport = () => {
         if (!activeDog) {
-            Alert.alert("Dog Profile Required", "Please add a dog to view their health passport.", [
-                { text: "Cancel", style: "cancel" },
-                { text: "Add Dog", onPress: () => navigation.navigate("DogRegistration") }
+            Alert.alert(t('wellness.dog_required_title'), t('wellness.dog_required_passport'), [
+                { text: t('common.cancel'), style: "cancel" },
+                { text: t('wellness.add_pet'), onPress: () => navigation.navigate("DogRegistration") }
             ]);
             return;
         }
@@ -163,17 +163,17 @@ export const WellnessHubScreen = ({ navigation }: any) => {
                         <View style={[styles.advisorCard, { borderLeftColor: COLORS.primary }]}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
                                 <Ionicons name="information-circle" size={24} color={COLORS.primary} />
-                                <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.primary, marginLeft: 8 }}>Setup Required</Text>
+                                <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.primary, marginLeft: 8 }}>{t('wellness.setup_required')}</Text>
                             </View>
                             <Text style={styles.insightText}>
-                                To start tracking health records, viewing digital passports, and getting wellness insights, please register a pet to your profile first!
+                                {t('wellness.setup_desc')}
                             </Text>
                             <TouchableOpacity 
                                 style={[styles.passportBtn, { marginTop: 15, marginBottom: 0 }]}
                                 onPress={() => navigation.navigate("DogRegistration")}
                             >
                                 <Ionicons name="add" size={20} color={COLORS.white} />
-                                <Text style={styles.passportBtnText}>Register a Pet</Text>
+                                <Text style={styles.passportBtnText}>{t('wellness.register_pet')}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -185,7 +185,7 @@ export const WellnessHubScreen = ({ navigation }: any) => {
                         <View style={styles.advisorCard}>
                             <View style={styles.advisorHeader}>
                                 <Ionicons name="sparkles" size={20} color={COLORS.secondary} />
-                                <Text style={styles.advisorTitle}>Health Advisor: {activeDog?.name}</Text>
+                                <Text style={styles.advisorTitle}>{t('wellness.health_advisor', { name: activeDog?.name })}</Text>
                             </View>
                             {advisorInsights.insights.map((insight: string, idx: number) => (
                                 <View key={idx} style={styles.insightRow}>
@@ -197,7 +197,7 @@ export const WellnessHubScreen = ({ navigation }: any) => {
                     ) : (
                         activeDog && (
                             <View style={[styles.advisorCard, { borderColor: '#E0E0E0', borderLeftColor: '#BDBDBD' }]}>
-                                <Text style={styles.insightText}>No insights available for {activeDog.name} yet. Add medical history!</Text>
+                                <Text style={styles.insightText}>{t('wellness.no_insights', { name: activeDog.name })}</Text>
                             </View>
                         )
                     )}
@@ -207,7 +207,7 @@ export const WellnessHubScreen = ({ navigation }: any) => {
                         onPress={handlePassport}
                     >
                         <Ionicons name="document-attach" size={20} color={COLORS.white} />
-                        <Text style={styles.passportBtnText}>View Digital Health Passport</Text>
+                        <Text style={styles.passportBtnText}>{t('wellness.view_passport')}</Text>
                     </TouchableOpacity>
 
                     {/* Quick Stats Grid */}
@@ -230,7 +230,7 @@ export const WellnessHubScreen = ({ navigation }: any) => {
                         </View>
                         <View style={styles.actionContent}>
                             <Text style={styles.actionName}>{t('wellness.sections.vaccination_title', 'Vaccinations')}</Text>
-                            <Text style={styles.actionDesc}>Log vaccines, deworming, etc.</Text>
+                            <Text style={styles.actionDesc}>{t('wellness.log_vaccines')}</Text>
                         </View>
                         <Ionicons name="chevron-forward" size={20} color={COLORS.gray} />
                     </TouchableOpacity>
@@ -244,7 +244,7 @@ export const WellnessHubScreen = ({ navigation }: any) => {
                         </View>
                         <View style={styles.actionContent}>
                             <Text style={styles.actionName}>{t('wellness.sections.diet_title')}</Text>
-                            <Text style={styles.actionDesc}>Update weight and feeding schedules.</Text>
+                            <Text style={styles.actionDesc}>{t('wellness.update_weight')}</Text>
                         </View>
                         <Ionicons name="chevron-forward" size={20} color={COLORS.gray} />
                     </TouchableOpacity>
@@ -257,8 +257,8 @@ export const WellnessHubScreen = ({ navigation }: any) => {
                             <Ionicons name="medical" size={22} color="#0288D1" />
                         </View>
                         <View style={styles.actionContent}>
-                            <Text style={styles.actionName}>Medication</Text>
-                            <Text style={styles.actionDesc}>Log daily medications and dosages.</Text>
+                            <Text style={styles.actionName}>{t('wellness.medication')}</Text>
+                            <Text style={styles.actionDesc}>{t('wellness.log_medications')}</Text>
                         </View>
                         <Ionicons name="chevron-forward" size={20} color={COLORS.gray} />
                     </TouchableOpacity>
@@ -271,8 +271,8 @@ export const WellnessHubScreen = ({ navigation }: any) => {
                             <Ionicons name="bandage" size={22} color="#C62828" />
                         </View>
                         <View style={styles.actionContent}>
-                            <Text style={styles.actionName}>Surgery</Text>
-                            <Text style={styles.actionDesc}>Log operations and recoveries.</Text>
+                            <Text style={styles.actionName}>{t('wellness.surgery')}</Text>
+                            <Text style={styles.actionDesc}>{t('wellness.log_surgeries')}</Text>
                         </View>
                         <Ionicons name="chevron-forward" size={20} color={COLORS.gray} />
                     </TouchableOpacity>
@@ -286,7 +286,7 @@ export const WellnessHubScreen = ({ navigation }: any) => {
                         </View>
                         <View style={styles.actionContent}>
                             <Text style={styles.actionName}>{t('wellness.sections.vet_notes_title')}</Text>
-                            <Text style={styles.actionDesc}>Save general observations and vet notes.</Text>
+                            <Text style={styles.actionDesc}>{t('wellness.save_notes')}</Text>
                         </View>
                         <Ionicons name="chevron-forward" size={20} color={COLORS.gray} />
                     </TouchableOpacity>

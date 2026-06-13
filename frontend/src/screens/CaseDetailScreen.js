@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     View, Text, StyleSheet, TextInput, ScrollView,
     TouchableOpacity, Image, SafeAreaView, KeyboardAvoidingView,
@@ -22,6 +23,7 @@ const CASE_TYPE_CONFIG = {
 };
 
 const CaseDetailScreen = ({ route, navigation }) => {
+    const { t } = useTranslation();
     const { reportId } = route.params;
     const { userInfo } = useContext(AuthContext);
 
@@ -129,10 +131,10 @@ const CaseDetailScreen = ({ route, navigation }) => {
         const now = new Date();
         const date = new Date(dateStr);
         const diff = Math.floor((now - date) / 1000);
-        if (diff < 60) return 'Just now';
-        if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-        if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-        return `${Math.floor(diff / 86400)}d ago`;
+        if (diff < 60) return t('common.just_now');
+        if (diff < 3600) return `${Math.floor(diff / 60)}m ${t('common.ago')}`;
+        if (diff < 86400) return `${Math.floor(diff / 3600)}h ${t('common.ago')}`;
+        return `${Math.floor(diff / 86400)}d ${t('common.ago')}`;
     };
 
     const formatDateTime = (dateStr) => {
@@ -172,7 +174,7 @@ const CaseDetailScreen = ({ route, navigation }) => {
                     <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
                         <Ionicons name="arrow-back" size={24} color={COLORS.white} />
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Case Detail</Text>
+                    <Text style={styles.headerTitle}>{t('case_detail.title')}</Text>
                     <View style={{ width: 40 }} />
                 </View>
 
@@ -197,12 +199,12 @@ const CaseDetailScreen = ({ route, navigation }) => {
                                         )}
                                     </View>
                                     <View style={styles.authorInfo}>
-                                        <Text style={styles.authorName}>{report.author?.full_name || 'Anonymous'}</Text>
+                                        <Text style={styles.authorName}>{report.author?.full_name || t('common.anonymous')}</Text>
                                         <Text style={styles.timeAgo}>{getTimeAgo(report.created_at)}</Text>
                                     </View>
                                     <View style={[styles.caseTypeBadge, { backgroundColor: config.color }]}>
                                         <Ionicons name={config.icon} size={14} color="white" />
-                                        <Text style={styles.caseTypeBadgeText}>{config.label}</Text>
+                                        <Text style={styles.caseTypeBadgeText}>{t(`report.types.${report.case_type}`, { defaultValue: config.label })}</Text>
                                     </View>
                                 </View>
 
@@ -219,7 +221,7 @@ const CaseDetailScreen = ({ route, navigation }) => {
                                             <View style={styles.detailItem}>
                                                 <Ionicons name="paw-outline" size={16} color={COLORS.accent} />
                                                 <View style={styles.detailTextCol}>
-                                                    <Text style={styles.detailLabel}>Estimated Breed</Text>
+                                                    <Text style={styles.detailLabel}>{t('report.labels.breed')}</Text>
                                                     <Text style={styles.detailValue}>{report.breed}</Text>
                                                 </View>
                                             </View>
@@ -228,7 +230,7 @@ const CaseDetailScreen = ({ route, navigation }) => {
                                             <View style={styles.detailItem}>
                                                 <Ionicons name="color-palette-outline" size={16} color={COLORS.accent} />
                                                 <View style={styles.detailTextCol}>
-                                                    <Text style={styles.detailLabel}>Dog Color</Text>
+                                                    <Text style={styles.detailLabel}>{t('report.labels.color')}</Text>
                                                     <Text style={styles.detailValue}>{report.color}</Text>
                                                 </View>
                                             </View>
@@ -292,14 +294,14 @@ const CaseDetailScreen = ({ route, navigation }) => {
                                                 }}
                                             >
                                                 <Ionicons name="map-outline" size={16} color="white" />
-                                                <Text style={styles.fullMapBtnText}>Incident Spot</Text>
+                                                <Text style={styles.fullMapBtnText}>{t('case_detail.incident_spot')}</Text>
                                             </TouchableOpacity>
                                         </View>
                                     </View>
                                 )}
 
                                 <Text style={styles.exactTimeText}>
-                                    Reported on: {formatDateTime(report.created_at)}
+                                    {t('case_detail.reported_on', { date: formatDateTime(report.created_at) })}
                                 </Text>
 
                                 {/* Actions */}
@@ -310,19 +312,19 @@ const CaseDetailScreen = ({ route, navigation }) => {
                                             size={24}
                                             color={report.is_liked ? '#FF4444' : 'rgba(255,255,255,0.6)'}
                                         />
-                                        <Text style={styles.actionCount}>{report.like_count || 0} likes</Text>
+                                        <Text style={styles.actionCount}>{t('case_detail.likes', { count: report.like_count || 0 })}</Text>
                                     </TouchableOpacity>
                                     <View style={styles.actionBtn}>
                                         <Ionicons name="chatbubble" size={20} color="rgba(255,255,255,0.6)" />
-                                        <Text style={styles.actionCount}>{comments.length} comments</Text>
+                                        <Text style={styles.actionCount}>{t('case_detail.comments_count', { count: comments.length })}</Text>
                                     </View>
                                 </View>
 
                                 {/* Comments Section */}
                                 <View style={styles.commentsSection}>
-                                    <Text style={styles.commentsSectionTitle}>Comments</Text>
+                                    <Text style={styles.commentsSectionTitle}>{t('case_detail.comments')}</Text>
                                     {comments.length === 0 ? (
-                                        <Text style={styles.noComments}>No comments yet. Be the first to respond!</Text>
+                                        <Text style={styles.noComments}>{t('case_detail.no_comments')}</Text>
                                     ) : (
                                         comments.map((c) => (
                                             <View key={c.id} style={styles.commentCard}>
@@ -330,7 +332,7 @@ const CaseDetailScreen = ({ route, navigation }) => {
                                                     <View style={styles.commentAvatar}>
                                                         <Ionicons name="person" size={14} color={COLORS.white} />
                                                     </View>
-                                                    <Text style={styles.commentAuthor}>{c.author?.full_name || 'User'}</Text>
+                                                    <Text style={styles.commentAuthor}>{c.author?.full_name || t('case_actions.user')}</Text>
                                                     <Text style={styles.commentTime}>{getTimeAgo(c.created_at)}</Text>
                                                 </View>
                                                 <Text style={styles.commentText}>{renderCommentText(c.content)}</Text>
@@ -358,7 +360,7 @@ const CaseDetailScreen = ({ route, navigation }) => {
                     <View style={styles.commentInputContainer}>
                         <TextInput
                             style={styles.commentInput}
-                            placeholder="Add a comment... use @ to tag"
+                            placeholder={t('case_detail.comment_placeholder')}
                             placeholderTextColor="rgba(255,255,255,0.4)"
                             value={newComment}
                             onChangeText={handleCommentChange}

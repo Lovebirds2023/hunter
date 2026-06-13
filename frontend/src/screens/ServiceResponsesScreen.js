@@ -21,7 +21,7 @@ const ServiceResponsesScreen = ({ route, navigation }) => {
             setResponses(data || []);
         } catch (error) {
             console.error('Error fetching responses:', error);
-            Alert.alert('Error', 'Failed to load booking responses');
+            Alert.alert(t('common.error'), t('service_responses.load_error'));
         } finally {
             setLoading(false);
         }
@@ -29,7 +29,7 @@ const ServiceResponsesScreen = ({ route, navigation }) => {
 
     const handleContact = (phone) => {
         if (!phone) {
-            Alert.alert('Privacy', 'This user chose not to share their phone number.');
+            Alert.alert(t('service_responses.privacy'), t('service_responses.no_phone'));
             return;
         }
         Linking.openURL(`tel:${phone}`);
@@ -40,7 +40,7 @@ const ServiceResponsesScreen = ({ route, navigation }) => {
             <View style={styles.cardHeader}>
                 <View>
                     <Text style={styles.buyerName}>{item.buyer.full_name}</Text>
-                    <Text style={styles.orderInfo}>Order: {item.order_id.split('-').pop()} • {new Date(item.created_at).toLocaleDateString()}</Text>
+                    <Text style={styles.orderInfo}>{t('service_responses.order_info', { id: item.order_id.split('-').pop(), date: new Date(item.created_at).toLocaleDateString() })}</Text>
                 </View>
                 <TouchableOpacity 
                     style={[styles.contactBtn, !item.buyer.phone && styles.contactBtnDisabled]} 
@@ -54,17 +54,17 @@ const ServiceResponsesScreen = ({ route, navigation }) => {
 
             {item.responses.length > 0 ? (
                 <View style={styles.answersSection}>
-                    <Text style={styles.sectionTitle}>Form Answers</Text>
+                    <Text style={styles.sectionTitle}>{t('service_responses.form_answers')}</Text>
                     {item.responses.map((resp, idx) => (
                         <View key={idx} style={styles.answerRow}>
                             <Text style={styles.questionText}>{resp.field_label}</Text>
-                            <Text style={styles.answerText}>{resp.answer_value || 'No answer'}</Text>
+                            <Text style={styles.answerText}>{resp.answer_value || t('event_responses.no_answer')}</Text>
                         </View>
                     ))}
                 </View>
             ) : (
                 <View style={styles.emptyAnswers}>
-                    <Text style={styles.emptyAnswersText}>No custom registration fields for this booking.</Text>
+                    <Text style={styles.emptyAnswersText}>{t('service_responses.no_fields')}</Text>
                 </View>
             )}
 
@@ -77,7 +77,7 @@ const ServiceResponsesScreen = ({ route, navigation }) => {
     if (loading) return (
         <View style={styles.center}>
             <ActivityIndicator size="large" color={COLORS.primary} />
-            <Text style={{ marginTop: 10, color: COLORS.textSecondary }}>Fetching participant data...</Text>
+            <Text style={{ marginTop: 10, color: COLORS.textSecondary }}>{t('service_responses.fetching')}</Text>
         </View>
     );
 
@@ -89,7 +89,7 @@ const ServiceResponsesScreen = ({ route, navigation }) => {
                         <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
                     </TouchableOpacity>
                     <View style={{ flex: 1 }}>
-                        <Text style={styles.headerTitle}>Booking Responses</Text>
+                        <Text style={styles.headerTitle}>{t('service_responses.title')}</Text>
                         <Text style={styles.headerSubtitle} numberOfLines={1}>{serviceTitle}</Text>
                     </View>
                 </View>
@@ -102,8 +102,8 @@ const ServiceResponsesScreen = ({ route, navigation }) => {
                     ListEmptyComponent={
                         <View style={styles.emptyContainer}>
                             <Ionicons name="people-outline" size={64} color="#ccc" />
-                            <Text style={styles.emptyText}>No bookings yet.</Text>
-                            <Text style={styles.emptySubtext}>When attendees register for your event, their details and answers will appear here.</Text>
+                            <Text style={styles.emptyText}>{t('service_responses.no_bookings')}</Text>
+                            <Text style={styles.emptySubtext}>{t('service_responses.no_bookings_subtitle')}</Text>
                         </View>
                     }
                 />

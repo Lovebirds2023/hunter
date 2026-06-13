@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Alert, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getEventResponses, getEventFormFields } from '../api/events';
@@ -7,6 +8,7 @@ import { useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 
 const EventResponsesScreen = ({ route, navigation }) => {
+    const { t } = useTranslation();
     const { eventId, eventTitle } = route.params;
     const { userInfo } = useContext(AuthContext);
     const isAdmin = userInfo?.role === 'admin';
@@ -29,7 +31,7 @@ const EventResponsesScreen = ({ route, navigation }) => {
             setFormFields(fieldsData || []);
         } catch (error) {
             console.error('Error fetching responses:', error);
-            Alert.alert('Error', 'Failed to load registration data');
+            Alert.alert(t('common.error'), t('event_responses.load_error'));
         } finally {
             setLoading(false);
         }
@@ -37,9 +39,9 @@ const EventResponsesScreen = ({ route, navigation }) => {
 
     const renderHeader = () => (
         <View style={styles.header}>
-            <Text style={styles.headerTitle}>Registration Responses</Text>
+            <Text style={styles.headerTitle}>{t('event_responses.title')}</Text>
             <Text style={styles.headerSubtitle}>{eventTitle}</Text>
-            <Text style={styles.statsText}>Total Registrations: {responses.length}</Text>
+            <Text style={styles.statsText}>{t('event_responses.total', { count: responses.length })}</Text>
         </View>
     );
 
@@ -53,7 +55,7 @@ const EventResponsesScreen = ({ route, navigation }) => {
                         </Text>
                     </View>
                     <View style={styles.userInfo}>
-                        <Text style={styles.userName}>{item.user_name || 'Unknown User'}</Text>
+                        <Text style={styles.userName}>{item.user_name || t('event_responses.unknown_user')}</Text>
                         <Text style={styles.userEmail}>{item.user_email}</Text>
                         
                         {(item.share_phone || isAdmin) && item.user_phone ? (
@@ -71,7 +73,7 @@ const EventResponsesScreen = ({ route, navigation }) => {
                 {item.dog_name && (
                     <View style={styles.dogRow}>
                         <Ionicons name="paw" size={16} color="#D4AF37" />
-                        <Text style={styles.dogName}>Attending with: {item.dog_name}</Text>
+                        <Text style={styles.dogName}>{t('event_responses.attending_with', { name: item.dog_name })}</Text>
                     </View>
                 )}
 
@@ -82,17 +84,17 @@ const EventResponsesScreen = ({ route, navigation }) => {
                             return (
                                 <View key={field.id} style={styles.qaRow}>
                                     <Text style={styles.questionText}>{field.label}</Text>
-                                    <Text style={styles.answerText}>{answer || '-- No Answer --'}</Text>
+                                    <Text style={styles.answerText}>{answer || t('event_responses.no_answer')}</Text>
                                 </View>
                             );
                         })
                     ) : (
-                        <Text style={styles.noFormText}>No custom form fields for this event.</Text>
+                        <Text style={styles.noFormText}>{t('event_responses.no_form_fields')}</Text>
                     )}
                 </View>
 
                 <View style={styles.footerRow}>
-                    <Text style={styles.dateText}>Registered: {moment(item.created_at).format('MMM D, YYYY')}</Text>
+                    <Text style={styles.dateText}>{t('event_responses.registered', { date: moment(item.created_at).format('MMM D, YYYY') })}</Text>
                 </View>
             </View>
         );
@@ -111,7 +113,7 @@ const EventResponsesScreen = ({ route, navigation }) => {
                 ListEmptyComponent={
                     <View style={styles.emptyContainer}>
                         <Ionicons name="people-outline" size={64} color="#ccc" />
-                        <Text style={styles.emptyText}>No registrations yet</Text>
+                        <Text style={styles.emptyText}>{t('event_responses.no_registrations')}</Text>
                     </View>
                 }
             />

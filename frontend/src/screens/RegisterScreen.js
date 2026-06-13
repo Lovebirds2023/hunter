@@ -49,7 +49,7 @@ const RegisterScreen = ({ navigation }) => {
         try {
             let { status } = await Location.requestForegroundPermissionsAsync();
             if (status !== 'granted') {
-                Alert.alert(t('common.permission_denied'), t('register.location_denied_error') + " Please enable it in your phone settings.");
+                Alert.alert(t('common.permission_denied'), `${t('register.location_denied_error')} ${t('register.location_settings_suffix')}`);
                 setLocationAllowed(false);
                 return null;
             }
@@ -64,7 +64,7 @@ const RegisterScreen = ({ navigation }) => {
             return loc.coords;
         } catch (error) {
             console.log("Location Error:", error);
-            Alert.alert("Location Error", "Could not fetch your location. Please check if your device GPS is turned on.");
+            Alert.alert(t('register.location_error_title'), t('register.location_error_msg'));
             return null;
         }
     };
@@ -154,11 +154,11 @@ const RegisterScreen = ({ navigation }) => {
                                     source={{ uri: "https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" }}
                                     style={styles.googleIcon}
                                 />
-                                <Text style={styles.googleSignUpText}>Sign up with Google</Text>
+                                <Text style={styles.googleSignUpText}>{t('register.google_signup')}</Text>
                             </TouchableOpacity>
                             <View style={styles.divider}>
                                 <View style={styles.line} />
-                                <Text style={styles.dividerText}>OR</Text>
+                                <Text style={styles.dividerText}>{t('login.or')}</Text>
                                 <View style={styles.line} />
                             </View>
                         </>
@@ -214,15 +214,15 @@ const RegisterScreen = ({ navigation }) => {
                                 <Button title={t('register.next_step')} onPress={() => {
                                     clearAuthNotice();
                                     if (!fullName || !email || !password) {
-                                        Alert.alert("Wait", "Please complete all fields on this step.");
+                                        Alert.alert(t('register.wait_title'), t('register.complete_step'));
                                         return;
                                     }
                                     if (!validateEmail(email.trim())) {
-                                        Alert.alert("Invalid email", "Please enter a valid email address.");
+                                        Alert.alert(t('register.invalid_email_title'), t('register.invalid_email_msg'));
                                         return;
                                     }
                                     if (password.length < 8) {
-                                        Alert.alert("Weak password", "Password must be at least 8 characters.");
+                                        Alert.alert(t('register.weak_password_title'), t('register.weak_password_msg'));
                                         return;
                                     }
                                     setCurrentStep(2);
@@ -312,7 +312,7 @@ const RegisterScreen = ({ navigation }) => {
                                     <Button title={t('common.continue')} onPress={() => {
                                         clearAuthNotice();
                                         if (!phoneNumber) {
-                                            Alert.alert("Wait", "Please provide a valid phone number.");
+                                            Alert.alert(t('register.wait_title'), t('register.valid_phone'));
                                             return;
                                         }
                                         setCurrentStep(3);

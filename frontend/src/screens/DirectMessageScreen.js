@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useContext } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, ActivityIndicator, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, SHADOWS } from '../constants/theme';
@@ -7,6 +8,7 @@ import client from '../api/client';
 import { AuthContext } from '../context/AuthContext';
 
 export const DirectMessageScreen = ({ route, navigation }) => {
+    const { t } = useTranslation();
     const { targetId, targetName } = route.params;
     const { user } = useContext(AuthContext);
     const [messages, setMessages] = useState([]);
@@ -70,8 +72,8 @@ export const DirectMessageScreen = ({ route, navigation }) => {
                     <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
                 </TouchableOpacity>
                 <View style={styles.targetInfo}>
-                    <Text style={styles.targetName}>{targetName || "User"}</Text>
-                    <Text style={styles.onlineStatus}>Private Message</Text>
+                    <Text style={styles.targetName}>{targetName || t('case_actions.user')}</Text>
+                    <Text style={styles.onlineStatus}>{t('messages.private_message')}</Text>
                 </View>
                 <View style={{ width: 40 }} />
             </View>
@@ -94,7 +96,7 @@ export const DirectMessageScreen = ({ route, navigation }) => {
                 <View style={styles.inputArea}>
                     <TextInput
                         style={styles.input}
-                        placeholder="Type a message..."
+                        placeholder={t('messages.type_message')}
                         value={inputText}
                         onChangeText={setInputText}
                         multiline
