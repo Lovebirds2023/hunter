@@ -49,7 +49,7 @@ const RegisterScreen = ({ navigation }) => {
             if (status !== 'granted') {
                 Alert.alert(t('common.permission_denied'), t('register.location_denied_error') + " Please enable it in your phone settings.");
                 setLocationAllowed(false);
-                return false;
+                return null;
             }
             
             let loc = await Location.getLastKnownPositionAsync({});
@@ -59,11 +59,11 @@ const RegisterScreen = ({ navigation }) => {
             
             setLocation(loc.coords);
             setLocationAllowed(true);
-            return true;
+            return loc.coords;
         } catch (error) {
             console.log("Location Error:", error);
             Alert.alert("Location Error", "Could not fetch your location. Please check if your device GPS is turned on.");
-            return false;
+            return null;
         }
     };
 
@@ -380,10 +380,7 @@ const RegisterScreen = ({ navigation }) => {
                                 <View style={{ flex: 1 }}>
                                     <Button title={t('register.register')} onPress={async () => {
                                         clearAuthNotice();
-                                        if (!locationAllowed) {
-                                            Alert.alert("Required", t('register.location_denied_error'));
-                                            return;
-                                        }
+                                        const currentLocation = locationAllowed ? location : await requestLocation();
                                         const success = await register(
                                             fullName,
                                             email.trim().toLowerCase(),
@@ -393,8 +390,8 @@ const RegisterScreen = ({ navigation }) => {
                                             bio,
                                             countryCode,
                                             preferredLanguage,
-                                            location?.latitude,
-                                            location?.longitude
+                                            currentLocation?.latitude,
+                                            currentLocation?.longitude
                                         );
                                         if (success) {
                                             navigation.navigate('Login');

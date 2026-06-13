@@ -2,24 +2,30 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-// Production API URL — must be set via EXPO_PUBLIC_API_URL in .env
+const PRODUCTION_API_URL = 'https://hunter-production-0341.up.railway.app';
+
+const normalizeUrl = (url) => {
+    const normalizedUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    return normalizedUrl.replace(/\/+$/, '');
+};
+
+// EXPO_PUBLIC_API_URL wins when set; production falls back to the live API.
 const getBaseUrl = () => {
     const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
 
-    if (!envUrl) {
-        // In production builds, EXPO_PUBLIC_API_URL must always be set
-        if (!__DEV__) {
-            console.error('FATAL: EXPO_PUBLIC_API_URL is not set in production.');
-        }
-        // Fallbacks only for local development
-        if (Platform.OS === 'android') {
-            return 'http://10.0.2.2:8000';
-        }
-        return 'http://localhost:8000';
+    if (envUrl) {
+        return normalizeUrl(envUrl);
     }
 
-    const normalizedUrl = /^https?:\/\//i.test(envUrl) ? envUrl : `https://${envUrl}`;
-    return normalizedUrl.replace(/\/+$/, '');
+    if (!__DEV__) {
+        return PRODUCTION_API_URL;
+    }
+
+    if (Platform.OS === 'android') {
+        return 'http://10.0.2.2:8000';
+    }
+
+    return 'http://localhost:8000';
 };
 
 export const BASE_URL = getBaseUrl();
