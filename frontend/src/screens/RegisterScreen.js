@@ -12,18 +12,14 @@ import { Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
-import { getGoogleRedirectUri } from '../api/googleAuthConfig';
+import {
+    getGoogleAuthRequestConfig,
+    getGoogleAuthStatus,
+    getGoogleIdTokenFromResponse,
+} from '../api/googleAuthConfig';
 import { setAppLanguage } from '../i18n';
 
-const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
-const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 WebBrowser.maybeCompleteAuthSession();
-
-const isUsableGoogleClientId = (clientId) => {
-    if (!clientId) return false;
-    const normalized = clientId.trim().toLowerCase();
-    return normalized.endsWith('.apps.googleusercontent.com') && !normalized.startsWith('your-');
-};
 
 const RegisterScreen = ({ navigation }) => {
     const { t } = useTranslation();
@@ -39,6 +35,7 @@ const RegisterScreen = ({ navigation }) => {
     const [locationAllowed, setLocationAllowed] = useState(false);
     const [currentStep, setCurrentStep] = useState(1);
     const [showPassword, setShowPassword] = useState(false);
+    const [localGoogleNotice, setLocalGoogleNotice] = useState(null);
 
     const changeLanguage = async (lng) => {
         setPreferredLanguage(lng);
@@ -70,30 +67,36 @@ const RegisterScreen = ({ navigation }) => {
     };
 
     const { register, googleLogin, isLoading, authNotice, clearAuthNotice } = useContext(AuthContext);
+    const visibleNotice = localGoogleNotice || authNotice;
 
     const validateEmail = (value) => /\S+@\S+\.\S+/.test(value);
 
     // Google Sign-Up setup
-    const canUseGoogleAuth = Platform.OS === 'web'
-        ? isUsableGoogleClientId(googleWebClientId)
-        : Boolean(isUsableGoogleClientId(googleIosClientId) || isUsableGoogleClientId(googleWebClientId));
-
-    const redirectUri = getGoogleRedirectUri();
-
-    const [googleRequest, googleResponse, promptGoogleAsync] = Google.useAuthRequest({
-        webClientId: googleWebClientId,
-        iosClientId: googleIosClientId,
-        redirectUri,
-    });
+    const googleAuthStatus = getGoogleAuthStatus();
+    const canUseGoogleAuth = googleAuthStatus.isAvailable;
+    const [googleRequest, googleResponse, promptGoogleAsync] = Google.useIdTokenAuthRequest(getGoogleAuthRequestConfig());
 
     React.useEffect(() => {
         if (googleResponse?.type === 'success') {
-            const { authentication } = googleResponse;
-            if (authentication?.idToken) {
-                googleLogin(authentication.idToken);
+            const idToken = getGoogleIdTokenFromResponse(googleResponse);
+            if (idToken) {
+                setLocalGoogleNotice(null);
+                googleLogin(idToken);
+            } else {
+                clearAuthNotice();
+                setLocalGoogleNotice({
+                    type: 'error',
+                    message: 'Google did not return an ID token. Please try again or use email/password.',
+                });
             }
+        } else if (googleResponse?.type === 'error') {
+            clearAuthNotice();
+            setLocalGoogleNotice({
+                type: 'error',
+                message: googleResponse.error?.message || 'Google signup failed before reaching the server.',
+            });
         }
-    }, [googleResponse, googleLogin]);
+    }, [googleResponse, googleLogin, clearAuthNotice]);
 
     return (
         <ThemeBackground>
@@ -123,26 +126,26 @@ const RegisterScreen = ({ navigation }) => {
                         {currentStep === 3 && t('register.step3_title')}
                     </Text>
 
-                    {authNotice && (
+                    {visibleNotice && (
                         <View style={[
                             styles.notice,
-                            authNotice.type === 'error' && styles.noticeError,
-                            authNotice.type === 'success' && styles.noticeSuccess,
+                            visibleNotice.type === 'error' && styles.noticeError,
+                            visibleNotice.type === 'success' && styles.noticeSuccess,
                         ]}>
                             <View style={styles.noticeContent}>
                                 <Text style={styles.noticeIcon}>
-                                    {authNotice.type === 'success' && '✓'}
-                                    {authNotice.type === 'error' && '✕'}
+                                    {visibleNotice.type === 'success' && '✓'}
+                                    {visibleNotice.type === 'error' && '✕'}
                                 </Text>
                                 <View style={{ flex: 1 }}>
-                                    <Text style={styles.noticeText}>{authNotice.message}</Text>
+                                    <Text style={styles.noticeText}>{visibleNotice.message}</Text>
                                 </View>
                             </View>
                         </View>
                     )}
 
                     {/* Google Sign-Up Button (All Steps) */}
-                    {canUseGoogleAuth && (
+                    {canUseGoogleAuth ? (
                         <>
                             <TouchableOpacity
                                 style={styles.googleSignUpBtn}
@@ -162,6 +165,21 @@ const RegisterScreen = ({ navigation }) => {
                                 <View style={styles.line} />
                             </View>
                         </>
+                    ) : (
+                        <TouchableOpacity
+                            style={[styles.googleSignUpBtn, styles.googleSignUpBtnDisabled]}
+                            onPress={() => {
+                                clearAuthNotice();
+                                setLocalGoogleNotice({ type: 'error', message: googleAuthStatus.reason });
+                            }}
+                            activeOpacity={0.8}
+                        >
+                            <Image
+                                source={{ uri: "https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" }}
+                                style={styles.googleIcon}
+                            />
+                            <Text style={styles.googleSignUpText}>{t('login.setup_google')}</Text>
+                        </TouchableOpacity>
                     )}
 
                     {/* Step 1: Basics */}
@@ -244,20 +262,20 @@ const RegisterScreen = ({ navigation }) => {
                                         dropdownIconColor={COLORS.accent}
                                         itemStyle={{ color: COLORS.white }}
                                     >
-                                        <Picker.Item label="🇰🇪 +254 (Kenya)" value="+254" />
-                                        <Picker.Item label="🇺🇬 +256 (Uganda)" value="+256" />
-                                        <Picker.Item label="🇹🇿 +255 (Tanzania)" value="+255" />
-                                        <Picker.Item label="🇷🇼 +250 (Rwanda)" value="+250" />
-                                        <Picker.Item label="🇬🇧 +44 (UK)" value="+44" />
-                                        <Picker.Item label="🇺🇸 +1 (USA)" value="+1" />
-                                        <Picker.Item label="🇮🇳 +91 (India)" value="+91" />
-                                        <Picker.Item label="🇪🇸 +34 (Spain)" value="+34" />
-                                        <Picker.Item label="🇫🇷 +33 (France)" value="+33" />
-                                        <Picker.Item label="🇩🇪 +49 (Germany)" value="+49" />
-                                        <Picker.Item label="🇧🇷 +55 (Brazil)" value="+55" />
-                                        <Picker.Item label="🇦🇪 +971 (UAE)" value="+971" />
-                                        <Picker.Item label="🇨🇳 +86 (China)" value="+86" />
-                                        <Picker.Item label="🇯🇵 +81 (Japan)" value="+81" />
+                                        <Picker.Item label="ðŸ‡°ðŸ‡ª +254 (Kenya)" value="+254" />
+                                        <Picker.Item label="ðŸ‡ºðŸ‡¬ +256 (Uganda)" value="+256" />
+                                        <Picker.Item label="ðŸ‡¹ðŸ‡¿ +255 (Tanzania)" value="+255" />
+                                        <Picker.Item label="ðŸ‡·ðŸ‡¼ +250 (Rwanda)" value="+250" />
+                                        <Picker.Item label="ðŸ‡¬ðŸ‡§ +44 (UK)" value="+44" />
+                                        <Picker.Item label="ðŸ‡ºðŸ‡¸ +1 (USA)" value="+1" />
+                                        <Picker.Item label="ðŸ‡®ðŸ‡³ +91 (India)" value="+91" />
+                                        <Picker.Item label="ðŸ‡ªðŸ‡¸ +34 (Spain)" value="+34" />
+                                        <Picker.Item label="ðŸ‡«ðŸ‡· +33 (France)" value="+33" />
+                                        <Picker.Item label="ðŸ‡©ðŸ‡ª +49 (Germany)" value="+49" />
+                                        <Picker.Item label="ðŸ‡§ðŸ‡· +55 (Brazil)" value="+55" />
+                                        <Picker.Item label="ðŸ‡¦ðŸ‡ª +971 (UAE)" value="+971" />
+                                        <Picker.Item label="ðŸ‡¨ðŸ‡³ +86 (China)" value="+86" />
+                                        <Picker.Item label="ðŸ‡¯ðŸ‡µ +81 (Japan)" value="+81" />
                                     </Picker>
                                 </View>
                                 <TextInput
@@ -282,14 +300,14 @@ const RegisterScreen = ({ navigation }) => {
                                 >
                                     <Picker.Item label="English (Primary)" value="en" />
                                     <Picker.Item label="Kiswahili" value="sw" />
-                                    <Picker.Item label="Español (Spanish)" value="es" />
-                                    <Picker.Item label="Français (French)" value="fr" />
+                                    <Picker.Item label="EspaÃ±ol (Spanish)" value="es" />
+                                    <Picker.Item label="FranÃ§ais (French)" value="fr" />
                                     <Picker.Item label="Deutsch (German)" value="de" />
-                                    <Picker.Item label="Português (Portuguese)" value="pt" />
-                                    <Picker.Item label="العربية (Arabic)" value="ar" />
-                                    <Picker.Item label="中文 (Chinese)" value="zh" />
-                                    <Picker.Item label="हिन्दी (Hindi)" value="hi" />
-                                    <Picker.Item label="日本語 (Japanese)" value="ja" />
+                                    <Picker.Item label="PortuguÃªs (Portuguese)" value="pt" />
+                                    <Picker.Item label="Ø§Ù„Ø¹Ø±Ø¨ÙŠØ© (Arabic)" value="ar" />
+                                    <Picker.Item label="ä¸­æ–‡ (Chinese)" value="zh" />
+                                    <Picker.Item label="à¤¹à¤¿à¤¨à¥à¤¦à¥€ (Hindi)" value="hi" />
+                                    <Picker.Item label="æ—¥æœ¬èªž (Japanese)" value="ja" />
                                 </Picker>
                             </View>
 
@@ -712,6 +730,9 @@ const styles = StyleSheet.create({
         marginBottom: SPACING.md,
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.2)',
+    },
+    googleSignUpBtnDisabled: {
+        opacity: 0.72,
     },
     googleIcon: {
         width: 24,

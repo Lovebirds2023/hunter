@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     # Google OAuth
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_IOS_CLIENT_ID: str = os.getenv("GOOGLE_IOS_CLIENT_ID", "")
+    GOOGLE_ANDROID_CLIENT_ID: str = os.getenv("GOOGLE_ANDROID_CLIENT_ID", "")
 
     class Config:
         case_sensitive = True

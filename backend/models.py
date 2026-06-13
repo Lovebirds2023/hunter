@@ -25,6 +25,8 @@ class User(Base):
     hashed_password = Column(String)
     full_name = Column(String)
     role = Column(String, default="buyer")
+    auth_provider = Column(String, default="email")
+    google_id = Column(String, unique=True, nullable=True, index=True)
     phone_number = Column(String, nullable=True)
     country = Column(String, nullable=True)
     language = Column(String, default="en")

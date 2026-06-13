@@ -28,16 +28,20 @@ def get_password_hash(password: str) -> str:
 def verify_google_token(token: str) -> Optional[Dict[str, Any]]:
     """
     Verify Google OAuth token and return user info.
-    Tries both web and iOS client IDs.
+    Tries every configured Google client ID.
     """
-    try:
-        # Try web client ID first
-        idinfo = id_token.verify_oauth2_token(token, requests.Request(), settings.GOOGLE_CLIENT_ID)
-        return idinfo
-    except ValueError:
-        # Try iOS client ID if web fails
+    audiences = [
+        client_id
+        for client_id in [
+            settings.GOOGLE_CLIENT_ID,
+            settings.GOOGLE_IOS_CLIENT_ID,
+            settings.GOOGLE_ANDROID_CLIENT_ID,
+        ]
+        if client_id
+    ]
+    for audience in audiences:
         try:
-            idinfo = id_token.verify_oauth2_token(token, requests.Request(), settings.GOOGLE_IOS_CLIENT_ID)
-            return idinfo
+            return id_token.verify_oauth2_token(token, requests.Request(), audience)
         except ValueError:
-            return None
+            continue
+    return None

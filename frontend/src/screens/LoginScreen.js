@@ -8,17 +8,13 @@ import { COLORS, SPACING, SIZES } from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
-import { getGoogleRedirectUri } from '../api/googleAuthConfig';
+import {
+    getGoogleAuthRequestConfig,
+    getGoogleAuthStatus,
+    getGoogleIdTokenFromResponse,
+} from '../api/googleAuthConfig';
 
-const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
-const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 WebBrowser.maybeCompleteAuthSession();
-
-const isUsableGoogleClientId = (clientId) => {
-    if (!clientId) return false;
-    const normalized = clientId.trim().toLowerCase();
-    return normalized.endsWith('.apps.googleusercontent.com') && !normalized.startsWith('your-');
-};
 
 const SocialLoginButton = ({ icon, imageUri, label, onPress, disabled, subtle }) => (
     <TouchableOpacity
@@ -36,23 +32,21 @@ const SocialLoginButton = ({ icon, imageUri, label, onPress, disabled, subtle })
     </TouchableOpacity>
 );
 
-const GoogleSignInButton = ({ googleLogin, label, disabledLabel }) => {
-    const redirectUri = getGoogleRedirectUri();
-
-    const [request, response, promptAsync] = Google.useAuthRequest({
-        webClientId: googleWebClientId,
-        iosClientId: googleIosClientId,
-        redirectUri,
-    });
+const GoogleSignInButton = ({ googleLogin, label, disabledLabel, onAuthNotice }) => {
+    const [request, response, promptAsync] = Google.useIdTokenAuthRequest(getGoogleAuthRequestConfig());
 
     React.useEffect(() => {
         if (response?.type === 'success') {
-            const { authentication } = response;
-            if (authentication?.idToken) {
-                googleLogin(authentication.idToken);
+            const idToken = getGoogleIdTokenFromResponse(response);
+            if (idToken) {
+                googleLogin(idToken);
+            } else {
+                onAuthNotice('Google did not return an ID token. Please try again or use email/password.');
             }
+        } else if (response?.type === 'error') {
+            onAuthNotice(response.error?.message || 'Google login failed before reaching the server.');
         }
-    }, [response, googleLogin]);
+    }, [response, googleLogin, onAuthNotice]);
 
     return (
         <SocialLoginButton
@@ -70,9 +64,8 @@ const LoginScreen = ({ navigation }) => {
     const [password, setPassword] = useState("");
     const [localNotice, setLocalNotice] = useState(null);
     const { login, googleLogin, isLoading, authNotice, clearAuthNotice } = useContext(AuthContext);
-    const canUseGoogleAuth = Platform.OS === 'web'
-        ? isUsableGoogleClientId(googleWebClientId)
-        : Boolean(isUsableGoogleClientId(googleIosClientId) || isUsableGoogleClientId(googleWebClientId));
+    const googleAuthStatus = getGoogleAuthStatus();
+    const canUseGoogleAuth = googleAuthStatus.isAvailable;
     const visibleNotice = localNotice || authNotice;
 
     const handleLogin = async () => {
@@ -89,6 +82,11 @@ const LoginScreen = ({ navigation }) => {
         clearAuthNotice();
         setLocalNotice({ type: 'info', message });
     };
+
+    const showGoogleError = React.useCallback((message) => {
+        clearAuthNotice();
+        setLocalNotice({ type: 'error', message });
+    }, [clearAuthNotice]);
 
     return (
         <ThemeBackground>
@@ -131,12 +129,13 @@ const LoginScreen = ({ navigation }) => {
                                 googleLogin={googleLogin}
                                 label={t('login.continue_google')}
                                 disabledLabel={t('login.google_unavailable')}
+                                onAuthNotice={showGoogleError}
                             />
                         ) : (
                             <SocialLoginButton
                                 imageUri="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg"
                                 label={t('login.setup_google')}
-                                onPress={() => showUnavailableNotice(t('login.google_setup_notice'))}
+                                onPress={() => showUnavailableNotice(googleAuthStatus.reason || t('login.google_setup_notice'))}
                             />
                         )}
 

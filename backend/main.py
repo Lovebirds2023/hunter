@@ -3,6 +3,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
 import uuid
 import os
@@ -142,17 +143,17 @@ try:
     db = database.SessionLocal()
     try:
         migration_statements = [
-            """ALTER TABLE "user" 
+            """ALTER TABLE users
                ADD COLUMN IF NOT EXISTS auth_provider VARCHAR(50) DEFAULT 'email';""",
-            """ALTER TABLE "user" 
+            """ALTER TABLE users
                ADD COLUMN IF NOT EXISTS google_id VARCHAR(255) UNIQUE;""",
-            """ALTER TABLE "user" 
+            """ALTER TABLE users
                ALTER COLUMN hashed_password DROP NOT NULL;""",
-            """ALTER TABLE "user" 
+            """ALTER TABLE users
                ALTER COLUMN full_name DROP NOT NULL;""",
-            """CREATE INDEX IF NOT EXISTS idx_user_google_id ON "user"(google_id);""",
-            """CREATE INDEX IF NOT EXISTS idx_user_auth_provider ON "user"(auth_provider);""",
-            """CREATE INDEX IF NOT EXISTS idx_user_email ON "user"(email);""",
+            """CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);""",
+            """CREATE INDEX IF NOT EXISTS idx_users_auth_provider ON users(auth_provider);""",
+            """CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);""",
         ]
         
         for i, stmt in enumerate(migration_statements, 1):
@@ -331,31 +332,51 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 
 @app.post("/auth/google", response_model=schemas.GoogleLoginResponse)
 async def google_auth(request: schemas.GoogleLoginRequest, db: Session = Depends(database.get_db)):
-    # Verify the Google token
     id_info = auth.verify_google_token(request.id_token)
     if not id_info:
         raise HTTPException(status_code=400, detail="Invalid Google token")
     
-    email = id_info.get("email")
-    full_name = id_info.get("name", "")
+    email = (id_info.get("email") or "").strip().lower()
+    full_name = (id_info.get("name") or "").strip()
+    google_id = id_info.get("sub")
+    email_verified = id_info.get("email_verified")
     
-    # Check if user exists
-    user = db.query(models.User).filter(models.User.email == email).first()
+    if not email or not google_id:
+        raise HTTPException(status_code=400, detail="Invalid Google token - missing required profile details")
+
+    if email_verified is False:
+        raise HTTPException(status_code=400, detail="Google account email is not verified")
     
+    user = db.query(models.User).filter(models.User.google_id == google_id).first()
     if not user:
-        # Create new user if they don't exist
+        user = db.query(models.User).filter(models.User.email == email).first()
+        if user and user.google_id and user.google_id != google_id:
+            raise HTTPException(status_code=400, detail="This email is already linked to a different Google account")
+
+    if not user:
         user = models.User(
             id=str(uuid.uuid4()),
             email=email,
-            full_name=full_name,
-            hashed_password="", # No password for Google users
-            role=models.UserRole.BUYER # Default role
+            full_name=full_name or email.split("@")[0],
+            hashed_password=None,
+            role=models.UserRole.BUYER.value,
+            auth_provider="google",
+            google_id=google_id,
+            language="en",
         )
         db.add(user)
+    else:
+        user.full_name = user.full_name or full_name or email.split("@")[0]
+        user.google_id = user.google_id or google_id
+        user.auth_provider = "google"
+
+    try:
         db.commit()
         db.refresh(user)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="This Google account is already linked to another user")
     
-    # Create internal access token
     access_token = auth.create_access_token(data={"sub": user.email, "role": user.role})
     
     return {
