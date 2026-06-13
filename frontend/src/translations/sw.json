@@ -957,7 +957,7 @@
         "add_option": "Add Option",
         "option_placeholder": "Option {{number}}",
         "question_number": "Question {{number}}",
-        "question_placeholder": "Question Label (e.g. What is your role?)",
+        "question_placeholder": "Lebo ya swali (mfano: jukumu lako ni lipi?)",
         "type": "Type:",
         "required_question": "Required Question",
         "no_questions": "No questions added yet.",
