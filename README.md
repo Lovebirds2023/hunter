@@ -39,7 +39,7 @@ A production-ready mobile application for dog identification (biometrics), manag
    - Press `i` for iOS Simulator (macOS only).
    - Scan QR code with Expo Go app on physical device.
 
-**Note**: Since the backend runs in Docker, if you are using an Android Emulator, the API Client in `src/api/client.js` is configured to point to `http://10.0.2.2:8000`. If you run on a physical device, update `BASE_URL` to your machine's LAN IP (e.g., `http://192.168.1.5:8000/api/v1`).
+**Note**: Since the backend runs in Docker, if you are using an Android Emulator, the API Client in `src/api/client.js` is configured to point to `http://10.0.2.2:8000`. If you run on a physical device, set `EXPO_PUBLIC_API_URL` in `frontend/.env` to your machine's LAN IP (e.g., `http://192.168.1.5:8000`).
 
 ## Features Implemented
 - **Owner Registration**: Sign up, login, role selection.

@@ -19,16 +19,19 @@ elif len(SECRET_KEY) < 32:
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "43200"))  # 30 days
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_IOS_CLIENT_ID = os.getenv("GOOGLE_IOS_CLIENT_ID")
 
 from google.oauth2 import id_token
 from google.auth.transport import requests
 
 def verify_google_token(token: str):
-    try:
-        idinfo = id_token.verify_oauth2_token(token, requests.Request(), GOOGLE_CLIENT_ID)
-        return idinfo
-    except ValueError:
-        return None
+    audiences = [client_id for client_id in [GOOGLE_CLIENT_ID, GOOGLE_IOS_CLIENT_ID] if client_id]
+    for audience in audiences:
+        try:
+            return id_token.verify_oauth2_token(token, requests.Request(), audience)
+        except ValueError:
+            continue
+    return None
 
 import bcrypt
 

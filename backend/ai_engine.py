@@ -4,8 +4,8 @@ import uuid
 
 class DogIDEngine:
     def __init__(self):
-        self.orb = cv2.ORB_create(nfeatures=500)
-        self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+        self.sift = cv2.SIFT_create(nfeatures=500)
+        self.bf = cv2.BFMatcher(cv2.NORM_L2)
 
     def extract_descriptor(self, image_bytes: bytes):
         nparr = np.frombuffer(image_bytes, np.uint8)
@@ -13,7 +13,7 @@ class DogIDEngine:
         if img is None:
             return None
         
-        kp, des = self.orb.detectAndCompute(img, None)
+        kp, des = self.sift.detectAndCompute(img, None)
         if des is None:
             return None
             
@@ -23,18 +23,25 @@ class DogIDEngine:
         if not des1_list or not des2_list:
             return 0.0
             
-        des1 = np.array(des1_list, dtype=np.uint8)
-        des2 = np.array(des2_list, dtype=np.uint8)
+        des1 = np.array(des1_list, dtype=np.float32)
+        des2 = np.array(des2_list, dtype=np.float32)
+        if len(des1.shape) != 2 or len(des2.shape) != 2 or des1.shape[1] != des2.shape[1]:
+            return 0.0
         
-        matches = self.bf.match(des1, des2)
-        matches = sorted(matches, key=lambda x: x.distance)
+        matches = self.bf.knnMatch(des1, des2, k=2)
         
-        # Simple confidence score based on match count and distances
         if not matches:
             return 0.0
-            
-        score = sum(1 for m in matches if m.distance < 50)
-        confidence = (score / min(len(des1), len(des2))) * 100
+
+        good_matches = []
+        for match_pair in matches:
+            if len(match_pair) < 2:
+                continue
+            best, second_best = match_pair
+            if best.distance < 0.75 * second_best.distance:
+                good_matches.append(best)
+
+        confidence = (len(good_matches) / min(len(des1), len(des2))) * 100
         return min(confidence, 100.0)
 
     def identify_dog(self, target_des, known_dogs):

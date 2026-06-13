@@ -20,13 +20,12 @@
 
     <div class="card">
         <h2>Actions</h2>
-        <button onclick="verifyUserPrompt()">Verify a Provider</button>
+        <button onclick="suspendUserPrompt()">Suspend a User</button>
     </div>
 
     <script>
-        const BASE_URL = 'http://localhost:8000/api/v1';
-        // Mock Auth Token - In real app, you'd login first
-        const TOKEN = prompt("Enter Admin Token (Bearer ...):");
+        const BASE_URL = (localStorage.getItem('LOVEDOGS_API_URL') || 'https://hunter-production-0341.up.railway.app').replace(/\/+$/, '');
+        const TOKEN = (prompt("Enter Admin Token:") || '').replace(/^Bearer\s+/i, '');
 
         async function loadStats() {
             try {
@@ -36,27 +35,29 @@
                 if(!res.ok) throw new Error("Auth failed");
                 const data = await res.json();
                 document.getElementById('stats').innerHTML = `
-                    Users: ${data.users}<br>
-                    Dogs: ${data.dogs}<br>
-                    Bookings: ${data.bookings}
+                    Users: ${data.total_users}<br>
+                    Services: ${data.total_services}<br>
+                    Orders: ${data.total_orders}<br>
+                    Events: ${data.total_events}<br>
+                    Revenue: ${data.total_revenue}
                 `;
             } catch(e) {
                 document.getElementById('stats').innerHTML = "Error loading stats (Check token)";
             }
         }
 
-        async function verifyUserPrompt() {
-            const id = prompt("User ID to verify:");
+        async function suspendUserPrompt() {
+            const id = prompt("User ID to suspend:");
             if(!id) return;
             try {
-                const res = await fetch(`${BASE_URL}/admin/users/${id}/verify`, {
-                    method: 'PUT',
+                const res = await fetch(`${BASE_URL}/admin/users/${id}/suspend`, {
+                    method: 'POST',
                     headers: { 'Authorization': `Bearer ${TOKEN}` }
                 });
                 const data = await res.json();
                 alert(JSON.stringify(data));
             } catch(e) {
-                alert("Error verifying user");
+                alert("Error suspending user");
             }
         }
 

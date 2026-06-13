@@ -425,6 +425,19 @@ async def update_user_me(
     db.refresh(user)
     return user
 
+@app.get("/dogs/{dog_id}", response_model=schemas.DogResponse)
+async def get_dog(
+    dog_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    dog = db.query(models.Dog).filter(models.Dog.id == dog_id).first()
+    if not dog:
+        raise HTTPException(status_code=404, detail="Dog not found")
+    if dog.owner_id != current_user.id and current_user.role not in [models.UserRole.ADMIN, models.UserRole.PROVIDER]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    return dog
+
 @app.put("/dogs/{dog_id}", response_model=schemas.DogResponse)
 async def update_dog(
     dog_id: str,
@@ -1681,6 +1694,73 @@ def require_admin(current_user: models.User = Depends(get_current_user)):
     if current_user.role != models.UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
+
+def normalize_app_platform(platform: Optional[str]) -> str:
+    normalized = (platform or "all").strip().lower()
+    if normalized not in {"android", "ios", "all"}:
+        raise HTTPException(status_code=400, detail="Platform must be android, ios, or all")
+    return normalized
+
+@app.get("/app/version/latest", response_model=Optional[schemas.AppVersionResponse])
+def get_latest_app_version(
+    platform: Optional[str] = None,
+    db: Session = Depends(database.get_db)
+):
+    normalized_platform = normalize_app_platform(platform)
+    eligible_platforms = ["all"] if normalized_platform == "all" else [normalized_platform, "all"]
+    return (
+        db.query(models.AppVersion)
+        .filter(
+            models.AppVersion.is_active == True,
+            models.AppVersion.platform.in_(eligible_platforms),
+        )
+        .order_by(models.AppVersion.created_at.desc())
+        .first()
+    )
+
+@app.post("/app/version", response_model=schemas.AppVersionResponse)
+def create_app_version(
+    version: schemas.AppVersionCreate,
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin)
+):
+    app_version = models.AppVersion(
+        id=str(uuid.uuid4()),
+        version=version.version.strip(),
+        platform=normalize_app_platform(version.platform),
+        release_notes=version.release_notes,
+        download_url=version.download_url,
+        is_required=version.is_required,
+    )
+    db.add(app_version)
+    db.commit()
+    db.refresh(app_version)
+    return app_version
+
+@app.put("/app/version/{version_id}", response_model=schemas.AppVersionResponse)
+def update_app_version(
+    version_id: str,
+    version_update: schemas.AppVersionUpdate,
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin)
+):
+    app_version = db.query(models.AppVersion).filter(models.AppVersion.id == version_id).first()
+    if not app_version:
+        raise HTTPException(status_code=404, detail="App version not found")
+
+    if version_update.release_notes is not None:
+        app_version.release_notes = version_update.release_notes
+    if version_update.download_url is not None:
+        app_version.download_url = version_update.download_url
+    if version_update.is_required is not None:
+        app_version.is_required = version_update.is_required
+    if version_update.is_active is not None:
+        app_version.is_active = version_update.is_active
+    app_version.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(app_version)
+    return app_version
 
 @app.get("/admin/stats")
 def admin_stats(db: Session = Depends(database.get_db), admin: models.User = Depends(require_admin)):

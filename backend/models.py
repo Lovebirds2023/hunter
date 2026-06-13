@@ -99,7 +99,7 @@ class Dog(Base):
     pet_type = Column(String, default="dog")  # "dog" or "cat"
     body_structure = Column(String)
     bio = Column(String, nullable=True)
-    nose_print_descriptor = Column(JSON) # Storing ORB descriptors
+    nose_print_descriptor = Column(JSON) # Storing SIFT descriptors
     nose_print_image = Column(String, nullable=True) # URL/Path to nose print image
     body_image = Column(String, nullable=True) # URL/Path to full body image
     birthmark_image = Column(String, nullable=True) # URL/Path to birthmark image
@@ -332,6 +332,19 @@ class Notification(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     user = relationship("User")
+
+class AppVersion(Base):
+    __tablename__ = "app_versions"
+
+    id = Column(String, primary_key=True, index=True)
+    version = Column(String, nullable=False)
+    platform = Column(String, nullable=False, default="all")
+    release_notes = Column(String, nullable=True)
+    download_url = Column(String, nullable=True)
+    is_required = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
