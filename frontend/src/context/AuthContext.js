@@ -2,6 +2,7 @@ import React, { createContext, useState, useEffect } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import client from '../api/client';
 import { Alert, Platform } from 'react-native';
+import { setAppLanguage } from '../i18n';
 
 const Storage = {
     getItemAsync: async (key) => Platform.OS === 'web' ? localStorage.getItem(key) : await SecureStore.getItemAsync(key),
@@ -65,6 +66,7 @@ export const AuthProvider = ({ children }) => {
             const userRes = await client.get('/users/me', {
                 headers: { Authorization: `Bearer ${access_token}` }
             });
+            await setAppLanguage(userRes.data.language || 'en');
             setUserInfo(userRes.data);
             setIsAdmin(userRes.data.role === 'admin');
             await Storage.setItemAsync('userInfo', JSON.stringify(userRes.data));
@@ -88,6 +90,7 @@ export const AuthProvider = ({ children }) => {
             const response = await client.post('/auth/google', { id_token: idToken });
             
             const { access_token, user } = response.data;
+            await setAppLanguage(user.language || 'en');
             setUserToken(access_token);
             setUserInfo(user);
             setIsAdmin(user.role === 'admin');
@@ -123,6 +126,7 @@ export const AuthProvider = ({ children }) => {
                 longitude,
                 bio
             });
+            await setAppLanguage(preferredLanguage || 'en');
             setAuthNotice({ type: 'success', message: 'Registration successful. Please log in.' });
             Alert.alert("Success", "Registration successful. Please login.");
             return true;
@@ -179,16 +183,22 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    const updateUser = async (data) => {
+    const updateUser = async (data, options = {}) => {
+        const { silent = false } = options;
         try {
             const res = await client.put('/users/me', data);
+            await setAppLanguage(res.data.language || data.language || 'en');
             setUserInfo(res.data);
             await Storage.setItemAsync('userInfo', JSON.stringify(res.data));
-            Alert.alert("Success", "Profile updated!");
+            if (!silent) {
+                Alert.alert("Success", "Profile updated!");
+            }
             return true;
         } catch (e) {
             if (__DEV__) console.log('Update profile error', e);
-            Alert.alert("Error", "Failed to update profile.");
+            if (!silent) {
+                Alert.alert("Error", "Failed to update profile.");
+            }
             return false;
         }
     };
@@ -215,12 +225,14 @@ export const AuthProvider = ({ children }) => {
                 setUserToken(userToken);
                 if (userInfoStr) {
                     const parsedInfo = JSON.parse(userInfoStr);
+                    await setAppLanguage(parsedInfo.language || 'en');
                     setUserInfo(parsedInfo);
                     setIsAdmin(parsedInfo.role === 'admin');
                 }
 
                 // Refresh user info in background
-                client.get('/users/me').then(res => {
+                client.get('/users/me').then(async res => {
+                    await setAppLanguage(res.data.language || 'en');
                     setUserInfo(res.data);
                     setIsAdmin(res.data.role === 'admin');
                     Storage.setItemAsync('userInfo', JSON.stringify(res.data));

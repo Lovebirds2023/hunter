@@ -12,31 +12,38 @@ import zh from './translations/zh.json';
 import hi from './translations/hi.json';
 import ja from './translations/ja.json';
 
-const LANGUAGE_KEY = 'user-language';
+export const LANGUAGE_KEY = 'user-language';
+
+export const getSavedLanguage = async () => {
+    try {
+        return await AsyncStorage.getItem(LANGUAGE_KEY);
+    } catch (error) {
+        if (__DEV__) console.log('Error reading language from AsyncStorage', error);
+        return null;
+    }
+};
+
+export const setSavedLanguage = async (language) => {
+    try {
+        await AsyncStorage.setItem(LANGUAGE_KEY, language);
+    } catch (error) {
+        if (__DEV__) console.log('Error saving language to AsyncStorage', error);
+    }
+};
 
 const languageDetector = {
     type: 'languageDetector',
     async: true,
     detect: async (callback) => {
-        try {
-            const savedLanguage = await AsyncStorage.getItem(LANGUAGE_KEY);
-            if (savedLanguage) {
-                return callback(savedLanguage);
-            }
-            // Default to English if no language is saved
-            return callback('en');
-        } catch (error) {
-            if (__DEV__) console.log('Error reading language from AsyncStorage', error);
-            return callback('en');
+        const savedLanguage = await getSavedLanguage();
+        if (savedLanguage) {
+            return callback(savedLanguage);
         }
+        return callback('en');
     },
     init: () => { },
     cacheUserLanguage: async (language) => {
-        try {
-            await AsyncStorage.setItem(LANGUAGE_KEY, language);
-        } catch (error) {
-            if (__DEV__) console.log('Error saving language to AsyncStorage', error);
-        }
+        await setSavedLanguage(language);
     },
 };
 
@@ -65,5 +72,11 @@ i18n
             useSuspense: false,
         },
     });
+
+export const setAppLanguage = async (language) => {
+    if (!language) return;
+    await i18n.changeLanguage(language);
+    await setSavedLanguage(language);
+};
 
 export default i18n;

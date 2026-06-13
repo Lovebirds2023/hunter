@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { COLORS, SPACING } from '../constants/theme';
+import { setAppLanguage } from '../i18n';
 
 const LANGUAGES = [
     { code: 'en', name: 'English' },
@@ -16,14 +17,18 @@ const LANGUAGES = [
     { code: 'ja', name: '日本語' }
 ];
 
-const LanguageSwitcher = () => {
+const LanguageSwitcher = ({ selectedLanguage, onLanguageChange }) => {
     const { i18n, t } = useTranslation();
 
-    const changeLanguage = (lng) => {
-        i18n.changeLanguage(lng);
+    const changeLanguage = async (lng) => {
+        if (onLanguageChange) {
+            await onLanguageChange(lng);
+            return;
+        }
+        await setAppLanguage(lng);
     };
 
-    const currentLanguage = i18n.language;
+    const currentLanguage = selectedLanguage || i18n.language;
 
     return (
         <View style={styles.container}>

@@ -13,6 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { getGoogleRedirectUri } from '../api/googleAuthConfig';
+import { setAppLanguage } from '../i18n';
 
 const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
@@ -39,11 +40,9 @@ const RegisterScreen = ({ navigation }) => {
     const [currentStep, setCurrentStep] = useState(1);
     const [showPassword, setShowPassword] = useState(false);
 
-    const { i18n } = useTranslation();
-
-    const changeLanguage = (lng) => {
-        i18n.changeLanguage(lng);
+    const changeLanguage = async (lng) => {
         setPreferredLanguage(lng);
+        await setAppLanguage(lng);
     };
 
     const requestLocation = async () => {

@@ -11,6 +11,7 @@ import LanguageSwitcher from '../components/LanguageSwitcher';
 import * as ImagePicker from 'expo-image-picker';
 import { Picker } from '@react-native-picker/picker';
 import { LinearGradient } from 'expo-linear-gradient';
+import { setAppLanguage } from '../i18n';
 
 const { width } = Dimensions.get('window');
 
@@ -41,7 +42,7 @@ const LANGUAGES = [
 ];
 
 export const ProfileScreen = ({ navigation }) => {
-    const { t, i18n } = useTranslation();
+    const { t } = useTranslation();
     const { userInfo, logout, updateUser } = useContext(AuthContext);
     const [dogs, setDogs] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -132,11 +133,22 @@ export const ProfileScreen = ({ navigation }) => {
                 // Only store payout preference and M-Pesa phone (never card numbers/CVV)
                 mpesa_phone_number: paymentMethod === 'mpesa' ? mpesaPhone : (userInfo?.mpesa_phone_number || null),
             };
-            await updateUser(payload);
+            const saved = await updateUser(payload, { silent: true });
+            if (!saved) {
+                throw new Error('Profile update failed');
+            }
+            setIsEditing(false);
+            setIsPaymentEditing(false);
             Alert.alert(t('common.success'), t('profile_screen.success_msg'));
         } catch (error) {
             Alert.alert(t('common.error'), t('profile_screen.error_msg'));
         }
+    };
+
+    const handleLanguageChange = async (language) => {
+        setEditLanguage(language);
+        await setAppLanguage(language);
+        await updateUser({ language }, { silent: true });
     };
 
     const renderPetItem = ({ item }) => (
@@ -362,7 +374,10 @@ export const ProfileScreen = ({ navigation }) => {
                         <Text style={styles.dashboardSectionTitle}>{t('profile_screen.language')}</Text>
                     </View>
                     <View style={styles.infoCard}>
-                        <LanguageSwitcher />
+                        <LanguageSwitcher
+                            selectedLanguage={editLanguage}
+                            onLanguageChange={handleLanguageChange}
+                        />
                     </View>
 
                 </View>
@@ -433,7 +448,7 @@ export const ProfileScreen = ({ navigation }) => {
 
                                 <Text style={styles.label}>{t('profile_screen.preferred_language')}</Text>
                                 <View style={styles.pickerContainer}>
-                                    <Picker selectedValue={editLanguage} onValueChange={(val) => { setEditLanguage(val); i18n.changeLanguage(val); }} style={styles.picker}>
+                                    <Picker selectedValue={editLanguage} onValueChange={handleLanguageChange} style={styles.picker}>
                                         {LANGUAGES.map(l => <Picker.Item key={l.value} label={l.label} value={l.value} />)}
                                     </Picker>
                                 </View>
@@ -452,8 +467,8 @@ export const ProfileScreen = ({ navigation }) => {
                                     <TouchableOpacity onPress={() => setIsEditing(false)} style={[styles.saveBtn, { flex: 1, backgroundColor: '#f0f0f0', elevation: 0 }]}>
                                         <Text style={[styles.btnText, { color: COLORS.gray }]}>{t('profile_screen.back')}</Text>
                                     </TouchableOpacity>
-                                    <TouchableOpacity onPress={() => setIsEditing(false)} style={[styles.saveBtn, { flex: 2, backgroundColor: COLORS.accent }]}>
-                                        <Text style={[styles.btnText, { color: COLORS.primaryDark }]}>Apply Changes</Text>
+                                    <TouchableOpacity onPress={handleSaveGlobal} style={[styles.saveBtn, { flex: 2, backgroundColor: COLORS.accent }]}>
+                                        <Text style={[styles.btnText, { color: COLORS.primaryDark }]}>{t('profile_screen.save_updates')}</Text>
                                     </TouchableOpacity>
                                 </View>
                             </ScrollView>
