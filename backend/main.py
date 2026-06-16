@@ -13,6 +13,7 @@ import time
 import urllib.request
 import smtplib
 import hashlib
+import requests
 import models, schemas, auth, database, ai_engine, wellness_utils, gemini_utils
 from typing import List, Optional
 import csv
@@ -77,6 +78,7 @@ def get_smtp_settings():
     frontend_url = (os.getenv("FRONTEND_URL") or "https://hunter-v9qj-lovebirds-project.vercel.app").strip()
     use_ssl = (os.getenv("SMTP_USE_SSL") or "").strip().lower() in {"1", "true", "yes"} or smtp_port == 465
     use_tls = (os.getenv("SMTP_USE_TLS") or "true").strip().lower() not in {"0", "false", "no"}
+    timeout = int((os.getenv("SMTP_TIMEOUT") or "10").strip())
 
     # Google shows app passwords grouped with spaces; SMTP auth expects the 16 characters.
     if "gmail.com" in smtp_host.lower():
@@ -91,45 +93,121 @@ def get_smtp_settings():
         "frontend_url": frontend_url,
         "use_ssl": use_ssl,
         "use_tls": use_tls,
+        "timeout": timeout,
     }
 
 def is_smtp_configured():
     settings = get_smtp_settings()
-    return bool(settings["host"] and settings["user"] and settings["password"] and settings["from_email"])
+    return bool(
+        os.getenv("RESEND_API_KEY")
+        or (settings["host"] and settings["user"] and settings["password"] and settings["from_email"])
+    )
+
+def get_smtp_attempts(settings: dict):
+    attempts = [settings]
+
+    if "gmail.com" in settings["host"].lower():
+        fallbacks = [
+            {**settings, "port": 465, "use_ssl": True, "use_tls": False},
+            {**settings, "port": 587, "use_ssl": False, "use_tls": True},
+        ]
+        for fallback in fallbacks:
+            duplicate = any(
+                attempt["host"] == fallback["host"]
+                and attempt["port"] == fallback["port"]
+                and attempt["use_ssl"] == fallback["use_ssl"]
+                for attempt in attempts
+            )
+            if not duplicate:
+                attempts.append(fallback)
+
+    return attempts
+
+def send_email_via_resend(to_email: str, subject: str, body: str, from_email: str):
+    api_key = (os.getenv("RESEND_API_KEY") or "").strip()
+    if not api_key:
+        raise RuntimeError("RESEND_API_KEY is not configured")
+
+    resend_from_email = (os.getenv("RESEND_FROM_EMAIL") or from_email).strip()
+    response = requests.post(
+        "https://api.resend.com/emails",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "from": resend_from_email,
+            "to": [to_email],
+            "subject": subject,
+            "text": body,
+        },
+        timeout=10,
+    )
+    response.raise_for_status()
+    logger.info("Password reset email sent via Resend to %s", to_email)
+    return True
+
+def send_email_via_smtp(to_email: str, subject: str, body: str, settings: dict):
+    if not (settings["host"] and settings["user"] and settings["password"] and settings["from_email"]):
+        raise RuntimeError("SMTP is not fully configured")
+
+    last_error = None
+    for attempt in get_smtp_attempts(settings):
+        message = EmailMessage()
+        message["Subject"] = subject
+        message["From"] = attempt["from_email"]
+        message["To"] = to_email
+        message.set_content(body)
+
+        try:
+            logger.info(
+                "Sending password reset email via SMTP host=%s port=%s ssl=%s tls=%s from=%s",
+                attempt["host"],
+                attempt["port"],
+                attempt["use_ssl"],
+                attempt["use_tls"],
+                attempt["from_email"],
+            )
+            smtp_class = smtplib.SMTP_SSL if attempt["use_ssl"] else smtplib.SMTP
+            with smtp_class(attempt["host"], attempt["port"], timeout=attempt["timeout"]) as server:
+                if attempt["use_tls"] and not attempt["use_ssl"]:
+                    server.starttls()
+                server.login(attempt["user"], attempt["password"])
+                server.send_message(message)
+            return True
+        except Exception as exc:
+            last_error = exc
+            logger.warning(
+                "SMTP password reset email attempt failed host=%s port=%s ssl=%s error_type=%s error=%s",
+                attempt["host"],
+                attempt["port"],
+                attempt["use_ssl"],
+                type(exc).__name__,
+                exc,
+            )
+
+    raise last_error
 
 def hash_reset_token(token: str):
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 def send_password_reset_email(email: str, token: str):
     smtp_settings = get_smtp_settings()
-
-    message = EmailMessage()
-    message["Subject"] = "Reset your Lovedogs360 password"
-    message["From"] = smtp_settings["from_email"]
-    message["To"] = email
-    message.set_content(
+    subject = "Reset your Lovedogs360 password"
+    body = (
         "Use this reset code to update your Lovedogs360 password:\n\n"
         f"{token}\n\n"
         f"Open {smtp_settings['frontend_url']}/forgot-password and paste the code. "
         "This code expires in 30 minutes."
     )
 
-    logger.info(
-        "Sending password reset email via SMTP host=%s port=%s ssl=%s tls=%s from=%s",
-        smtp_settings["host"],
-        smtp_settings["port"],
-        smtp_settings["use_ssl"],
-        smtp_settings["use_tls"],
-        smtp_settings["from_email"],
-    )
+    if os.getenv("RESEND_API_KEY"):
+        try:
+            return send_email_via_resend(email, subject, body, smtp_settings["from_email"])
+        except Exception as exc:
+            logger.warning("Resend password reset email failed; trying SMTP fallback. error_type=%s error=%s", type(exc).__name__, exc)
 
-    smtp_class = smtplib.SMTP_SSL if smtp_settings["use_ssl"] else smtplib.SMTP
-    with smtp_class(smtp_settings["host"], smtp_settings["port"], timeout=10) as server:
-        if smtp_settings["use_tls"] and not smtp_settings["use_ssl"]:
-            server.starttls()
-        server.login(smtp_settings["user"], smtp_settings["password"])
-        server.send_message(message)
-    return True
+    return send_email_via_smtp(email, subject, body, smtp_settings)
 
 def calculate_distance(lat1, lon1, lat2, lon2):
     # Haversine formula
