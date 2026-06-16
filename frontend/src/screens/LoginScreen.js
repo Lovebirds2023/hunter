@@ -5,7 +5,6 @@ import { Button } from '../components/Button';
 import { AuthContext } from '../context/AuthContext';
 import { ThemeBackground } from '../components/ThemeBackground';
 import { COLORS, SPACING, SIZES } from '../constants/theme';
-import { Ionicons } from '@expo/vector-icons';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import {
@@ -16,18 +15,14 @@ import {
 
 WebBrowser.maybeCompleteAuthSession();
 
-const SocialLoginButton = ({ icon, imageUri, label, onPress, disabled, subtle }) => (
+const SocialLoginButton = ({ imageUri, label, onPress, disabled }) => (
     <TouchableOpacity
-        style={[styles.socialBtn, subtle && styles.socialBtnSubtle, disabled && styles.socialBtnDisabled]}
+        style={[styles.socialBtn, disabled && styles.socialBtnDisabled]}
         onPress={onPress}
         disabled={disabled}
         activeOpacity={0.82}
     >
-        {imageUri ? (
-            <Image source={{ uri: imageUri }} style={styles.socialImageIcon} />
-        ) : (
-            <Ionicons name={icon} size={23} color={disabled ? 'rgba(255,255,255,0.45)' : COLORS.white} />
-        )}
+        <Image source={{ uri: imageUri }} style={styles.socialImageIcon} />
         <Text style={[styles.socialBtnText, disabled && styles.socialBtnTextDisabled]}>{label}</Text>
     </TouchableOpacity>
 );
@@ -138,19 +133,6 @@ const LoginScreen = ({ navigation }) => {
                                 onPress={() => showUnavailableNotice(googleAuthStatus.reason || t('login.google_setup_notice'))}
                             />
                         )}
-
-                        <SocialLoginButton
-                            icon="logo-apple"
-                            label={t('login.continue_apple')}
-                            subtle
-                            onPress={() => showUnavailableNotice(t('login.apple_unavailable_notice'))}
-                        />
-                        <SocialLoginButton
-                            icon="call-outline"
-                            label={t('login.continue_phone')}
-                            subtle
-                            onPress={() => showUnavailableNotice(t('login.phone_unavailable_notice'))}
-                        />
 
                         <View style={styles.divider}>
                             <View style={styles.line} />
@@ -296,10 +278,6 @@ const styles = StyleSheet.create({
         width: '100%',
         minHeight: 58,
         marginBottom: SPACING.sm,
-    },
-    socialBtnSubtle: {
-        backgroundColor: 'rgba(255,255,255,0.08)',
-        borderColor: 'rgba(255,255,255,0.16)',
     },
     socialBtnDisabled: {
         opacity: 0.72,
