@@ -68,38 +68,66 @@ def bootstrap_admin_user():
     finally:
         db.close()
 
+def get_smtp_settings():
+    smtp_host = (os.getenv("SMTP_HOST") or "").strip()
+    smtp_port = int((os.getenv("SMTP_PORT") or "587").strip())
+    smtp_user = (os.getenv("SMTP_USER") or "").strip()
+    smtp_password = (os.getenv("SMTP_PASSWORD") or "").strip()
+    from_email = (os.getenv("SMTP_FROM_EMAIL") or smtp_user).strip()
+    frontend_url = (os.getenv("FRONTEND_URL") or "https://hunter-v9qj-lovebirds-project.vercel.app").strip()
+    use_ssl = (os.getenv("SMTP_USE_SSL") or "").strip().lower() in {"1", "true", "yes"} or smtp_port == 465
+    use_tls = (os.getenv("SMTP_USE_TLS") or "true").strip().lower() not in {"0", "false", "no"}
+
+    # Google shows app passwords grouped with spaces; SMTP auth expects the 16 characters.
+    if "gmail.com" in smtp_host.lower():
+        smtp_password = smtp_password.replace(" ", "")
+
+    return {
+        "host": smtp_host,
+        "port": smtp_port,
+        "user": smtp_user,
+        "password": smtp_password,
+        "from_email": from_email,
+        "frontend_url": frontend_url,
+        "use_ssl": use_ssl,
+        "use_tls": use_tls,
+    }
+
 def is_smtp_configured():
-    smtp_host = os.getenv("SMTP_HOST")
-    smtp_user = os.getenv("SMTP_USER")
-    smtp_password = os.getenv("SMTP_PASSWORD")
-    from_email = os.getenv("SMTP_FROM_EMAIL") or smtp_user
-    return bool(smtp_host and smtp_user and smtp_password and from_email)
+    settings = get_smtp_settings()
+    return bool(settings["host"] and settings["user"] and settings["password"] and settings["from_email"])
 
 def hash_reset_token(token: str):
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 def send_password_reset_email(email: str, token: str):
-    smtp_host = os.getenv("SMTP_HOST")
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_user = os.getenv("SMTP_USER")
-    smtp_password = os.getenv("SMTP_PASSWORD")
-    from_email = os.getenv("SMTP_FROM_EMAIL") or smtp_user
-    frontend_url = os.getenv("FRONTEND_URL", "https://hunter-v9qj-lovebirds-project.vercel.app")
+    smtp_settings = get_smtp_settings()
 
     message = EmailMessage()
     message["Subject"] = "Reset your Lovedogs360 password"
-    message["From"] = from_email
+    message["From"] = smtp_settings["from_email"]
     message["To"] = email
     message.set_content(
         "Use this reset code to update your Lovedogs360 password:\n\n"
         f"{token}\n\n"
-        f"Open {frontend_url}/forgot-password and paste the code. "
+        f"Open {smtp_settings['frontend_url']}/forgot-password and paste the code. "
         "This code expires in 30 minutes."
     )
 
-    with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
-        server.starttls()
-        server.login(smtp_user, smtp_password)
+    logger.info(
+        "Sending password reset email via SMTP host=%s port=%s ssl=%s tls=%s from=%s",
+        smtp_settings["host"],
+        smtp_settings["port"],
+        smtp_settings["use_ssl"],
+        smtp_settings["use_tls"],
+        smtp_settings["from_email"],
+    )
+
+    smtp_class = smtplib.SMTP_SSL if smtp_settings["use_ssl"] else smtplib.SMTP
+    with smtp_class(smtp_settings["host"], smtp_settings["port"], timeout=10) as server:
+        if smtp_settings["use_tls"] and not smtp_settings["use_ssl"]:
+            server.starttls()
+        server.login(smtp_settings["user"], smtp_settings["password"])
         server.send_message(message)
     return True
 
