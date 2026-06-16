@@ -8,7 +8,8 @@
     "android": "npx expo start --android",
     "ios": "npx expo start --ios",
     "web": "npx expo start --web",
-    "build": "npx expo export -p web"
+    "lint:translations": "node scripts/check-translations.js",
+    "build": "npm run lint:translations && npx expo export -p web"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",

@@ -12,21 +12,15 @@ import * as ImagePicker from 'expo-image-picker';
 import { Picker } from '@react-native-picker/picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { setAppLanguage } from '../i18n';
+import {
+    COUNTRY_CODES,
+    CUSTOM_COUNTRY_CODE,
+    formatCountryCode,
+    getCountryCodeSelection,
+    isValidCountryCode,
+} from '../constants/countryCodes';
 
 const { width } = Dimensions.get('window');
-
-const COUNTRY_CODES = [
-    { label: "Kenya (+254)", value: "+254" },
-    { label: "Uganda (+256)", value: "+256" },
-    { label: "Tanzania (+255)", value: "+255" },
-    { label: "Rwanda (+250)", value: "+250" },
-    { label: "USA (+1)", value: "+1" },
-    { label: "UK (+44)", value: "+44" },
-    { label: "India (+91)", value: "+91" },
-    { label: "China (+86)", value: "+86" },
-    { label: "Nigeria (+234)", value: "+234" },
-    { label: "South Africa (+27)", value: "+27" }
-];
 
 const LANGUAGES = [
     { label: "English", value: "en" },
@@ -44,6 +38,8 @@ const LANGUAGES = [
 export const ProfileScreen = ({ navigation }) => {
     const { t } = useTranslation();
     const { userInfo, logout, updateUser } = useContext(AuthContext);
+    const initialCountryCode = userInfo?.country || '+254';
+    const initialCountryCodeSelection = getCountryCodeSelection(initialCountryCode);
     const [dogs, setDogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
@@ -52,7 +48,11 @@ export const ProfileScreen = ({ navigation }) => {
     const [editName, setEditName] = useState(userInfo?.full_name || '');
     const [editPhone, setEditPhone] = useState(userInfo?.phone_number || '');
     const [editBio, setEditBio] = useState(userInfo?.bio || '');
-    const [editCountryCode, setEditCountryCode] = useState(userInfo?.country || '+254');
+    const [editCountryCode, setEditCountryCode] = useState(initialCountryCode);
+    const [editCountryCodeSelection, setEditCountryCodeSelection] = useState(initialCountryCodeSelection);
+    const [customEditCountryCode, setCustomEditCountryCode] = useState(
+        initialCountryCodeSelection === CUSTOM_COUNTRY_CODE ? initialCountryCode : ''
+    );
     const [editLanguage, setEditLanguage] = useState(userInfo?.language || 'en');
     const [editAvatar, setEditAvatar] = useState(userInfo?.profile_image || null);
 
@@ -68,7 +68,11 @@ export const ProfileScreen = ({ navigation }) => {
             setEditName(userInfo?.full_name || '');
             setEditPhone(userInfo?.phone_number || '');
             setEditBio(userInfo?.bio || '');
-            setEditCountryCode(userInfo?.country || '+254');
+            const nextCountryCode = userInfo?.country || '+254';
+            const nextCountryCodeSelection = getCountryCodeSelection(nextCountryCode);
+            setEditCountryCode(nextCountryCode);
+            setEditCountryCodeSelection(nextCountryCodeSelection);
+            setCustomEditCountryCode(nextCountryCodeSelection === CUSTOM_COUNTRY_CODE ? nextCountryCode : '');
             setEditLanguage(userInfo?.language || 'en');
             setEditAvatar(userInfo?.profile_image || null);
             setPaymentMethod(userInfo?.payment_method || '');
@@ -121,8 +125,27 @@ export const ProfileScreen = ({ navigation }) => {
         }
     };
 
+    const handleEditCountryCodeSelection = (itemValue) => {
+        setEditCountryCodeSelection(itemValue);
+        setEditCountryCode(itemValue === CUSTOM_COUNTRY_CODE ? customEditCountryCode : itemValue);
+    };
+
+    const handleCustomEditCountryCodeChange = (value) => {
+        const formattedCode = formatCountryCode(value);
+        setCustomEditCountryCode(formattedCode);
+        setEditCountryCode(formattedCode);
+    };
+
     const handleSaveGlobal = async () => {
         try {
+            if (!isValidCountryCode(editCountryCode)) {
+                Alert.alert(
+                    t('common.error'),
+                    t('profile_screen.valid_country_code', { defaultValue: 'Please enter a valid country code, e.g. +254.' })
+                );
+                return;
+            }
+
             const payload = {
                 full_name: editName,
                 phone_number: editPhone,
@@ -387,10 +410,14 @@ export const ProfileScreen = ({ navigation }) => {
             {isDirty && (
                 <View style={styles.dirtyFooter}>
                     <TouchableOpacity style={styles.discardBtn} onPress={() => {
+                        const nextCountryCode = userInfo.country || '+254';
+                        const nextCountryCodeSelection = getCountryCodeSelection(nextCountryCode);
                         setEditName(userInfo.full_name);
                         setEditPhone(userInfo.phone_number);
                         setEditBio(userInfo.bio);
-                        setEditCountryCode(userInfo.country);
+                        setEditCountryCode(nextCountryCode);
+                        setEditCountryCodeSelection(nextCountryCodeSelection);
+                        setCustomEditCountryCode(nextCountryCodeSelection === CUSTOM_COUNTRY_CODE ? nextCountryCode : '');
                         setEditLanguage(userInfo.language);
                         setEditAvatar(userInfo.profile_image);
                         setPaymentMethod(userInfo.payment_method || '');
@@ -435,10 +462,20 @@ export const ProfileScreen = ({ navigation }) => {
                                     <View style={{ flex: 1, marginRight: 10 }}>
                                         <Text style={styles.label}>{t('profile_screen.region')}</Text>
                                         <View style={styles.pickerContainer}>
-                                            <Picker selectedValue={editCountryCode} onValueChange={setEditCountryCode} style={styles.picker}>
+                                            <Picker selectedValue={editCountryCodeSelection} onValueChange={handleEditCountryCodeSelection} style={styles.picker}>
                                                 {COUNTRY_CODES.map(c => <Picker.Item key={c.value} label={c.label} value={c.value} />)}
+                                                <Picker.Item label={t('common.other')} value={CUSTOM_COUNTRY_CODE} />
                                             </Picker>
                                         </View>
+                                        {editCountryCodeSelection === CUSTOM_COUNTRY_CODE && (
+                                            <TextInput
+                                                style={[styles.input, styles.customCountryCodeInput]}
+                                                value={customEditCountryCode}
+                                                onChangeText={handleCustomEditCountryCodeChange}
+                                                keyboardType="phone-pad"
+                                                placeholder="e.g. +254"
+                                            />
+                                        )}
                                     </View>
                                     <View style={{ flex: 1.5 }}>
                                         <Text style={styles.label}>{t('profile_screen.whatsapp_phone')}</Text>
@@ -622,6 +659,7 @@ const styles = StyleSheet.create({
     row: { flexDirection: 'row' },
     pickerContainer: { backgroundColor: '#f9f9f9', borderRadius: 15, borderWidth: 1, borderColor: '#eee', overflow: 'hidden' },
     picker: { height: 55, color: COLORS.text },
+    customCountryCodeInput: { marginTop: 8 },
     textArea: { height: 110, textAlignVertical: 'top' },
     modalButtons: { flexDirection: 'row', marginTop: 35, gap: 15, paddingBottom: 20 },
     saveBtn: { flex: 2, padding: 18, borderRadius: 18, backgroundColor: COLORS.primary, alignItems: 'center', shadowColor: COLORS.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },

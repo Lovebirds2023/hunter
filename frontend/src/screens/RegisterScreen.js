@@ -18,6 +18,12 @@ import {
     getGoogleIdTokenFromResponse,
 } from '../api/googleAuthConfig';
 import { setAppLanguage } from '../i18n';
+import {
+    COUNTRY_CODES,
+    CUSTOM_COUNTRY_CODE,
+    formatCountryCode,
+    isValidCountryCode,
+} from '../constants/countryCodes';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -30,6 +36,8 @@ const RegisterScreen = ({ navigation }) => {
     const [bio, setBio] = useState("");
     const [role, setRole] = useState("buyer");
     const [countryCode, setCountryCode] = useState("+254"); // Default to Kenya as start
+    const [countryCodeSelection, setCountryCodeSelection] = useState("+254");
+    const [customCountryCode, setCustomCountryCode] = useState("");
     const [preferredLanguage, setPreferredLanguage] = useState("en");
     const [location, setLocation] = useState(null);
     const [locationAllowed, setLocationAllowed] = useState(false);
@@ -70,6 +78,17 @@ const RegisterScreen = ({ navigation }) => {
     const visibleNotice = localGoogleNotice || authNotice;
 
     const validateEmail = (value) => /\S+@\S+\.\S+/.test(value);
+
+    const handleCountryCodeSelection = (itemValue) => {
+        setCountryCodeSelection(itemValue);
+        setCountryCode(itemValue === CUSTOM_COUNTRY_CODE ? customCountryCode : itemValue);
+    };
+
+    const handleCustomCountryCodeChange = (value) => {
+        const formattedCode = formatCountryCode(value);
+        setCustomCountryCode(formattedCode);
+        setCountryCode(formattedCode);
+    };
 
     // Google Sign-Up setup
     const googleAuthStatus = getGoogleAuthStatus();
@@ -256,26 +275,16 @@ const RegisterScreen = ({ navigation }) => {
                             <View style={styles.phoneInputContainer}>
                                 <View style={styles.countryCodePicker}>
                                     <Picker
-                                        selectedValue={countryCode}
-                                        onValueChange={(itemValue) => setCountryCode(itemValue)}
+                                        selectedValue={countryCodeSelection}
+                                        onValueChange={handleCountryCodeSelection}
                                         style={styles.picker}
                                         dropdownIconColor={COLORS.accent}
                                         itemStyle={{ color: COLORS.white }}
                                     >
-                                        <Picker.Item label="ðŸ‡°ðŸ‡ª +254 (Kenya)" value="+254" />
-                                        <Picker.Item label="ðŸ‡ºðŸ‡¬ +256 (Uganda)" value="+256" />
-                                        <Picker.Item label="ðŸ‡¹ðŸ‡¿ +255 (Tanzania)" value="+255" />
-                                        <Picker.Item label="ðŸ‡·ðŸ‡¼ +250 (Rwanda)" value="+250" />
-                                        <Picker.Item label="ðŸ‡¬ðŸ‡§ +44 (UK)" value="+44" />
-                                        <Picker.Item label="ðŸ‡ºðŸ‡¸ +1 (USA)" value="+1" />
-                                        <Picker.Item label="ðŸ‡®ðŸ‡³ +91 (India)" value="+91" />
-                                        <Picker.Item label="ðŸ‡ªðŸ‡¸ +34 (Spain)" value="+34" />
-                                        <Picker.Item label="ðŸ‡«ðŸ‡· +33 (France)" value="+33" />
-                                        <Picker.Item label="ðŸ‡©ðŸ‡ª +49 (Germany)" value="+49" />
-                                        <Picker.Item label="ðŸ‡§ðŸ‡· +55 (Brazil)" value="+55" />
-                                        <Picker.Item label="ðŸ‡¦ðŸ‡ª +971 (UAE)" value="+971" />
-                                        <Picker.Item label="ðŸ‡¨ðŸ‡³ +86 (China)" value="+86" />
-                                        <Picker.Item label="ðŸ‡¯ðŸ‡µ +81 (Japan)" value="+81" />
+                                        {COUNTRY_CODES.map((country) => (
+                                            <Picker.Item key={country.value} label={country.label} value={country.value} />
+                                        ))}
+                                        <Picker.Item label={t('common.other')} value={CUSTOM_COUNTRY_CODE} />
                                     </Picker>
                                 </View>
                                 <TextInput
@@ -287,6 +296,16 @@ const RegisterScreen = ({ navigation }) => {
                                     keyboardType="phone-pad"
                                 />
                             </View>
+                            {countryCodeSelection === CUSTOM_COUNTRY_CODE && (
+                                <TextInput
+                                    style={[styles.input, styles.customCountryCodeInput]}
+                                    placeholder="Country code, e.g. +254"
+                                    placeholderTextColor="rgba(255,255,255,0.4)"
+                                    value={customCountryCode}
+                                    onChangeText={handleCustomCountryCodeChange}
+                                    keyboardType="phone-pad"
+                                />
+                            )}
                             <Text style={styles.inputHint}>{t('register.phone_description')}</Text>
 
                             <Text style={styles.label}>{t('register.language_label')}</Text>
@@ -300,14 +319,14 @@ const RegisterScreen = ({ navigation }) => {
                                 >
                                     <Picker.Item label="English (Primary)" value="en" />
                                     <Picker.Item label="Kiswahili" value="sw" />
-                                    <Picker.Item label="EspaÃ±ol (Spanish)" value="es" />
-                                    <Picker.Item label="FranÃ§ais (French)" value="fr" />
+                                    <Picker.Item label="Español (Spanish)" value="es" />
+                                    <Picker.Item label="Français (French)" value="fr" />
                                     <Picker.Item label="Deutsch (German)" value="de" />
-                                    <Picker.Item label="PortuguÃªs (Portuguese)" value="pt" />
-                                    <Picker.Item label="Ø§Ù„Ø¹Ø±Ø¨ÙŠØ© (Arabic)" value="ar" />
-                                    <Picker.Item label="ä¸­æ–‡ (Chinese)" value="zh" />
-                                    <Picker.Item label="à¤¹à¤¿à¤¨à¥à¤¦à¥€ (Hindi)" value="hi" />
-                                    <Picker.Item label="æ—¥æœ¬èªž (Japanese)" value="ja" />
+                                    <Picker.Item label="Português (Portuguese)" value="pt" />
+                                    <Picker.Item label="العربية (Arabic)" value="ar" />
+                                    <Picker.Item label="中文 (Chinese)" value="zh" />
+                                    <Picker.Item label="हिन्दी (Hindi)" value="hi" />
+                                    <Picker.Item label="日本語 (Japanese)" value="ja" />
                                 </Picker>
                             </View>
 
@@ -331,6 +350,13 @@ const RegisterScreen = ({ navigation }) => {
                                         clearAuthNotice();
                                         if (!phoneNumber) {
                                             Alert.alert(t('register.wait_title'), t('register.valid_phone'));
+                                            return;
+                                        }
+                                        if (!isValidCountryCode(countryCode)) {
+                                            Alert.alert(
+                                                t('register.wait_title'),
+                                                t('register.valid_country_code', { defaultValue: 'Please enter a valid country code, e.g. +254.' })
+                                            );
                                             return;
                                         }
                                         setCurrentStep(3);
@@ -484,6 +510,10 @@ const styles = StyleSheet.create({
         height: 50,
         borderRadius: SIZES.radius,
         justifyContent: 'center',
+    },
+    customCountryCodeInput: {
+        marginTop: 8,
+        marginBottom: SPACING.md,
     },
     pickerContainer: {
         width: '100%',
