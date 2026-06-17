@@ -10,19 +10,21 @@ import { AuthContext } from '../context/AuthContext';
 export const DirectMessageScreen = ({ route, navigation }) => {
     const { t } = useTranslation();
     const { targetId, targetName } = route.params;
-    const { user } = useContext(AuthContext);
+    const { userInfo: user } = useContext(AuthContext);
     const [messages, setMessages] = useState([]);
     const [inputText, setInputText] = useState('');
     const [loading, setLoading] = useState(true);
     const [isSending, setIsSending] = useState(false);
 
     useEffect(() => {
+        if (!user?.id) return;
         fetchMessages();
         const interval = setInterval(fetchMessages, 4000); // 4s polling for private chat
         return () => clearInterval(interval);
-    }, [targetId]);
+    }, [targetId, user?.id]);
 
     const fetchMessages = async () => {
+        if (!user?.id) return;
         try {
             const response = await client.get('/chat/dms');
             // Filter only messages between me and the target
@@ -30,7 +32,13 @@ export const DirectMessageScreen = ({ route, navigation }) => {
                 (m.sender_id === user.id && m.receiver_id === targetId) ||
                 (m.sender_id === targetId && m.receiver_id === user.id)
             );
-            setMessages(filtered);
+            const unreadIncoming = filtered.filter(m => m.receiver_id === user.id && !m.read_at);
+            if (unreadIncoming.length > 0) {
+                await Promise.all(
+                    unreadIncoming.map(m => client.post(`/chat/dms/${m.id}/read`).catch(() => null))
+                );
+            }
+            setMessages(filtered.map(m => m.receiver_id === user.id ? { ...m, read_at: m.read_at || new Date().toISOString() } : m));
         } catch (error) {
             console.error("DM fetch error:", error);
         } finally {
@@ -39,7 +47,7 @@ export const DirectMessageScreen = ({ route, navigation }) => {
     };
 
     const sendMessage = async () => {
-        if (!inputText.trim()) return;
+        if (!inputText.trim() || !user?.id) return;
         setIsSending(true);
         try {
             await client.post('/chat/dm', {
@@ -56,7 +64,7 @@ export const DirectMessageScreen = ({ route, navigation }) => {
     };
 
     const renderMessage = ({ item }) => {
-        const isMine = item.sender_id === user.id;
+        const isMine = item.sender_id === user?.id;
         return (
             <View style={[styles.messageBubble, isMine ? styles.myBubble : styles.theirBubble]}>
                 <Text style={[styles.messageText, isMine ? styles.myText : styles.theirText]}>{item.content}</Text>

@@ -4,24 +4,54 @@ import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, 
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SHADOWS } from '../constants/theme';
 import client from '../api/client';
+import { useAuth } from '../context/AuthContext';
 
 export const InboxScreen = ({ navigation }) => {
     const { t } = useTranslation();
+    const { userInfo } = useAuth();
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
     const fetchInbox = useCallback(async () => {
         try {
-            const [annRes, notifRes] = await Promise.all([
+            const [annRes, notifRes, dmRes] = await Promise.all([
                 client.get('/announcements'),
-                client.get('/notifications')
+                client.get('/notifications'),
+                userInfo?.id ? client.get('/chat/dms') : Promise.resolve({ data: [] })
             ]);
+
+            const conversations = new Map();
+            (dmRes.data || []).forEach(dm => {
+                const isMine = dm.sender_id === userInfo?.id;
+                const targetId = isMine ? dm.receiver_id : dm.sender_id;
+                const target = isMine ? dm.receiver : dm.sender;
+                const existing = conversations.get(targetId);
+
+                if (!existing) {
+                    conversations.set(targetId, {
+                        id: `dm-${targetId}`,
+                        itemType: 'direct_message',
+                        title: target?.full_name || t('messages.private_message'),
+                        message: dm.content,
+                        created_at: dm.created_at,
+                        targetId,
+                        targetName: target?.full_name || t('messages.private_message'),
+                        unread_count: !isMine && !dm.read_at ? 1 : 0,
+                    });
+                    return;
+                }
+
+                if (!isMine && !dm.read_at) {
+                    existing.unread_count += 1;
+                }
+            });
             
             // Combine and sort by date
             const combined = [
                 ...annRes.data.map(a => ({ ...a, itemType: 'announcement' })),
-                ...notifRes.data.map(n => ({ ...n, itemType: 'notification' }))
+                ...notifRes.data.map(n => ({ ...n, itemType: 'notification' })),
+                ...Array.from(conversations.values())
             ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
             setItems(combined);
@@ -31,7 +61,7 @@ export const InboxScreen = ({ navigation }) => {
             setLoading(false);
             setRefreshing(false);
         }
-    }, []);
+    }, [t, userInfo?.id]);
 
     useEffect(() => {
         fetchInbox();
@@ -57,6 +87,7 @@ export const InboxScreen = ({ navigation }) => {
 
     const getIcon = (item) => {
         if (item.itemType === 'announcement') return "megaphone";
+        if (item.itemType === 'direct_message') return "chatbubble-ellipses";
         switch (item.type) {
             case 'rejection': return "close-circle";
             case 'approval': return "checkmark-circle";
@@ -67,6 +98,7 @@ export const InboxScreen = ({ navigation }) => {
 
     const getIconColor = (item) => {
         if (item.itemType === 'announcement') return COLORS.accent;
+        if (item.itemType === 'direct_message') return "#3498db";
         switch (item.type) {
             case 'rejection': return "#ff4d4d";
             case 'approval': return "#2ecc71";
@@ -76,13 +108,28 @@ export const InboxScreen = ({ navigation }) => {
     };
 
     const renderItem = ({ item }) => {
-        const isUnread = item.itemType === 'notification' && !item.is_read;
+        const isUnread = (item.itemType === 'notification' && !item.is_read) ||
+            (item.itemType === 'direct_message' && item.unread_count > 0);
+
+        const handlePress = () => {
+            if (item.itemType === 'direct_message') {
+                navigation.navigate('DirectMessage', {
+                    targetId: item.targetId,
+                    targetName: item.targetName
+                });
+                return;
+            }
+
+            if (item.itemType === 'notification' && !item.is_read) {
+                markAsRead(item.id);
+            }
+        };
 
         return (
             <TouchableOpacity 
                 style={[styles.card, isUnread && styles.unreadCard]}
-                onPress={() => item.itemType === 'notification' && !item.is_read && markAsRead(item.id)}
-                disabled={item.itemType === 'announcement' || item.is_read}
+                onPress={handlePress}
+                disabled={item.itemType === 'announcement' || (item.itemType === 'notification' && item.is_read)}
             >
                 <View style={styles.cardHeader}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
@@ -99,6 +146,9 @@ export const InboxScreen = ({ navigation }) => {
                     <Text style={styles.date}>{new Date(item.created_at).toLocaleDateString()}</Text>
                 </View>
                 <Text style={styles.message}>{item.message}</Text>
+                {item.itemType === 'direct_message' && item.unread_count > 0 && (
+                    <Text style={styles.unreadText}>{item.unread_count} unread</Text>
+                )}
                 {isUnread && <View style={styles.unreadBadge} />}
             </TouchableOpacity>
         );
@@ -150,6 +200,7 @@ const styles = StyleSheet.create({
     title: { fontSize: 16, fontWeight: 'bold', color: '#333', flex: 1 },
     date: { fontSize: 12, color: '#999' },
     message: { fontSize: 14, color: '#666', lineHeight: 22 },
+    unreadText: { fontSize: 12, color: COLORS.primary, fontWeight: '700', marginTop: 8 },
     unreadBadge: { position: 'absolute', top: 12, right: 12, width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.accent },
     emptyContainer: { alignItems: 'center', marginTop: 100 },
     emptyText: { color: '#999', marginTop: 10, fontSize: 16 }

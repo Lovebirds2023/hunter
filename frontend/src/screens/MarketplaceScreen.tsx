@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, SafeAreaView, ScrollView, ActivityIndicator, Alert, TextInput, Dimensions, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +8,7 @@ import { COLORS, SPACING, SHADOWS } from '../constants/theme';
 import client from '../api/client';
 import * as SecureStore from 'expo-secure-store';
 import * as Location from 'expo-location';
+import { useFocusEffect } from '@react-navigation/native';
 import MapView, { Marker, Callout } from '../components/MapComponent';
 import { useCurrency } from '../context/CurrencyContext';
 import { useAuth } from '../context/AuthContext';
@@ -66,7 +67,13 @@ export const MarketplaceScreen = ({ navigation }: any) => {
 
     useEffect(() => {
         fetchServices();
-    }, [userLocation]);
+    }, [userLocation, activeTab]);
+
+    useFocusEffect(
+        useCallback(() => {
+            fetchServices();
+        }, [userLocation, activeTab])
+    );
 
     const setupLocation = async () => {
         try {
@@ -139,13 +146,16 @@ export const MarketplaceScreen = ({ navigation }: any) => {
     const renderCard = ({ item, index }: any) => {
         const isOwner = item.provider_id === userId;
         const isClosest = index === 0 && userLocation && item.distance !== undefined;
-        
-        const isUnavailable = (item.item_type === 'products' && (item.stock_count === 0 || item.stock_count === null)) ||
-                              (item.item_type === 'services' && (item.is_busy || item.slots_available === 0 || item.slots_available === null));
+        const remainingCount = item.item_type === 'products' ? item.stock_count : item.slots_available;
+        const hasTrackedAvailability = remainingCount !== null && remainingCount !== undefined;
+        const isUnavailable = (item.item_type === 'products' && hasTrackedAvailability && remainingCount <= 0) ||
+                              (item.item_type === 'services' && (item.is_busy || (hasTrackedAvailability && remainingCount <= 0)));
 
-        const remainingText = item.item_type === 'products' 
-            ? t('marketplace.left_count', { count: item.stock_count || 0 })
-            : t('marketplace.slots_left', { count: item.slots_available || 0 });
+        const remainingText = !hasTrackedAvailability
+            ? t('marketplace.available', { defaultValue: 'Available' })
+            : item.item_type === 'products'
+                ? t('marketplace.left_count', { count: remainingCount })
+                : t('marketplace.slots_left', { count: remainingCount });
 
         const handleBookPress = async () => {
             if (isUnavailable) {

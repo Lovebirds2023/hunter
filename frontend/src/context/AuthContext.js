@@ -262,6 +262,7 @@ export const AuthProvider = ({ children }) => {
             isLoading,
             userToken,
             userInfo,
+            user: userInfo,
             isAdmin
         }}>
             {children}

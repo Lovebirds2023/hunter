@@ -128,7 +128,7 @@ class ServiceCreate(ServiceBase):
     form_fields: Optional[List[ServiceFormFieldCreate]] = None
 
 class ProviderMini(BaseModel):
-    full_name: str
+    full_name: Optional[str] = None
     profile_image: Optional[str] = None
     average_rating: float = 0.0
     total_ratings: int = 0
@@ -400,7 +400,7 @@ class CaseReportCreate(BaseModel):
 
 class AuthorMini(BaseModel):
     id: str
-    full_name: str
+    full_name: Optional[str] = None
     profile_image: Optional[str] = None
     class Config:
         from_attributes = True
@@ -590,6 +590,8 @@ class DirectMessageResponse(DirectMessageBase):
     sender_id: str
     created_at: datetime.datetime
     read_at: Optional[datetime.datetime] = None
+    sender: Optional[AuthorMini] = None
+    receiver: Optional[AuthorMini] = None
     class Config:
         from_attributes = True
 

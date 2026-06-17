@@ -15,6 +15,7 @@ import AdminDashboardScreen from '../screens/AdminDashboardScreen';
 import { DogIdentityScreen } from '../screens/DogIdentityScreen';
 import { SupportScreen } from '../screens/SupportScreen';
 import { InboxScreen } from '../screens/InboxScreen';
+import { DirectMessageScreen } from '../screens/DirectMessageScreen';
 import SavedEventsScreen from '../screens/SavedEventsScreen';
 import EventFormBuilderScreen from '../screens/EventFormBuilderScreen';
 import EventResponsesScreen from '../screens/EventResponsesScreen';
@@ -62,6 +63,7 @@ const AppNavigator = () => {
                     <Stack.Screen name="LostFound" component={LostFoundScreen} />
                     <Stack.Screen name="Support" component={SupportScreen} />
                     <Stack.Screen name="Inbox" component={InboxScreen} />
+                    <Stack.Screen name="DirectMessage" component={DirectMessageScreen} />
                 </>
             )}
         </Stack.Navigator>

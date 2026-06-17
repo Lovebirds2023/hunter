@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, String
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
 import uuid
@@ -257,9 +257,41 @@ try:
                ALTER COLUMN hashed_password DROP NOT NULL;""",
             """ALTER TABLE users
                ALTER COLUMN full_name DROP NOT NULL;""",
+            """ALTER TABLE services
+               ADD COLUMN IF NOT EXISTS item_type VARCHAR DEFAULT 'services';""",
+            """ALTER TABLE services
+               ADD COLUMN IF NOT EXISTS image_url VARCHAR;""",
+            """ALTER TABLE services
+               ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;""",
+            """ALTER TABLE services
+               ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;""",
+            """ALTER TABLE services
+               ADD COLUMN IF NOT EXISTS address VARCHAR;""",
+            """ALTER TABLE services
+               ADD COLUMN IF NOT EXISTS location_landmark VARCHAR;""",
+            """ALTER TABLE services
+               ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT TRUE;""",
+            """ALTER TABLE services
+               ADD COLUMN IF NOT EXISTS currency VARCHAR DEFAULT 'KES';""",
+            """ALTER TABLE services
+               ADD COLUMN IF NOT EXISTS stock_count INTEGER DEFAULT 0;""",
+            """ALTER TABLE services
+               ADD COLUMN IF NOT EXISTS slots_available INTEGER DEFAULT 0;""",
+            """ALTER TABLE services
+               ADD COLUMN IF NOT EXISTS is_busy BOOLEAN DEFAULT FALSE;""",
+            """ALTER TABLE services
+               ADD COLUMN IF NOT EXISTS images JSON;""",
+            """ALTER TABLE services
+               ADD COLUMN IF NOT EXISTS admin_approved BOOLEAN DEFAULT FALSE;""",
+            """ALTER TABLE services
+               ADD COLUMN IF NOT EXISTS rejection_reason VARCHAR;""",
+            """ALTER TABLE direct_messages
+               ADD COLUMN IF NOT EXISTS read_at TIMESTAMP;""",
             """CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);""",
             """CREATE INDEX IF NOT EXISTS idx_users_auth_provider ON users(auth_provider);""",
             """CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);""",
+            """CREATE INDEX IF NOT EXISTS idx_services_marketplace ON services(item_type, is_published, admin_approved);""",
+            """CREATE INDEX IF NOT EXISTS idx_direct_messages_users ON direct_messages(sender_id, receiver_id, created_at);""",
         ]
         
         for i, stmt in enumerate(migration_statements, 1):
@@ -695,9 +727,7 @@ def list_services(
                     setattr(s, 'distance', round(dist, 2))
                     filtered_services.append(s)
             else:
-                # Services without location might be shown at the end or filtered out
-                # For "Uber-like" we might prefer showing only ones with location
-                pass
+                filtered_services.append(s)
         
         # Sort by distance
         filtered_services.sort(key=lambda x: getattr(x, 'distance', 999999))
@@ -726,7 +756,13 @@ def create_service(
         latitude=service.latitude,
         longitude=service.longitude,
         address=service.address,
-        is_published=service.is_published
+        location_landmark=service.location_landmark,
+        is_published=service.is_published,
+        currency=service.currency,
+        stock_count=service.stock_count,
+        slots_available=service.slots_available,
+        is_busy=service.is_busy,
+        images=service.images,
     )
     db.add(new_service)
 
@@ -827,6 +863,18 @@ def create_order(
     service = db.query(models.Service).filter(models.Service.id == order_data.service_id).first()
     if not service:
         raise HTTPException(status_code=404, detail="Service not found")
+
+    if not service.is_published or not service.admin_approved:
+        raise HTTPException(status_code=400, detail="This marketplace item is not available for purchase")
+
+    if service.item_type == "products":
+        if service.stock_count is not None and service.stock_count <= 0:
+            raise HTTPException(status_code=400, detail="This product is out of stock")
+    else:
+        if service.is_busy:
+            raise HTTPException(status_code=400, detail="This service is currently unavailable")
+        if service.slots_available is not None and service.slots_available <= 0:
+            raise HTTPException(status_code=400, detail="No slots are available for this service")
         
     # Validate required form fields
     form_fields = db.query(models.ServiceFormField).filter(models.ServiceFormField.service_id == order_data.service_id).all()
@@ -857,6 +905,11 @@ def create_order(
                 id=str(uuid.uuid4()), order_id=new_order.id,
                 field_id=resp.field_id, answer_value=resp.answer_value
             ))
+
+    if service.item_type == "products" and service.stock_count is not None:
+        service.stock_count -= 1
+    elif service.item_type != "products" and service.slots_available is not None:
+        service.slots_available -= 1
             
     db.commit()
     db.refresh(new_order)
@@ -872,16 +925,6 @@ def pay_order(order_id: str, db: Session = Depends(database.get_db), current_use
     
     if order.status == models.OrderStatus.PAID:
         return {"message": "Order already paid", "status": order.status}
-
-    # Decrement stock/slots
-    service = db.query(models.Service).filter(models.Service.id == order.service_id).first()
-    if service:
-        if service.item_type == "products":
-            if service.stock_count > 0:
-                service.stock_count -= 1
-        else: # services
-            if service.slots_available > 0:
-                service.slots_available -= 1
 
     order.status = models.OrderStatus.PAID
     db.commit()
@@ -1527,10 +1570,10 @@ def update_service(
     if service.provider_id != current_user.id and current_user.role != models.UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Not authorized")
     
-    update_data = service_update.dict()
-    # Apply 20% markup if price is updated
+    update_data = service_update.dict(exclude_unset=True)
+    # Apply the same marketplace markup used during creation.
     if "price" in update_data:
-        update_data["price"] = round(update_data["price"] * 1.20, 2)
+        update_data["price"] = round(update_data["price"] * 1.235, 2)
 
     for key, value in update_data.items():
         setattr(service, key, value)
@@ -2117,6 +2160,9 @@ def admin_approve_item(
         if not item: raise HTTPException(status_code=404, detail="Service not found")
         item.admin_approved = req.is_approved
         item.rejection_reason = req.rejection_reason
+        if req.is_approved:
+            item.is_published = True
+            item.rejection_reason = None
     elif item_type == "report":
         item = db.query(models.CaseReport).filter(models.CaseReport.id == item_id).first()
         if not item: raise HTTPException(status_code=404, detail="Report not found")
@@ -2873,6 +2919,12 @@ def get_my_dms(db: Session = Depends(database.get_db), current_user: models.User
 
 @app.post("/chat/dm", response_model=schemas.DirectMessageResponse)
 def send_direct_message(dm: schemas.DirectMessageCreate, db: Session = Depends(database.get_db), current_user: models.User = Depends(get_current_user)):
+    receiver = db.query(models.User).filter(models.User.id == dm.receiver_id).first()
+    if not receiver:
+        raise HTTPException(status_code=404, detail="Receiver not found")
+    if receiver.id == current_user.id:
+        raise HTTPException(status_code=400, detail="You cannot message yourself")
+
     new_dm = models.DirectMessage(
         id=str(uuid.uuid4()),
         sender_id=current_user.id,
@@ -2883,6 +2935,21 @@ def send_direct_message(dm: schemas.DirectMessageCreate, db: Session = Depends(d
     db.commit()
     db.refresh(new_dm)
     return new_dm
+
+@app.post("/chat/dms/{message_id}/read")
+def mark_direct_message_read(message_id: str, db: Session = Depends(database.get_db), current_user: models.User = Depends(get_current_user)):
+    dm = db.query(models.DirectMessage).filter(
+        models.DirectMessage.id == message_id,
+        models.DirectMessage.receiver_id == current_user.id
+    ).first()
+    if not dm:
+        raise HTTPException(status_code=404, detail="Direct message not found")
+
+    if not dm.read_at:
+        dm.read_at = datetime.utcnow()
+        db.commit()
+
+    return {"message": "Success"}
 
 # =====================================================
 # Karma & Status Endpoints
