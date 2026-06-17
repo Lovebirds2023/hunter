@@ -854,6 +854,46 @@ def get_service_responses(
         })
     return results
 
+PAID_ORDER_STATES = {
+    models.OrderStatus.PAID.value,
+    models.OrderStatus.COMPLETED.value,
+    models.OrderStatus.SETTLED.value,
+}
+
+def order_status_value(status):
+    if hasattr(status, "value"):
+        return status.value
+    return str(status or "").lower()
+
+def is_order_paid(order: models.Order) -> bool:
+    return order_status_value(order.status) in PAID_ORDER_STATES
+
+def is_pesapal_payment_successful(status_res: dict) -> bool:
+    if not isinstance(status_res, dict):
+        return False
+    status_code = status_res.get("payment_status_code") or status_res.get("status_code")
+    status_text = (
+        status_res.get("payment_status_description")
+        or status_res.get("payment_status")
+        or status_res.get("status")
+        or ""
+    )
+    return str(status_code) == "1" or str(status_text).strip().lower() in {"completed", "paid", "success", "successful"}
+
+def mark_order_paid(db: Session, order: models.Order) -> bool:
+    if is_order_paid(order):
+        return False
+
+    service = db.query(models.Service).filter(models.Service.id == order.service_id).first()
+    if service:
+        if service.item_type == "products" and service.stock_count is not None:
+            service.stock_count = max(service.stock_count - 1, 0)
+        elif service.item_type != "products" and service.slots_available is not None:
+            service.slots_available = max(service.slots_available - 1, 0)
+
+    order.status = models.OrderStatus.PAID.value
+    return True
+
 @app.post("/orders", response_model=schemas.OrderResponse)
 def create_order(
     order_data: schemas.OrderCreate, 
@@ -893,7 +933,7 @@ def create_order(
         amount=service.price,
         commission=commission,
         payout=payout,
-        status=models.OrderStatus.PENDING,
+        status=models.OrderStatus.PENDING.value,
         share_phone=order_data.share_phone
     )
     db.add(new_order)
@@ -906,11 +946,6 @@ def create_order(
                 field_id=resp.field_id, answer_value=resp.answer_value
             ))
 
-    if service.item_type == "products" and service.stock_count is not None:
-        service.stock_count -= 1
-    elif service.item_type != "products" and service.slots_available is not None:
-        service.slots_available -= 1
-            
     db.commit()
     db.refresh(new_order)
     return new_order
@@ -923,10 +958,10 @@ def pay_order(order_id: str, db: Session = Depends(database.get_db), current_use
     if order.buyer_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
     
-    if order.status == models.OrderStatus.PAID:
+    if is_order_paid(order):
         return {"message": "Order already paid", "status": order.status}
 
-    order.status = models.OrderStatus.PAID
+    mark_order_paid(db, order)
     db.commit()
     return {"message": "Order paid successfully", "status": order.status}
 
@@ -936,7 +971,7 @@ def get_order_receipt(order_id: str, db: Session = Depends(database.get_db), cur
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     
-    if order.status != models.OrderStatus.PAID:
+    if not is_order_paid(order):
         raise HTTPException(status_code=400, detail="Receipt only available for paid orders")
 
     # Allow buyer OR provider OR admin to get receipt
@@ -1060,7 +1095,7 @@ def submit_rating(rating: schemas.RatingCreate, db: Session = Depends(database.g
         raise HTTPException(status_code=404, detail="Order not found")
     if order.buyer_id != current_user.id:
         raise HTTPException(status_code=403, detail="Only the buyer can rate this service")
-    if order.status not in [models.OrderStatus.PAID, models.OrderStatus.COMPLETED]:
+    if not is_order_paid(order):
         raise HTTPException(status_code=400, detail="Can only rate completed/paid services")
     
     # Check if already rated
@@ -2721,7 +2756,20 @@ def search_users(
     ]
 
 @app.post("/payments/initiate")
-async def initiate_payment(order_id: str, amount: float, email: str, phone: str = "0700000000"):
+async def initiate_payment(
+    order_id: str,
+    amount: Optional[float] = None,
+    email: str = "",
+    phone: str = "0700000000",
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.buyer_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
     # 1. Register IPN
     ipn_res = pesapal.register_ipn(os.getenv("PESAPAL_IPN_URL"))
     ipn_id = ipn_res.get("ipn_id")
@@ -2733,7 +2781,7 @@ async def initiate_payment(order_id: str, amount: float, email: str, phone: str 
     callback_url = os.getenv("PESAPAL_CALLBACK_URL")
     order_res = pesapal.submit_order(
         order_id=order_id,
-        amount=amount,
+        amount=order.amount,
         description=f"Lovedogs 360 - Order {order_id}",
         email=email,
         phone=phone,
@@ -2745,15 +2793,50 @@ async def initiate_payment(order_id: str, amount: float, email: str, phone: str 
 
 @app.get("/pesapal/callback")
 async def pesapal_callback(OrderTrackingId: str, OrderMerchantReference: str, db: Session = Depends(database.get_db)):
-    # Verify status
     status_res = pesapal.get_transaction_status(OrderTrackingId)
-    # Update order in DB
-    return {"status": "processed", "data": status_res}
+    order = db.query(models.Order).filter(models.Order.id == OrderMerchantReference).first()
+    if order and is_pesapal_payment_successful(status_res):
+        mark_order_paid(db, order)
+        db.commit()
+    return {"status": "processed", "order_status": order.status if order else None, "data": status_res}
+
+@app.get("/payments/status/{order_id}")
+async def payment_status(
+    order_id: str,
+    tracking_id: Optional[str] = None,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.buyer_id != current_user.id and current_user.role != models.UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    status_res = None
+    payment_success = is_order_paid(order)
+    if tracking_id and not payment_success:
+        status_res = pesapal.get_transaction_status(tracking_id)
+        payment_success = is_pesapal_payment_successful(status_res)
+        if payment_success:
+            mark_order_paid(db, order)
+            db.commit()
+
+    return {
+        "order_id": order.id,
+        "order_status": order.status,
+        "payment_success": payment_success,
+        "payment_status": status_res,
+    }
 
 @app.get("/pesapal/ipn")
-async def pesapal_ipn(OrderTrackingId: str, OrderMerchantReference: str, OrderNotificationType: str):
-    # Log IPN
+async def pesapal_ipn(OrderTrackingId: str, OrderMerchantReference: str, OrderNotificationType: str, db: Session = Depends(database.get_db)):
     logger.info(f"IPN Received: {OrderTrackingId} for Order {OrderMerchantReference}")
+    status_res = pesapal.get_transaction_status(OrderTrackingId)
+    order = db.query(models.Order).filter(models.Order.id == OrderMerchantReference).first()
+    if order and is_pesapal_payment_successful(status_res):
+        mark_order_paid(db, order)
+        db.commit()
     return {"status": "acknowledged"}
 # =====================================================
 # Community Hub & Social Endpoints

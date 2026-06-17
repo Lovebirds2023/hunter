@@ -40,8 +40,8 @@ const CreateServiceScreen = ({ route, navigation }) => {
     const [price, setPrice] = useState(service ? (service.price / 1.235).toFixed(2) : '');
     const [images, setImages] = useState(service?.images || (service?.image_url ? [service.image_url] : []));
     const [currency, setCurrency] = useState(service?.currency || 'KES');
-    const [stockCount, setStockCount] = useState(service?.stock_count?.toString() || '0');
-    const [slotsAvailable, setSlotsAvailable] = useState(service?.slots_available?.toString() || '0');
+    const [stockCount, setStockCount] = useState(service?.stock_count !== null && service?.stock_count !== undefined ? service.stock_count.toString() : '');
+    const [slotsAvailable, setSlotsAvailable] = useState(service?.slots_available !== null && service?.slots_available !== undefined ? service.slots_available.toString() : '');
     const [isBusy, setIsBusy] = useState(service?.is_busy || false);
     const [locationLandmark, setLocationLandmark] = useState(service?.location_landmark || '');
     const [itemType, setItemType] = useState(service?.item_type || 'services');
@@ -110,6 +110,12 @@ const CreateServiceScreen = ({ route, navigation }) => {
         setCategory(type === 'services' ? SERVICE_CATEGORIES[0] : PRODUCT_CATEGORIES[0]);
     };
 
+    const parseOptionalCount = (value) => {
+        const trimmed = String(value || '').trim();
+        if (!trimmed) return null;
+        return Math.max(parseInt(trimmed, 10) || 0, 0);
+    };
+
     const handleSubmit = async () => {
         if (!title || !description || !price) {
             Alert.alert(t('common.error'), t('marketplace.create.error_fill'));
@@ -127,8 +133,8 @@ const CreateServiceScreen = ({ route, navigation }) => {
                 image_url: images.length > 0 ? images[0] : null,
                 images,
                 currency,
-                stock_count: parseInt(stockCount) || 0,
-                slots_available: parseInt(slotsAvailable) || 0,
+                stock_count: itemType === 'products' ? parseOptionalCount(stockCount) : null,
+                slots_available: itemType === 'services' ? parseOptionalCount(slotsAvailable) : null,
                 is_busy: isBusy,
                 latitude,
                 longitude,

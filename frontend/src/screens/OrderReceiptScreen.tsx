@@ -31,6 +31,7 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
     const [comment, setComment] = useState('');
     const [isDownloading, setIsDownloading] = useState(false);
     const [rated, setRated] = useState(false);
+    const [paymentTrackingId, setPaymentTrackingId] = useState<string | null>(null);
     const [karmaBalance, setKarmaBalance] = useState(0);
     const [discount, setDiscount] = useState(0);
     const [preferredCurrency, setPreferredCurrency] = useState('KES');
@@ -109,11 +110,15 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
             );
 
             if (paymentRes.redirect_url) {
+                setPaymentTrackingId(paymentRes.order_tracking_id || paymentRes.OrderTrackingId || null);
                 // Step 4: Redirect to Pesapal secure checkout page
                 const canOpen = await Linking.canOpenURL(paymentRes.redirect_url);
                 if (canOpen) {
                     await Linking.openURL(paymentRes.redirect_url);
-                    // After returning from Pesapal, show success screen
+                    Alert.alert(
+                        t('common.success'),
+                        t('checkout.payment_opened', { defaultValue: 'Payment page opened. Complete payment, then return here for your receipt.' })
+                    );
                     setStep('success');
                 } else {
                     Alert.alert(t('common.error'), t('checkout.payment_open_error'));
@@ -130,31 +135,89 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
         }
     };
 
+    const isPaidStatus = (status?: string) => {
+        return ['paid', 'completed', 'settled'].includes(String(status || '').toLowerCase());
+    };
+
+    const getStoredToken = async () => {
+        if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+            return localStorage.getItem('userToken');
+        }
+        return SecureStore.getItemAsync('userToken');
+    };
+
+    const verifyPaymentStatus = async () => {
+        if (!orderId) {
+            Alert.alert(t('common.error'), t('marketplace.orders.missing_order', { defaultValue: 'Order not found. Please try again.' }));
+            return false;
+        }
+
+        try {
+            const res = await client.get(`/payments/status/${orderId}`, {
+                params: paymentTrackingId ? { tracking_id: paymentTrackingId } : {}
+            });
+            const isPaid = Boolean(res.data?.payment_success) || isPaidStatus(res.data?.order_status);
+            if (!isPaid) {
+                Alert.alert(
+                    t('checkout.payment_failed'),
+                    t('checkout.payment_not_confirmed', { defaultValue: 'Payment is not confirmed yet. If you just paid, wait a moment and try again.' })
+                );
+            }
+            return isPaid;
+        } catch (error: any) {
+            const detail = error.response?.data?.detail || t('checkout.process_failed');
+            Alert.alert(t('checkout.payment_failed'), typeof detail === 'string' ? detail : JSON.stringify(detail));
+            return false;
+        }
+    };
+
     const downloadReceipt = async () => {
-        if (!orderId) return;
+        if (!orderId) {
+            Alert.alert(t('common.error'), t('marketplace.orders.missing_order', { defaultValue: 'Order not found. Please try again.' }));
+            return;
+        }
         setIsDownloading(true);
         try {
+            const isPaid = await verifyPaymentStatus();
+            if (!isPaid) return;
+
+            const token = await getStoredToken();
             const fileUri = `${FileSystem.documentDirectory}receipt_${orderId}.pdf`;
             const downloadRes = await FileSystem.downloadAsync(
                 `${client.defaults.baseURL}/orders/${orderId}/receipt`,
-                fileUri
+                fileUri,
+                token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
             );
             if (downloadRes.status === 200) {
-                await Sharing.shareAsync(fileUri);
+                if (await Sharing.isAvailableAsync()) {
+                    await Sharing.shareAsync(fileUri);
+                }
+                Alert.alert(t('common.success'), t('marketplace.orders.success_download', { defaultValue: 'PDF receipt is ready.' }));
             } else {
                 Alert.alert(t('common.error'), t('marketplace.orders.error_download'));
             }
-        } catch (error) {
-            Alert.alert(t('common.error'), t('marketplace.orders.error_download_failed'));
+        } catch (error: any) {
+            const detail = error.response?.data?.detail || error.message || t('marketplace.orders.error_download_failed');
+            Alert.alert(t('common.error'), typeof detail === 'string' ? detail : JSON.stringify(detail));
         } finally {
             setIsDownloading(false);
         }
     };
 
     const submitRating = async () => {
-        if (!orderId || rating === 0) return;
+        if (!orderId) {
+            Alert.alert(t('common.error'), t('marketplace.orders.missing_order', { defaultValue: 'Order not found. Please try again.' }));
+            return;
+        }
+        if (rating === 0) {
+            Alert.alert(t('common.error'), t('marketplace.orders.select_rating', { defaultValue: 'Please select a rating first.' }));
+            return;
+        }
         setSubmitting(true);
         try {
+            const isPaid = await verifyPaymentStatus();
+            if (!isPaid) return;
+
             await client.post('/ratings', {
                 order_id: orderId,
                 rated_id: service.provider_id,
@@ -163,8 +226,9 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
             });
             setRated(true);
             Alert.alert(t('common.success'), t('marketplace.orders.success_rating'));
-        } catch (error) {
-            Alert.alert(t('common.error'), t('marketplace.orders.error_rating'));
+        } catch (error: any) {
+            const detail = error.response?.data?.detail || t('marketplace.orders.error_rating');
+            Alert.alert(t('common.error'), typeof detail === 'string' ? detail : JSON.stringify(detail));
         } finally {
             setSubmitting(false);
         }

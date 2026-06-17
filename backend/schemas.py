@@ -117,8 +117,8 @@ class ServiceBase(BaseModel):
     location_landmark: Optional[str] = None
     is_published: Optional[bool] = True
     currency: Optional[str] = "KES"
-    stock_count: Optional[int] = 0
-    slots_available: Optional[int] = 0
+    stock_count: Optional[int] = None
+    slots_available: Optional[int] = None
     is_busy: Optional[bool] = False
     images: Optional[List[str]] = None
     admin_approved: Optional[bool] = False
