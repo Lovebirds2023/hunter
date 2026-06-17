@@ -105,7 +105,7 @@ function calcTrend(current, previous) {
 }
 
 /* ─── Main Overview Tab ─── */
-export const AdminOverviewTab = ({ onNavigate }) => {
+export const AdminOverviewTab = ({ onNavigate, onBack }) => {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -126,11 +126,33 @@ export const AdminOverviewTab = ({ onNavigate }) => {
     useEffect(() => { fetchAnalytics(); }, [fetchAnalytics]);
     const onRefresh = () => { setRefreshing(true); fetchAnalytics(true); };
 
+    const OverviewHeader = () => (
+        <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, backgroundColor: ADMIN_COLORS.bg }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <TouchableOpacity
+                    onPress={onBack}
+                    style={{ marginRight: 14 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Go back to admin home"
+                >
+                    <Ionicons name="arrow-back" size={24} color={ADMIN_COLORS.textPrimary} />
+                </TouchableOpacity>
+                <View style={{ flex: 1 }}>
+                    <Text style={s.sectionTitle}>Detailed Analytics</Text>
+                    <Text style={{ fontSize: 12, color: ADMIN_COLORS.textMuted }}>Live Platform Pulse</Text>
+                </View>
+            </View>
+        </View>
+    );
+
     if (loading || !data) {
         return (
-            <View style={s.loadingContainer}>
-                <ActivityIndicator size="large" color={ADMIN_COLORS.accent} />
-                <Text style={{ color: ADMIN_COLORS.textMuted, marginTop: 12 }}>Loading analytics...</Text>
+            <View style={s.screen}>
+                <OverviewHeader />
+                <View style={s.loadingContainer}>
+                    <ActivityIndicator size="large" color={ADMIN_COLORS.accent} />
+                    <Text style={{ color: ADMIN_COLORS.textMuted, marginTop: 12 }}>Loading analytics...</Text>
+                </View>
             </View>
         );
     }
@@ -165,12 +187,14 @@ export const AdminOverviewTab = ({ onNavigate }) => {
     ].filter(i => i.value > 0);
 
     return (
-        <ScrollView
-            style={s.screen}
-            contentContainerStyle={s.scrollContent}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={ADMIN_COLORS.accent} />}
-            showsVerticalScrollIndicator={false}
-        >
+        <View style={s.screen}>
+            <OverviewHeader />
+            <ScrollView
+                style={s.screen}
+                contentContainerStyle={s.scrollContent}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={ADMIN_COLORS.accent} />}
+                showsVerticalScrollIndicator={false}
+            >
             {/* Alerts Banner */}
             <AlertBanner alerts={alerts} />
 
@@ -338,7 +362,8 @@ export const AdminOverviewTab = ({ onNavigate }) => {
                 )}
             </View>
 
-            <View style={{ height: 30 }} />
-        </ScrollView>
+                <View style={{ height: 30 }} />
+            </ScrollView>
+        </View>
     );
 };

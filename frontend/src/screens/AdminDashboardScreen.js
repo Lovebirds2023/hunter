@@ -194,7 +194,7 @@ export default function AdminDashboardScreen() {
     const renderContent = () => {
         switch (activeTab) {
             case 'home': return renderHome();
-            case 'overview': return <AdminOverviewTab onNavigate={setActiveTab} />;
+            case 'overview': return <AdminOverviewTab onNavigate={setActiveTab} onBack={() => setActiveTab('home')} />;
             case 'users': return <AdminUsersTab onBack={() => setActiveTab('home')} />;
             case 'events': return <AdminEventsTab onBack={() => setActiveTab('home')} navigation={navigation} />;
             case 'orders': return <AdminOrdersTab onBack={() => setActiveTab('home')} />;
