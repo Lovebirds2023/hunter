@@ -84,7 +84,7 @@ export const useAppUpdateCheck = (currentVersion, onUpdateAvailable, onUpdateReq
         }
       } else {
         // Notify user that app is up to date
-        console.log('App is up to date');
+        if (__DEV__) console.log('App is up to date');
       }
     } catch (error) {
       console.error('Error in manual update check:', error);

@@ -494,14 +494,6 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 # Initialize AI engine
 ai_engine_instance = ai_engine.DogIDEngine()
 
-@app.get("/debug-users")
-def debug_users(db: Session = Depends(database.get_db)):
-    try:
-        users = db.query(models.User).all()
-        return [{"email": u.email, "role": u.role, "id": u.id, "created_at": str(u.created_at)} for u in users]
-    except Exception as e:
-        return {"error": str(e)}
-
 @app.post("/register", response_model=schemas.UserResponse)
 def register(user: schemas.UserCreate, db: Session = Depends(database.get_db)):
     db_user = db.query(models.User).filter(models.User.email == user.email).first()

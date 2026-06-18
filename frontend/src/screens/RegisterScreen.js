@@ -68,7 +68,7 @@ const RegisterScreen = ({ navigation }) => {
             setLocationAllowed(true);
             return loc.coords;
         } catch (error) {
-            console.log("Location Error:", error);
+            if (__DEV__) console.log("Location Error:", error);
             Alert.alert(t('register.location_error_title'), t('register.location_error_msg'));
             return null;
         }
