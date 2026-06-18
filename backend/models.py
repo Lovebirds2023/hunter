@@ -198,6 +198,8 @@ class Order(Base):
     amount = Column(Float)
     commission = Column(Float)
     payout = Column(Float)
+    discount_amount = Column(Float, default=0)
+    karma_points_redeemed = Column(Integer, default=0)
     status = Column(String, default="PENDING")
     share_phone = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)

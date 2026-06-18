@@ -158,6 +158,7 @@ class OrderCreate(BaseModel):
     service_id: str
     share_phone: Optional[bool] = False
     form_responses: Optional[List[OrderFormResponseSchema]] = []
+    karma_points_to_redeem: Optional[int] = 0
 
 class OrderFormResponseMini(BaseModel):
     id: str
@@ -174,6 +175,8 @@ class OrderResponse(BaseModel):
     amount: float
     commission: float
     payout: float
+    discount_amount: float = 0
+    karma_points_redeemed: int = 0
     status: OrderStatus
     share_phone: bool
     created_at: datetime.datetime

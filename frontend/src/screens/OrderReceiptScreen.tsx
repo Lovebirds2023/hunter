@@ -5,14 +5,21 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING } from '../constants/theme';
 import { ThemeBackground } from '../components/ThemeBackground';
 import { Button } from '../components/Button';
-import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
 import * as SecureStore from 'expo-secure-store';
 import client from '../api/client';
 import { getServiceFormFields, createOrder, initiatePayment } from '../api/marketplace';
 import { useCurrency } from '../context/CurrencyContext';
+import { downloadOrderReceipt } from '../utils/receiptDownload';
 
 type Step = 'form' | 'checkout' | 'success';
+
+const KARMA_REDEMPTION_TARGET = 100;
+const KARMA_MAX_DISCOUNT_RATE = 0.20;
+
+const estimateRewardPoints = (amount: number) => {
+    if (!amount || amount <= 0) return 0;
+    return Math.min(500, Math.max(5, Math.floor(amount / 100)));
+};
 
 const getStoredItem = async (key: string) => {
     if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
@@ -47,8 +54,23 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
     const [paymentTrackingId, setPaymentTrackingId] = useState<string | null>(null);
     const [karmaBalance, setKarmaBalance] = useState(0);
     const [discount, setDiscount] = useState(0);
+    const [useRewardDiscount, setUseRewardDiscount] = useState(false);
+    const [createdOrder, setCreatedOrder] = useState<any>(null);
+    const [earnedPoints, setEarnedPoints] = useState(0);
     const [preferredCurrency, setPreferredCurrency] = useState('KES');
     const { convertPrice, formatCurrency } = useCurrency();
+
+    const listingPrice = Number(service?.price || 0);
+    const maxDiscountByOrder = Math.floor(listingPrice * KARMA_MAX_DISCOUNT_RATE);
+    const maxRedeemablePoints = Math.min(karmaBalance, maxDiscountByOrder);
+    const hasRewardTarget = karmaBalance >= KARMA_REDEMPTION_TARGET;
+    const canRedeemRewards = hasRewardTarget && maxRedeemablePoints >= KARMA_REDEMPTION_TARGET;
+    const pointsToRedeem = useRewardDiscount && canRedeemRewards ? maxRedeemablePoints : 0;
+    const estimatedDiscount = pointsToRedeem;
+    const orderDiscount = Number(createdOrder?.discount_amount ?? discount ?? estimatedDiscount);
+    const orderTotal = Number(createdOrder?.amount ?? Math.max(listingPrice - estimatedDiscount, 1));
+    const orderCommission = Number(createdOrder?.commission ?? Math.max(orderTotal - (orderTotal / 1.235), 0));
+    const estimatedEarnedPoints = earnedPoints || estimateRewardPoints(orderTotal);
 
     useEffect(() => {
         initFlow();
@@ -126,6 +148,7 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
             const orderData = {
                 service_id: service.id,
                 share_phone: sharePhone,
+                karma_points_to_redeem: pointsToRedeem,
                 form_responses: Object.entries(answers).map(([field_id, value]) => ({
                     field_id,
                     answer_value: value
@@ -134,10 +157,17 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
 
             // Step 1: Create the order, unless this screen was opened with an existing unpaid order.
             let newOrderId = orderId;
+            let payableAmount = createdOrder?.amount || service.price;
             if (!newOrderId) {
                 const result = await createOrder(orderData);
                 newOrderId = result.id;
+                payableAmount = result.amount;
                 setOrderId(newOrderId);
+                setCreatedOrder(result);
+                setDiscount(result.discount_amount || 0);
+                if (result.karma_points_redeemed) {
+                    setKarmaBalance((current) => Math.max(current - result.karma_points_redeemed, 0));
+                }
             }
 
             // Step 2: Get user info for payment initiation
@@ -148,7 +178,7 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
             // Step 3: Initiate payment with Pesapal
             const paymentRes = await initiatePayment(
                 newOrderId,
-                service.price,
+                payableAmount,
                 userEmail,
                 userPhone
             );
@@ -185,10 +215,6 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
         return ['paid', 'completed', 'settled'].includes(String(status || '').toLowerCase());
     };
 
-    const getStoredToken = async () => {
-        return getStoredItem('userToken');
-    };
-
     const verifyPaymentStatus = async () => {
         if (!orderId) {
             Alert.alert(t('common.error'), t('marketplace.orders.missing_order', { defaultValue: 'Order not found. Please try again.' }));
@@ -200,6 +226,10 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
                 params: paymentTrackingId ? { tracking_id: paymentTrackingId } : {}
             });
             const isPaid = Boolean(res.data?.payment_success) || isPaidStatus(res.data?.order_status);
+            setEarnedPoints(res.data?.buyer_reward_points || 0);
+            if (res.data?.discount_amount !== undefined) {
+                setDiscount(res.data.discount_amount || 0);
+            }
             if (!isPaid) {
                 Alert.alert(
                     t('checkout.payment_failed'),
@@ -224,21 +254,8 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
             const isPaid = await verifyPaymentStatus();
             if (!isPaid) return;
 
-            const token = await getStoredToken();
-            const fileUri = `${FileSystem.documentDirectory}receipt_${orderId}.pdf`;
-            const downloadRes = await FileSystem.downloadAsync(
-                `${client.defaults.baseURL}/orders/${orderId}/receipt`,
-                fileUri,
-                token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
-            );
-            if (downloadRes.status === 200) {
-                if (await Sharing.isAvailableAsync()) {
-                    await Sharing.shareAsync(fileUri);
-                }
-                Alert.alert(t('common.success'), t('marketplace.orders.success_download', { defaultValue: 'PDF receipt is ready.' }));
-            } else {
-                Alert.alert(t('common.error'), t('marketplace.orders.error_download'));
-            }
+            await downloadOrderReceipt(orderId);
+            Alert.alert(t('common.success'), t('marketplace.orders.success_download', { defaultValue: 'PDF receipt is ready.' }));
         } catch (error: any) {
             const detail = error.response?.data?.detail || error.message || t('marketplace.orders.error_download_failed');
             Alert.alert(t('common.error'), typeof detail === 'string' ? detail : JSON.stringify(detail));
@@ -275,6 +292,23 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
         } finally {
             setSubmitting(false);
         }
+    };
+
+    const goBackAfterPayment = () => {
+        if (navigation.canGoBack?.()) {
+            navigation.goBack();
+            return;
+        }
+
+        if (navigation.reset) {
+            navigation.reset({
+                index: 0,
+                routes: [{ name: 'Main', params: { screen: 'Marketplace' } }],
+            });
+            return;
+        }
+
+        navigation.navigate?.('Main', { screen: 'Marketplace' });
     };
 
     const renderFormField = (field: any) => {
@@ -415,6 +449,55 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
                                 {formatCurrency(convertPrice(service.price, service.currency || 'KES', preferredCurrency), preferredCurrency)}
                             </Text>
                         </View>
+
+                        <View style={styles.rewardsBox}>
+                            <View style={styles.rewardsHeader}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.rewardsTitle}>
+                                        {t('checkout.reward_points', { defaultValue: 'Reward points' })}
+                                    </Text>
+                                    <Text style={styles.rewardsText}>
+                                        {karmaBalance} {t('community_hub.pts', { defaultValue: 'points' })} {t('checkout.available', { defaultValue: 'available' })}
+                                    </Text>
+                                </View>
+                                <Switch
+                                    value={useRewardDiscount}
+                                    onValueChange={setUseRewardDiscount}
+                                    disabled={!canRedeemRewards}
+                                    trackColor={{ false: '#ddd', true: COLORS.primary }}
+                                />
+                            </View>
+                            <Text style={styles.rewardsHint}>
+                                {canRedeemRewards
+                                    ? t('checkout.reward_discount_hint', {
+                                        defaultValue: 'Use {{points}} points for {{amount}} off this order.',
+                                        points: pointsToRedeem || maxRedeemablePoints,
+                                        amount: formatCurrency(convertPrice(pointsToRedeem || maxRedeemablePoints, service.currency || 'KES', preferredCurrency), preferredCurrency)
+                                    })
+                                    : hasRewardTarget
+                                        ? t('checkout.reward_order_too_small', {
+                                            defaultValue: 'Rewards can cover up to 20% of an order, so use them on a larger order.'
+                                        })
+                                    : t('checkout.reward_target_hint', {
+                                        defaultValue: 'Reach {{target}} points to redeem future order discounts.',
+                                        target: KARMA_REDEMPTION_TARGET
+                                    })}
+                            </Text>
+                            {useRewardDiscount && canRedeemRewards && (
+                                <View style={styles.priceRowCompact}>
+                                    <Text style={styles.discountLabel}>{t('checkout.discount', { defaultValue: 'Discount' })}</Text>
+                                    <Text style={styles.discountValue}>
+                                        -{formatCurrency(convertPrice(estimatedDiscount, service.currency || 'KES', preferredCurrency), preferredCurrency)}
+                                    </Text>
+                                </View>
+                            )}
+                            <View style={styles.priceRowCompact}>
+                                <Text style={styles.rewardEarnLabel}>{t('checkout.earn_after_payment', { defaultValue: 'Earn after payment' })}</Text>
+                                <Text style={styles.rewardEarnValue}>
+                                    {estimateRewardPoints(Math.max(service.price - estimatedDiscount, 1))} {t('community_hub.pts', { defaultValue: 'points' })}
+                                </Text>
+                            </View>
+                        </View>
                         
                         <View style={styles.privacyRow}>
                             <View style={{ flex: 1 }}>
@@ -461,8 +544,8 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
         <ThemeBackground>
             <SafeAreaView style={styles.safeArea}>
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={() => navigation.replace('Marketplace')} style={styles.backButton}>
-                        <Ionicons name="close" size={24} color={COLORS.primary} />
+                    <TouchableOpacity onPress={goBackAfterPayment} style={styles.backButton}>
+                        <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>{t('marketplace.orders.summary')}</Text>
                     <View style={{ width: 40 }} />
@@ -481,22 +564,43 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
                         <View style={styles.divider} />
 
                         <View style={styles.row}>
-                            <Text style={styles.rowLabel}>{t('marketplace.orders.item_price')}</Text>
+                            <Text style={styles.rowLabel}>{t('marketplace.orders.item_price', { defaultValue: 'Listing Price' })}</Text>
                             <Text style={styles.rowValue}>
-                                {formatCurrency(convertPrice((service.price / 1.235), service.currency || 'KES', preferredCurrency), preferredCurrency)}
+                                {formatCurrency(convertPrice(listingPrice, service.currency || 'KES', preferredCurrency), preferredCurrency)}
                             </Text>
                         </View>
+                        {orderDiscount > 0 && (
+                            <View style={styles.row}>
+                                <Text style={styles.rowLabel}>
+                                    {t('checkout.points_discount', { defaultValue: 'Points Discount' })}
+                                </Text>
+                                <Text style={styles.discountValue}>
+                                    -{formatCurrency(convertPrice(orderDiscount, service.currency || 'KES', preferredCurrency), preferredCurrency)}
+                                </Text>
+                            </View>
+                        )}
                         <View style={styles.row}>
-                            <Text style={styles.rowLabel}>{t('marketplace.orders.fee')}</Text>
+                            <Text style={styles.rowLabel}>
+                                {t('marketplace.orders.platform_fee_235', { defaultValue: 'Platform Fee (23.5%)' })}
+                            </Text>
                             <Text style={styles.rowValue}>
-                                {formatCurrency(convertPrice((service.price - (service.price / 1.235)), service.currency || 'KES', preferredCurrency), preferredCurrency)}
+                                {formatCurrency(convertPrice(orderCommission, service.currency || 'KES', preferredCurrency), preferredCurrency)}
                             </Text>
                         </View>
 
                         <View style={[styles.row, { marginTop: 10 }]}>
                             <Text style={styles.totalLabel}>{t('marketplace.orders.total')}</Text>
                             <Text style={styles.totalValue}>
-                                {formatCurrency(convertPrice(service.price, service.currency || 'KES', preferredCurrency), preferredCurrency)}
+                                {formatCurrency(convertPrice(orderTotal, service.currency || 'KES', preferredCurrency), preferredCurrency)}
+                            </Text>
+                        </View>
+                        <View style={styles.pointsEarnedRow}>
+                            <Ionicons name="sparkles-outline" size={16} color={COLORS.primary} />
+                            <Text style={styles.pointsEarnedText}>
+                                {t('checkout.points_earned_after_payment', {
+                                    defaultValue: 'Points earned from this purchase: {{points}}',
+                                    points: estimatedEarnedPoints
+                                })}
                             </Text>
                         </View>
                     </View>
@@ -532,6 +636,13 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
                             <Text style={styles.thanksText}>{t('marketplace.orders.thanks')}</Text>
                         </View>
                     )}
+
+                    <Button
+                        title={t('checkout.back_to_marketplace', { defaultValue: 'Back to Marketplace' })}
+                        onPress={goBackAfterPayment}
+                        variant="outline"
+                        style={styles.returnBtn}
+                    />
                 </ScrollView>
             </SafeAreaView>
         </ThemeBackground>
@@ -570,6 +681,16 @@ const styles = StyleSheet.create({
     priceRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
     priceLabel: { fontSize: 16, color: COLORS.textSecondary },
     priceValue: { fontSize: 20, fontWeight: 'bold', color: COLORS.text },
+    priceRowCompact: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
+    rewardsBox: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, padding: 12, marginBottom: 16 },
+    rewardsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    rewardsTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text },
+    rewardsText: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
+    rewardsHint: { fontSize: 12, color: COLORS.textSecondary, lineHeight: 17, marginTop: 8 },
+    discountLabel: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '600' },
+    discountValue: { fontSize: 14, color: '#2E7D32', fontWeight: '800' },
+    rewardEarnLabel: { fontSize: 12, color: COLORS.textSecondary },
+    rewardEarnValue: { fontSize: 12, color: COLORS.primary, fontWeight: '800' },
     privacyRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8f9fa', padding: 12, borderRadius: 10 },
     privacyTitle: { fontSize: 14, fontWeight: 'bold', color: COLORS.text },
     privacySubtitle: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2 },
@@ -589,10 +710,13 @@ const styles = StyleSheet.create({
     rowValue: { fontSize: 14, color: COLORS.text },
     totalLabel: { fontSize: 18, fontWeight: 'bold', color: COLORS.primary },
     totalValue: { fontSize: 18, fontWeight: 'bold', color: COLORS.primary },
+    pointsEarnedRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 14, backgroundColor: '#F0F4FF', padding: 10, borderRadius: 10 },
+    pointsEarnedText: { fontSize: 12, color: COLORS.primary, fontWeight: '700', flexShrink: 1 },
     downloadBtn: { width: '100%', marginBottom: 20 },
     ratingSection: { backgroundColor: '#fff', borderRadius: 15, padding: 20, alignItems: 'center' },
     ratingTitle: { fontSize: 16, fontWeight: 'bold', color: COLORS.text, marginBottom: 15 },
     starRow: { flexDirection: 'row', marginBottom: 20 },
     submitBtn: { width: '100%' },
+    returnBtn: { width: '100%', marginTop: 16 },
     thanksText: { fontSize: 16, fontWeight: 'bold', color: COLORS.primary }
 });

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     View, Text, FlatList, TouchableOpacity, TextInput,
-    ActivityIndicator, RefreshControl, Alert, ScrollView
+    ActivityIndicator, RefreshControl, Alert, ScrollView, Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import client from '../../api/client';
@@ -65,7 +65,47 @@ export const AdminOrdersTab = ({ onBack }) => {
     const paidCommission = filtered.reduce((sum, o) => sum + (o.paid_commission || 0), 0);
     const paidPayout = filtered.reduce((sum, o) => sum + (o.paid_payout || 0), 0);
 
+    const confirmAdminAction = (title, message, confirmText, onConfirm) => {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            if (window.confirm(`${title}\n\n${message}`)) {
+                onConfirm();
+            }
+            return;
+        }
+
+        Alert.alert(
+            title,
+            message,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                { text: confirmText, style: 'default', onPress: onConfirm }
+            ]
+        );
+    };
+
     const handleCompleteOrder = async (orderId) => {
+        if (Platform.OS === 'web') {
+            confirmAdminAction(
+                'Confirm Delivery',
+                'Mark this order as completed (service delivered)? This will enable payout approval.',
+                'Confirm Delivery',
+                async () => {
+                    setActioningId(orderId);
+                    try {
+                        const res = await client.post(`/admin/orders/${orderId}/complete`);
+                        Alert.alert('Success', res.data?.message || 'Order marked as completed. You can now approve the seller payout.');
+                        fetchOrders(true);
+                    } catch (e) {
+                        const msg = e.response?.data?.detail || 'Failed to complete order.';
+                        Alert.alert('Error', msg);
+                    } finally {
+                        setActioningId(null);
+                    }
+                }
+            );
+            return;
+        }
+
         Alert.alert(
             'Confirm Delivery',
             'Mark this order as completed (service delivered)? This will enable payout approval.',
@@ -92,6 +132,28 @@ export const AdminOrdersTab = ({ onBack }) => {
     };
 
     const handleSettleOrder = async (order) => {
+        if (Platform.OS === 'web') {
+            confirmAdminAction(
+                'Approve Seller Payout',
+                `Release KES ${(order.payout || 0).toLocaleString()} to ${order.provider_name || 'seller'}?\n\nService: ${order.service_title}\nPlatform Commission: KES ${(order.commission || 0).toLocaleString()}`,
+                'Approve Payout',
+                async () => {
+                    setActioningId(order.id);
+                    try {
+                        const res = await client.post(`/admin/orders/${order.id}/settle`);
+                        Alert.alert('Payout Approved', res.data.message);
+                        fetchOrders(true);
+                    } catch (e) {
+                        const msg = e.response?.data?.detail || 'Failed to settle order.';
+                        Alert.alert('Error', msg);
+                    } finally {
+                        setActioningId(null);
+                    }
+                }
+            );
+            return;
+        }
+
         Alert.alert(
             'Approve Seller Payout',
             `Release KES ${(order.payout || 0).toLocaleString()} to ${order.provider_name || 'seller'}?\n\nService: ${order.service_title}\nPlatform Commission: KES ${(order.commission || 0).toLocaleString()}`,
@@ -246,6 +308,14 @@ export const AdminOrdersTab = ({ onBack }) => {
                                         <Text style={[s.financialValue, { color: ADMIN_COLORS.success }]}>KES {(item.paid_payout || 0).toLocaleString()}</Text>
                                     </View>
                                 </View>
+
+                                {(item.discount_amount || 0) > 0 && (
+                                    <View style={{ marginTop: 8, backgroundColor: `${ADMIN_COLORS.success}10`, padding: 8, borderRadius: 8 }}>
+                                        <Text style={{ color: ADMIN_COLORS.success, fontSize: 12, fontWeight: '700' }}>
+                                            Points discount: -KES {(item.discount_amount || 0).toLocaleString()} ({item.karma_points_redeemed || 0} points)
+                                        </Text>
+                                    </View>
+                                )}
 
                                 {/* Form Responses Button */}
                                 {(item.form_responses?.length > 0) && (

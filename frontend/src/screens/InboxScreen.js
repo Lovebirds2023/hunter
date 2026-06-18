@@ -92,6 +92,9 @@ export const InboxScreen = ({ navigation }) => {
             case 'rejection': return "close-circle";
             case 'approval': return "checkmark-circle";
             case 'feedback': return "chatbubble-ellipses";
+            case 'purchase': return "bag-check";
+            case 'sale': return "cash";
+            case 'delivery': return "checkmark-done";
             default: return "notifications";
         }
     };
@@ -103,6 +106,9 @@ export const InboxScreen = ({ navigation }) => {
             case 'rejection': return "#ff4d4d";
             case 'approval': return "#2ecc71";
             case 'feedback': return "#3498db";
+            case 'purchase': return "#2E7D32";
+            case 'sale': return COLORS.accent;
+            case 'delivery': return "#1565C0";
             default: return COLORS.primary;
         }
     };

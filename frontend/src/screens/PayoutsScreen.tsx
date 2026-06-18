@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useContext } from 'react';
 import {
     View, Text, StyleSheet, SafeAreaView, ScrollView,
-    TouchableOpacity, ActivityIndicator, RefreshControl
+    TouchableOpacity, ActivityIndicator, RefreshControl, Alert
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { ThemeBackground } from '../components/ThemeBackground';
@@ -12,6 +12,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { AuthContext } from '../context/AuthContext';
 import client from '../api/client';
 import { LinearGradient } from 'expo-linear-gradient';
+import { downloadOrderReceipt } from '../utils/receiptDownload';
 
 interface WalletSummary {
     total_earned: number;
@@ -27,6 +28,8 @@ interface EarningItem {
     gross_amount: number;
     commission: number;
     payout: number;
+    discount_amount?: number;
+    karma_points_redeemed?: number;
     order_status: string;
     escrow_status: 'in_escrow' | 'available' | 'settled';
     created_at: string;
@@ -38,6 +41,8 @@ interface BuyerOrder {
     service_image: string | null;
     provider_name: string;
     amount: number;
+    discount_amount?: number;
+    karma_points_redeemed?: number;
     status: string;
     created_at: string;
 }
@@ -54,6 +59,7 @@ export const PayoutsScreen = () => {
     // Seller state
     const [wallet, setWallet] = useState<WalletSummary>({ total_earned: 0, in_escrow: 0, available: 0, settled: 0 });
     const [earnings, setEarnings] = useState<EarningItem[]>([]);
+    const [receiptOrderId, setReceiptOrderId] = useState<string | null>(null);
 
     // Buyer state
     const [buyerOrders, setBuyerOrders] = useState<BuyerOrder[]>([]);
@@ -111,6 +117,31 @@ export const PayoutsScreen = () => {
                 return { color: '#C62828', bg: '#FFEBEE', label: t('payouts.status.cancelled'), icon: 'close-circle' as const };
             default:
                 return { color: '#999', bg: '#f5f5f5', label: status, icon: 'help-circle' as const };
+        }
+    };
+
+    const canDownloadReceipt = (status?: string) => {
+        return ['paid', 'completed', 'settled'].includes(String(status || '').toLowerCase());
+    };
+
+    const handleDownloadReceipt = async (orderId: string, status?: string) => {
+        if (!canDownloadReceipt(status)) {
+            Alert.alert(
+                t('common.error'),
+                t('checkout.payment_not_confirmed', { defaultValue: 'Payment is not confirmed yet. If you just paid, wait a moment and try again.' })
+            );
+            return;
+        }
+
+        setReceiptOrderId(orderId);
+        try {
+            await downloadOrderReceipt(orderId);
+            Alert.alert(t('common.success'), t('marketplace.orders.success_download', { defaultValue: 'PDF receipt is ready.' }));
+        } catch (error: any) {
+            const detail = error.response?.data?.detail || error.message || t('marketplace.orders.error_download_failed');
+            Alert.alert(t('common.error'), typeof detail === 'string' ? detail : JSON.stringify(detail));
+        } finally {
+            setReceiptOrderId(null);
         }
     };
 
@@ -267,6 +298,28 @@ export const PayoutsScreen = () => {
                                                     </View>
                                                 </View>
 
+                                                {(item.discount_amount || 0) > 0 && (
+                                                    <Text style={styles.discountNote}>
+                                                        Points discount used: KES {(item.discount_amount || 0).toLocaleString()} ({item.karma_points_redeemed || 0} points)
+                                                    </Text>
+                                                )}
+
+                                                <TouchableOpacity
+                                                    style={[
+                                                        styles.receiptAction,
+                                                        receiptOrderId === item.id && styles.receiptActionDisabled
+                                                    ]}
+                                                    onPress={() => handleDownloadReceipt(item.id, item.order_status)}
+                                                    disabled={receiptOrderId === item.id}
+                                                >
+                                                    <Ionicons name="receipt-outline" size={16} color={COLORS.primary} />
+                                                    <Text style={styles.receiptActionText}>
+                                                        {receiptOrderId === item.id
+                                                            ? t('marketplace.orders.downloading')
+                                                            : t('marketplace.orders.view_receipt', { defaultValue: 'View receipt' })}
+                                                    </Text>
+                                                </TouchableOpacity>
+
                                                 {/* Escrow lock note for held funds */}
                                                 {isEscrowed && (
                                                     <View style={styles.escrowNote}>
@@ -342,6 +395,30 @@ export const PayoutsScreen = () => {
                                                 </View>
                                             )}
                                         </View>
+
+                                        {(order.discount_amount || 0) > 0 && (
+                                            <Text style={styles.discountNote}>
+                                                Points discount: KES {(order.discount_amount || 0).toLocaleString()} ({order.karma_points_redeemed || 0} points)
+                                            </Text>
+                                        )}
+
+                                        {canDownloadReceipt(order.status) && (
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.receiptAction,
+                                                    receiptOrderId === order.id && styles.receiptActionDisabled
+                                                ]}
+                                                onPress={() => handleDownloadReceipt(order.id, order.status)}
+                                                disabled={receiptOrderId === order.id}
+                                            >
+                                                <Ionicons name="receipt-outline" size={16} color={COLORS.primary} />
+                                                <Text style={styles.receiptActionText}>
+                                                    {receiptOrderId === order.id
+                                                        ? t('marketplace.orders.downloading')
+                                                        : t('marketplace.orders.view_receipt', { defaultValue: 'View receipt' })}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        )}
 
                                         {order.created_at && (
                                             <Text style={styles.dateText}>
@@ -450,6 +527,14 @@ const styles = StyleSheet.create({
         marginTop: 10, backgroundColor: '#f9f9f9', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8,
     },
     escrowNoteText: { fontSize: 11, color: '#999', fontStyle: 'italic' },
+    receiptAction: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+        borderWidth: 1, borderColor: COLORS.primary, borderRadius: 10,
+        paddingVertical: 9, paddingHorizontal: 12, marginTop: 12,
+        backgroundColor: '#fff',
+    },
+    receiptActionDisabled: { opacity: 0.6 },
+    receiptActionText: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
 
     // Buyer Order Card
     buyerOrderCard: {
@@ -474,6 +559,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#E8F5E9', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
     },
     paymentConfirmText: { fontSize: 12, fontWeight: 'bold', color: '#2E7D32' },
+    discountNote: { fontSize: 11, color: '#2E7D32', fontWeight: '700', marginTop: 10, textAlign: 'center' },
 
     dateText: { fontSize: 10, color: '#999', marginTop: 10, textAlign: 'right' },
 

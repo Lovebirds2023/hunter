@@ -220,12 +220,77 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     c = 2 * math.asin(math.sqrt(a))
     return R * c
 
-def award_karma(db: Session, user_id: str, amount: int, category: str, description: str = None):
+KARMA_REDEMPTION_TARGET = 100
+KARMA_POINT_VALUE = 1.0
+KARMA_MAX_ORDER_DISCOUNT_RATE = 0.20
+KARMA_REWARD_AMOUNT_STEP = 100
+KARMA_MIN_REWARD_PER_ORDER = 5
+KARMA_MAX_REWARD_PER_ORDER = 500
+
+def calculate_karma_reward(amount: float) -> int:
+    """1 point per KES 100, with a small minimum and abuse-safe cap."""
+    amount = float(amount or 0)
+    if amount <= 0:
+        return 0
+    return min(
+        KARMA_MAX_REWARD_PER_ORDER,
+        max(KARMA_MIN_REWARD_PER_ORDER, int(amount // KARMA_REWARD_AMOUNT_STEP))
+    )
+
+def calculate_karma_redemption(user: models.User, order_total: float, requested_points: int) -> tuple[int, float]:
+    requested_points = int(requested_points or 0)
+    if requested_points <= 0:
+        return 0, 0.0
+
+    available_karma = int(user.available_karma or 0)
+    if available_karma < KARMA_REDEMPTION_TARGET:
+        raise HTTPException(
+            status_code=400,
+            detail=f"You need at least {KARMA_REDEMPTION_TARGET} points before redeeming a discount."
+        )
+    if requested_points < KARMA_REDEMPTION_TARGET:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Redeem at least {KARMA_REDEMPTION_TARGET} points."
+        )
+
+    max_discount_amount = max(float(order_total or 0) * KARMA_MAX_ORDER_DISCOUNT_RATE, 0)
+    max_points_for_order = int(max_discount_amount // KARMA_POINT_VALUE)
+    points_to_redeem = min(requested_points, available_karma, max_points_for_order)
+    if points_to_redeem < KARMA_REDEMPTION_TARGET:
+        raise HTTPException(
+            status_code=400,
+            detail=f"This order can only use discounts from {KARMA_REDEMPTION_TARGET} points or more."
+        )
+
+    discount_amount = round(points_to_redeem * KARMA_POINT_VALUE, 2)
+    return points_to_redeem, discount_amount
+
+def add_notification(db: Session, user_id: str, title: str, message: str, type: str = "info", commit: bool = True):
+    new_notif = models.Notification(
+        id=str(uuid.uuid4()),
+        user_id=user_id,
+        title=title,
+        message=message,
+        type=type
+    )
+    db.add(new_notif)
+    if commit:
+        db.commit()
+    else:
+        db.flush()
+    return new_notif
+
+def award_karma(db: Session, user_id: str, amount: int, category: str, description: str = None, commit: bool = True):
     """Helper to award karma and track the transaction"""
+    amount = int(amount or 0)
+    if amount <= 0:
+        return None
+
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if user:
-        user.karma_points += amount
-        user.available_karma += amount
+        user.karma_points = int(user.karma_points or 0) + amount
+        user.available_karma = int(user.available_karma or 0) + amount
         transaction = models.KarmaTransaction(
             id=str(uuid.uuid4()),
             user_id=user_id,
@@ -234,7 +299,12 @@ def award_karma(db: Session, user_id: str, amount: int, category: str, descripti
             description=description
         )
         db.add(transaction)
-        db.commit()
+        if commit:
+            db.commit()
+        else:
+            db.flush()
+        return transaction
+    return None
 
 
 app = FastAPI(title="Lovedogs 360 API")
@@ -287,6 +357,10 @@ try:
                ADD COLUMN IF NOT EXISTS rejection_reason VARCHAR;""",
             """ALTER TABLE direct_messages
                ADD COLUMN IF NOT EXISTS read_at TIMESTAMP;""",
+            """ALTER TABLE orders
+               ADD COLUMN IF NOT EXISTS discount_amount DOUBLE PRECISION DEFAULT 0;""",
+            """ALTER TABLE orders
+               ADD COLUMN IF NOT EXISTS karma_points_redeemed INTEGER DEFAULT 0;""",
             """CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);""",
             """CREATE INDEX IF NOT EXISTS idx_users_auth_provider ON users(auth_provider);""",
             """CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);""",
@@ -929,6 +1003,47 @@ def mark_order_paid(db: Session, order: models.Order) -> bool:
             service.slots_available = max(service.slots_available - 1, 0)
 
     order.status = models.OrderStatus.PAID.value
+    buyer_points = calculate_karma_reward(order.amount)
+    seller_points = calculate_karma_reward(order.payout)
+    item_label = "product" if service and service.item_type == "products" else "service"
+    item_title = service.title if service else "Marketplace item"
+
+    if buyer_points:
+        award_karma(
+            db,
+            order.buyer_id,
+            buyer_points,
+            "purchase",
+            f"Purchased {item_title}",
+            commit=False
+        )
+        add_notification(
+            db,
+            order.buyer_id,
+            "Purchase confirmed",
+            f"Your {item_label} purchase '{item_title}' is confirmed. You earned {buyer_points} points.",
+            "purchase",
+            commit=False
+        )
+
+    if service and service.provider_id and seller_points:
+        award_karma(
+            db,
+            service.provider_id,
+            seller_points,
+            "sale",
+            f"Sold {item_title}",
+            commit=False
+        )
+        add_notification(
+            db,
+            service.provider_id,
+            "New sale",
+            f"Your {item_label} '{item_title}' was bought. You earned {seller_points} points and payout is now in escrow.",
+            "sale",
+            commit=False
+        )
+
     return True
 
 @app.post("/orders", response_model=schemas.OrderResponse)
@@ -960,21 +1075,39 @@ def create_order(
         if field.is_required and not provided.get(field.id):
             raise HTTPException(status_code=400, detail=f"Question '{field.label}' is required")
 
-    payout = round(service.price / 1.235, 2)
-    commission = round(service.price - payout, 2)
+    points_redeemed, discount_amount = calculate_karma_redemption(
+        current_user,
+        service.price,
+        order_data.karma_points_to_redeem or 0
+    )
+    amount_due = round(max(float(service.price or 0) - discount_amount, 1), 2)
+    payout = round(amount_due / 1.235, 2)
+    commission = round(amount_due - payout, 2)
     
     new_order = models.Order(
         id=str(uuid.uuid4()),
         buyer_id=current_user.id,
         service_id=order_data.service_id,
-        amount=service.price,
+        amount=amount_due,
         commission=commission,
         payout=payout,
+        discount_amount=discount_amount,
+        karma_points_redeemed=points_redeemed,
         status=models.OrderStatus.PENDING.value,
         share_phone=order_data.share_phone
     )
     db.add(new_order)
     db.flush()
+
+    if points_redeemed:
+        current_user.available_karma = int(current_user.available_karma or 0) - points_redeemed
+        db.add(models.KarmaTransaction(
+            id=str(uuid.uuid4()),
+            user_id=current_user.id,
+            amount=-points_redeemed,
+            category="purchase_discount",
+            description=f"Redeemed {points_redeemed} points for order discount on {service.title}"
+        ))
     
     if order_data.form_responses:
         for resp in order_data.form_responses:
@@ -1048,6 +1181,8 @@ def get_my_orders(db: Session = Depends(database.get_db), current_user: models.U
             "service_image": service.image_url if service else None,
             "provider_name": provider.full_name if provider else "Unknown",
             "amount": order.amount,
+            "discount_amount": getattr(order, "discount_amount", 0) or 0,
+            "karma_points_redeemed": getattr(order, "karma_points_redeemed", 0) or 0,
             "status": order.status,
             "created_at": str(order.created_at) if order.created_at else None
         })
@@ -1106,6 +1241,8 @@ def get_my_earnings(db: Session = Depends(database.get_db), current_user: models
             "gross_amount": order.amount,
             "commission": order.commission,
             "payout": payout,
+            "discount_amount": getattr(order, "discount_amount", 0) or 0,
+            "karma_points_redeemed": getattr(order, "karma_points_redeemed", 0) or 0,
             "order_status": order.status,
             "escrow_status": escrow_label,
             "created_at": str(order.created_at) if order.created_at else None
@@ -1774,7 +1911,7 @@ def export_data(
 
     elif type == "orders":
         orders = db.query(models.Order).all()
-        headers = ["Order ID", "Buyer ID", "Buyer Name", "Buyer Email", "Service ID", "Service Title", "Provider ID", "Provider Name", "Amount", "Paid Amount", "Commission", "Paid Commission", "Payout", "Paid Payout", "Status", "Is Paid", "Created At"]
+        headers = ["Order ID", "Buyer ID", "Buyer Name", "Buyer Email", "Service ID", "Service Title", "Provider ID", "Provider Name", "Amount", "Discount", "Points Redeemed", "Paid Amount", "Commission", "Paid Commission", "Payout", "Paid Payout", "Status", "Is Paid", "Created At"]
         ws.append(headers)
         for cell in ws[1]: cell.font = header_font
         for o in orders:
@@ -1786,10 +1923,12 @@ def export_data(
             amount = float(o.amount or 0)
             commission = float(o.commission or 0)
             payout = float(o.payout or 0)
+            discount_amount = float(getattr(o, "discount_amount", 0) or 0)
+            karma_points_redeemed = int(getattr(o, "karma_points_redeemed", 0) or 0)
             ws.append([
                 o.id, o.buyer_id, buyer.full_name if buyer else None, buyer.email if buyer else None,
                 o.service_id, service.title if service else None, service.provider_id if service else None,
-                provider.full_name if provider else None, amount, amount if paid else 0,
+                provider.full_name if provider else None, amount, discount_amount, karma_points_redeemed, amount if paid else 0,
                 commission, commission if paid else 0, payout, payout if paid else 0,
                 status_value, "Yes" if paid else "No", str(o.created_at)
             ])
@@ -2134,6 +2273,8 @@ def admin_list_orders(db: Session = Depends(database.get_db), admin: models.User
         amount = float(order.amount or 0)
         commission = float(order.commission or 0)
         payout = float(order.payout or 0)
+        discount_amount = float(getattr(order, "discount_amount", 0) or 0)
+        karma_points_redeemed = int(getattr(order, "karma_points_redeemed", 0) or 0)
         result.append({
             "id": order.id,
             "buyer_name": buyer.full_name if buyer else "Unknown",
@@ -2148,6 +2289,8 @@ def admin_list_orders(db: Session = Depends(database.get_db), admin: models.User
             "amount": amount,
             "commission": commission,
             "payout": payout,
+            "discount_amount": discount_amount,
+            "karma_points_redeemed": karma_points_redeemed,
             "paid_amount": amount if is_paid else 0,
             "paid_commission": commission if is_paid else 0,
             "paid_payout": payout if is_paid else 0,
@@ -2176,13 +2319,38 @@ def admin_complete_order(
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    if order_status_value(order.status) != models.OrderStatus.PAID.value:
+    current_status = order_status_value(order.status)
+    if current_status in {models.OrderStatus.COMPLETED.value, models.OrderStatus.SETTLED.value}:
+        return {
+            "message": "Delivery was already confirmed for this order.",
+            "status": order.status
+        }
+    if current_status != models.OrderStatus.PAID.value:
         raise HTTPException(
             status_code=400,
             detail=f"Order must be in 'paid' status to mark as completed. Current status: {order.status}"
         )
 
     order.status = models.OrderStatus.COMPLETED.value
+    service = db.query(models.Service).filter(models.Service.id == order.service_id).first()
+    item_title = service.title if service else "Marketplace item"
+    add_notification(
+        db,
+        order.buyer_id,
+        "Delivery confirmed",
+        f"Delivery has been confirmed for '{item_title}'. You can now leave a rating.",
+        "delivery",
+        commit=False
+    )
+    if service and service.provider_id:
+        add_notification(
+            db,
+            service.provider_id,
+            "Delivery confirmed",
+            f"Delivery for '{item_title}' has been confirmed. Your payout is ready for admin approval.",
+            "delivery",
+            commit=False
+        )
     db.commit()
     return {"message": "Order marked as completed. Seller payout is now ready for approval.", "status": order.status}
 
@@ -3028,6 +3196,10 @@ async def payment_status(
         "order_status": order.status,
         "payment_success": payment_success,
         "payment_status": status_res,
+        "buyer_reward_points": calculate_karma_reward(order.amount) if payment_success else 0,
+        "seller_reward_points": calculate_karma_reward(order.payout) if payment_success else 0,
+        "discount_amount": getattr(order, "discount_amount", 0) or 0,
+        "karma_points_redeemed": getattr(order, "karma_points_redeemed", 0) or 0,
     }
 
 @app.get("/pesapal/ipn")
@@ -3254,6 +3426,10 @@ def get_online_users(db: Session = Depends(database.get_db)):
 
 @app.post("/karma/redeem")
 def redeem_karma(req: schemas.KarmaRedeemRequest, db: Session = Depends(database.get_db), current_user: models.User = Depends(get_current_user)):
+    if req.amount_to_redeem < KARMA_REDEMPTION_TARGET:
+        raise HTTPException(status_code=400, detail=f"Redeem at least {KARMA_REDEMPTION_TARGET} points")
+    if current_user.available_karma < KARMA_REDEMPTION_TARGET:
+        raise HTTPException(status_code=400, detail=f"You need at least {KARMA_REDEMPTION_TARGET} points before redeeming")
     if current_user.available_karma < req.amount_to_redeem:
         raise HTTPException(status_code=400, detail="Insufficient karma points")
     
@@ -3371,16 +3547,7 @@ def get_announcements(
 # --- Personalized Notifications ---
 
 def create_notification(db: Session, user_id: str, title: str, message: str, type: str = "info"):
-    new_notif = models.Notification(
-        id=str(uuid.uuid4()),
-        user_id=user_id,
-        title=title,
-        message=message,
-        type=type
-    )
-    db.add(new_notif)
-    db.commit()
-    return new_notif
+    return add_notification(db, user_id, title, message, type, commit=True)
 
 @app.get("/notifications", response_model=List[schemas.NotificationResponse])
 def get_notifications(

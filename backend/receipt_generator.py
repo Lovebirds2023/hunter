@@ -172,6 +172,9 @@ def generate_receipt_pdf(order, service, buyer, provider):
 
     # Payment breakdown
     gross = float(order.amount or 0)
+    discount = float(getattr(order, "discount_amount", 0) or 0)
+    points_redeemed = int(getattr(order, "karma_points_redeemed", 0) or 0)
+    listing_total = gross + discount
     commission = float(order.commission or 0)
     payout = float(order.payout or 0)
 
@@ -185,11 +188,14 @@ def generate_receipt_pdf(order, service, buyer, provider):
     ]))
     story.append(pay_section)
 
-    pay_data = [
+    pay_data = [["Listing Price:", f"KES {listing_total:,.2f}"]]
+    if discount > 0:
+        pay_data.append(["Points Discount:", f"-KES {discount:,.2f} ({points_redeemed} points)"])
+    pay_data.extend([
         ["Total Charged:", f"KES {gross:,.2f}"],
         ["Platform Fee (23.5%):", f"KES {commission:,.2f}"],
         ["Provider Payout:", f"KES {payout:,.2f}"],
-    ]
+    ])
     pay_table = Table(pay_data, colWidths=[5 * cm, None])
     pay_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (0, -1), LIGHT_GRAY),
