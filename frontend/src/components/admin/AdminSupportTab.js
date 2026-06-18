@@ -7,12 +7,27 @@ import { Ionicons } from '@expo/vector-icons';
 import client from '../../api/client';
 import { adminStyles as s, ADMIN_COLORS } from './AdminStyles';
 
+const SUPPORT_FILTERS = [
+    { key: 'all', label: 'All' },
+    { key: 'open', label: 'Open' },
+    { key: 'in-progress', label: 'In-Progress' },
+    { key: 'resolved', label: 'Resolved' },
+];
+
+const getStatusKey = (status) => String(status || 'open').toLowerCase().replace('_', '-');
+const getStatusLabel = (ticket) => ticket.status || SUPPORT_FILTERS.find(f => f.key === ticket.status_key)?.label || 'Open';
+const getStatusColor = (statusKey) => {
+    if (statusKey === 'resolved') return { bg: ADMIN_COLORS.successBg, text: ADMIN_COLORS.success };
+    if (statusKey === 'in-progress') return { bg: ADMIN_COLORS.warningBg, text: ADMIN_COLORS.warning };
+    return { bg: ADMIN_COLORS.dangerBg, text: ADMIN_COLORS.danger };
+};
+
 export const AdminSupportTab = ({ onBack }) => {
     const [tickets, setTickets] = useState([]);
     const [filtered, setFiltered] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [statusFilter, setStatusFilter] = useState('All');
+    const [statusFilter, setStatusFilter] = useState('all');
     
     // Reply Modal state
     const [replyModal, setReplyModal] = useState({ visible: false, ticket: null, text: '' });
@@ -34,10 +49,10 @@ export const AdminSupportTab = ({ onBack }) => {
     useEffect(() => { fetchTickets(); }, [fetchTickets]);
 
     useEffect(() => {
-        if (statusFilter === 'All') {
+        if (statusFilter === 'all') {
             setFiltered(tickets);
         } else {
-            setFiltered(tickets.filter(t => t.status?.toLowerCase() === statusFilter.toLowerCase()));
+            setFiltered(tickets.filter(t => (t.status_key || getStatusKey(t.status)) === statusFilter));
         }
     }, [tickets, statusFilter]);
 
@@ -94,14 +109,14 @@ export const AdminSupportTab = ({ onBack }) => {
                 {/* Status Filters */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
                     <View style={s.filterRow}>
-                        {['All', 'Open', 'In-Progress', 'Resolved'].map(st => (
+                        {SUPPORT_FILTERS.map(st => (
                             <TouchableOpacity
-                                key={st}
-                                style={[s.filterChip, statusFilter === st && s.filterChipActive]}
-                                onPress={() => setStatusFilter(st)}
+                                key={st.key}
+                                style={[s.filterChip, statusFilter === st.key && s.filterChipActive]}
+                                onPress={() => setStatusFilter(st.key)}
                             >
-                                <Text style={[s.filterChipText, statusFilter === st && s.filterChipTextActive]}>
-                                    {st}
+                                <Text style={[s.filterChipText, statusFilter === st.key && s.filterChipTextActive]}>
+                                    {st.label}
                                 </Text>
                             </TouchableOpacity>
                         ))}
@@ -123,14 +138,17 @@ export const AdminSupportTab = ({ onBack }) => {
                             <Text style={s.emptyText}>No support tickets found</Text>
                         </View>
                     }
-                    renderItem={({ item }) => (
+                    renderItem={({ item }) => {
+                        const statusKey = item.status_key || getStatusKey(item.status);
+                        const statusColor = getStatusColor(statusKey);
+                        return (
                         <View style={s.listCard}>
                             <View style={s.listCardHeader}>
                                 <View style={{ flex: 1 }}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                         <Text style={s.listCardTitle}>{item.subject || 'No Subject'}</Text>
-                                        <View style={[s.badge, { marginLeft: 8, backgroundColor: item.status === 'Open' ? ADMIN_COLORS.dangerBg : (item.status === 'Resolved' ? ADMIN_COLORS.successBg : ADMIN_COLORS.warningBg) }]}>
-                                            <Text style={[s.badgeText, { color: item.status === 'Open' ? ADMIN_COLORS.danger : (item.status === 'Resolved' ? ADMIN_COLORS.success : ADMIN_COLORS.warning) }]}>{item.status}</Text>
+                                        <View style={[s.badge, { marginLeft: 8, backgroundColor: statusColor.bg }]}>
+                                            <Text style={[s.badgeText, { color: statusColor.text }]}>{getStatusLabel(item)}</Text>
                                         </View>
                                     </View>
                                     <Text style={s.listCardSub}>From: {item.user_name} • {new Date(item.created_at).toLocaleString()}</Text>
@@ -149,7 +167,7 @@ export const AdminSupportTab = ({ onBack }) => {
                                     <Ionicons name="arrow-undo-outline" size={14} color={ADMIN_COLORS.info} />
                                     <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>Reply</Text>
                                 </TouchableOpacity>
-                                {item.status !== 'Resolved' && (
+                                {statusKey !== 'resolved' && (
                                     <TouchableOpacity 
                                         style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.successBg }]}
                                         onPress={() => handleResolve(item.id)}
@@ -160,7 +178,7 @@ export const AdminSupportTab = ({ onBack }) => {
                                 )}
                             </View>
                         </View>
-                    )}
+                    );}}
                 />
             )}
 

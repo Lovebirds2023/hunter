@@ -48,7 +48,7 @@ export default function AdminDashboardScreen() {
             const data = res.data;
             // Add composite counts
             data.total_pending = (data.pending_services || 0) + (data.pending_reports || 0);
-            data.pending_orders = data.orders_by_status?.pending || data.orders_by_status?.PENDING || 0;
+            data.pending_orders = data.pending_orders || data.orders_by_status?.pending || data.orders_by_status?.PENDING || 0;
             setStats(data);
         } catch (e) {
             console.error('Quick stats fetch error:', e);
@@ -133,6 +133,9 @@ export default function AdminDashboardScreen() {
                     <View>
                         <Text style={[s.sectionTitle, { fontSize: 16, color: ADMIN_COLORS.accent }]}>Live Platform Pulse</Text>
                         <Text style={{ color: ADMIN_COLORS.textSecondary, fontSize: 12, marginTop: 4 }}>
+                            {stats?.total_paid_orders || 0} paid orders | {stats?.pending_orders || 0} awaiting payment
+                        </Text>
+                        <Text style={{ color: ADMIN_COLORS.textSecondary, fontSize: 12, marginTop: 4 }}>
                             {stats?.total_users || 0} Users • KES {(stats?.total_revenue || 0).toLocaleString()} Revenue
                         </Text>
                     </View>
@@ -147,9 +150,9 @@ export default function AdminDashboardScreen() {
                         </Text>
                     </View>
                     <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.04)', padding: 10, borderRadius: 12 }}>
-                        <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 10 }}>NEW ORDERS (30d)</Text>
+                        <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 10 }}>PAID ORDERS (30d)</Text>
                         <Text style={{ color: ADMIN_COLORS.success, fontSize: 18, fontWeight: '800', marginTop: 2 }}>
-                            +{stats?.new_orders_30d || 0}
+                            +{stats?.new_paid_orders_30d || 0}
                         </Text>
                     </View>
                 </View>

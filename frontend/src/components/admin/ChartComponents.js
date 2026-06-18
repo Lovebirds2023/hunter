@@ -49,7 +49,7 @@ export const RevenueBarChart = ({ data = [] }) => {
                             <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2 }}>
                                 <View style={{
                                     width: barWidth * 0.45,
-                                    height: Math.max(3, revHeight),
+                                    height: item.revenue > 0 ? Math.max(3, revHeight) : 0,
                                     backgroundColor: ADMIN_COLORS.chart2,
                                     borderRadius: 4,
                                     borderBottomLeftRadius: 0,
@@ -57,7 +57,7 @@ export const RevenueBarChart = ({ data = [] }) => {
                                 }} />
                                 <View style={{
                                     width: barWidth * 0.45,
-                                    height: Math.max(3, commHeight),
+                                    height: item.commission > 0 ? Math.max(3, commHeight) : 0,
                                     backgroundColor: ADMIN_COLORS.accent,
                                     borderRadius: 4,
                                     borderBottomLeftRadius: 0,
@@ -94,13 +94,14 @@ export const RevenueBarChart = ({ data = [] }) => {
 /* ─── Horizontal Distribution Bar ─── */
 export const DistributionBar = ({ segments = [], total = 0, height = 8 }) => {
     if (!total) return null;
+    const visibleSegments = segments.filter(seg => (seg.value || 0) > 0);
     return (
         <View style={{ flexDirection: 'row', height, borderRadius: height / 2, overflow: 'hidden', backgroundColor: ADMIN_COLORS.surfaceLight }}>
-            {segments.map((seg, i) => (
+            {visibleSegments.map((seg, i) => (
                 <View
                     key={i}
                     style={{
-                        width: `${Math.max(2, (seg.value / total) * 100)}%`,
+                        width: `${(seg.value / total) * 100}%`,
                         backgroundColor: seg.color,
                         height,
                     }}

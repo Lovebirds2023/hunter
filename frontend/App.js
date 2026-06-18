@@ -94,7 +94,7 @@ const linking = {
                     Profile: 'profile',
                 },
             },
-            OrderReceipt: 'receipt/:orderId',
+            OrderReceipt: 'receipt/:orderId?',
             CreateService: 'create-service',
             DogRegistration: 'dog-registration',
             LostFound: 'lost-found',

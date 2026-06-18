@@ -146,12 +146,21 @@ export const SupportScreen = ({ navigation }) => {
         }
     };
 
-    const renderTicket = ({ item }) => (
+    const getTicketStatusColor = (status) => {
+        const key = String(status || 'open').toLowerCase().replace('_', '-');
+        if (key === 'resolved') return { bg: '#D4EDDA', text: '#155724' };
+        if (key === 'in-progress') return { bg: '#FFF3CD', text: '#856404' };
+        return { bg: '#F8D7DA', text: '#721C24' };
+    };
+
+    const renderTicket = ({ item }) => {
+        const statusColor = getTicketStatusColor(item.status);
+        return (
         <View style={styles.ticketCard}>
             <View style={styles.ticketHeader}>
                 <Text style={styles.ticketSubject} numberOfLines={1}>{item.subject}</Text>
-                <View style={[styles.statusBadge, { backgroundColor: item.status === 'open' ? '#FFF3CD' : '#D4EDDA' }]}>
-                    <Text style={[styles.statusText, { color: item.status === 'open' ? '#856404' : '#155724' }]}>
+                <View style={[styles.statusBadge, { backgroundColor: statusColor.bg }]}>
+                    <Text style={[styles.statusText, { color: statusColor.text }]}>
                         {item.status.toUpperCase()}
                     </Text>
                 </View>
@@ -175,7 +184,7 @@ export const SupportScreen = ({ navigation }) => {
             
             <Text style={styles.ticketDate}>{new Date(item.created_at).toLocaleDateString()}</Text>
         </View>
-    );
+    );};
 
     return (
         <SafeAreaView style={styles.container}>

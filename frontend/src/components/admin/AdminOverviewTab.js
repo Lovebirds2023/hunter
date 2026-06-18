@@ -159,7 +159,7 @@ export const AdminOverviewTab = ({ onNavigate, onBack }) => {
 
     // Compute trends
     const userTrend = calcTrend(data.new_users_30d, data.new_users_prev_30d);
-    const orderTrend = calcTrend(data.new_orders_30d, data.new_orders_prev_30d);
+    const orderTrend = calcTrend(data.new_paid_orders_30d, data.new_paid_orders_prev_30d);
     const revenueTrend = calcTrend(data.revenue_30d, data.revenue_prev_30d);
 
     // Build attention alerts
@@ -171,11 +171,27 @@ export const AdminOverviewTab = ({ onNavigate, onBack }) => {
     if (data.open_cases > 0) alerts.push({ icon: 'alert-circle-outline', text: `${data.open_cases} active case(s)` });
 
     // Role distribution data
-    const roleItems = [
-        { label: 'Buyers', value: data.users_by_role?.buyer || 0, color: ADMIN_COLORS.chart1 },
-        { label: 'Providers', value: data.users_by_role?.provider || 0, color: ADMIN_COLORS.chart2 },
-        { label: 'Admins', value: data.users_by_role?.admin || 0, color: ADMIN_COLORS.accent },
-    ];
+    const roleColors = {
+        buyer: ADMIN_COLORS.chart1,
+        provider: ADMIN_COLORS.chart2,
+        admin: ADMIN_COLORS.accent,
+        super_admin: ADMIN_COLORS.warning,
+        suspended: ADMIN_COLORS.danger,
+    };
+    const roleLabels = {
+        buyer: 'Buyers',
+        provider: 'Providers',
+        admin: 'Admins',
+        super_admin: 'Super Admins',
+        suspended: 'Suspended',
+    };
+    const roleItems = Object.entries(data.users_by_role || {})
+        .map(([role, value], index) => ({
+            label: roleLabels[role] || role,
+            value,
+            color: roleColors[role] || [ADMIN_COLORS.chart3, ADMIN_COLORS.chart4, ADMIN_COLORS.chart5][index % 3],
+        }))
+        .filter(item => item.value > 0);
 
     // Order status data
     const orderItems = [
@@ -210,8 +226,8 @@ export const AdminOverviewTab = ({ onNavigate, onBack }) => {
                 />
                 <KPICard
                     icon="cart"
-                    label="Total Orders"
-                    value={data.total_orders}
+                    label="Paid Orders"
+                    value={data.total_paid_orders || 0}
                     trend={orderTrend?.value}
                     trendUp={orderTrend?.up}
                     color={ADMIN_COLORS.chart2}
@@ -314,7 +330,7 @@ export const AdminOverviewTab = ({ onNavigate, onBack }) => {
                                         {svc.title}
                                     </Text>
                                     <Text style={{ fontSize: 11, color: ADMIN_COLORS.textMuted, marginTop: 1 }}>
-                                        {svc.order_count} orders
+                                        {svc.order_count} paid orders
                                     </Text>
                                 </View>
                                 <Text style={{ fontSize: 14, fontWeight: '700', color: ADMIN_COLORS.success }}>

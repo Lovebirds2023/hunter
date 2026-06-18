@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 
+REQUEST_TIMEOUT = 15
+
 class PesapalAPI:
     def __init__(self):
         self.consumer_key = os.getenv("PESAPAL_CONSUMER_KEY")
@@ -25,10 +27,13 @@ class PesapalAPI:
             "consumer_key": self.consumer_key,
             "consumer_secret": self.consumer_secret
         }
-        response = requests.post(url, json=payload)
-        if response.status_code == 200:
-            self.token = response.json().get("token")
-            return self.token
+        try:
+            response = requests.post(url, json=payload, timeout=REQUEST_TIMEOUT)
+            if response.status_code == 200:
+                self.token = response.json().get("token")
+                return self.token
+        except requests.RequestException:
+            return None
         return None
 
     def register_ipn(self, ipn_url):
@@ -44,8 +49,13 @@ class PesapalAPI:
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json"
         }
-        response = requests.post(url, json=payload, headers=headers)
-        return response.json()
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=REQUEST_TIMEOUT)
+            return response.json()
+        except requests.RequestException as exc:
+            return {"error": f"Pesapal IPN registration failed: {exc}"}
+        except ValueError:
+            return {"error": "Pesapal returned an invalid IPN response"}
 
     def submit_order(self, order_id, amount, description, email, phone, callback_url, ipn_id):
         if not self.token:
@@ -72,8 +82,13 @@ class PesapalAPI:
             "Accept": "application/json",
             "Content-Type": "application/json"
         }
-        response = requests.post(url, json=payload, headers=headers)
-        return response.json()
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=REQUEST_TIMEOUT)
+            return response.json()
+        except requests.RequestException as exc:
+            return {"error": f"Pesapal order submission failed: {exc}"}
+        except ValueError:
+            return {"error": "Pesapal returned an invalid checkout response"}
 
     def get_transaction_status(self, tracking_id):
         if not self.token:
@@ -85,5 +100,10 @@ class PesapalAPI:
             "Accept": "application/json",
             "Content-Type": "application/json"
         }
-        response = requests.get(url, headers=headers)
-        return response.json()
+        try:
+            response = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
+            return response.json()
+        except requests.RequestException as exc:
+            return {"error": f"Pesapal status check failed: {exc}"}
+        except ValueError:
+            return {"error": "Pesapal returned an invalid status response"}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, SafeAreaView, ScrollView, ActivityIndicator, Alert, TextInput, Dimensions, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, SafeAreaView, ScrollView, Alert, TextInput, Dimensions, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -53,7 +53,6 @@ export const MarketplaceScreen = ({ navigation }: any) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [services, setServices] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [orderLoading, setOrderLoading] = useState<string | null>(null);
     const [userId, setUserId] = useState<string | null>(null);
     const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
     const [showMap, setShowMap] = useState(false);
@@ -157,34 +156,20 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                 ? t('marketplace.left_count', { count: remainingCount })
                 : t('marketplace.slots_left', { count: remainingCount });
 
-        const handleBookPress = async () => {
+        const handleBookPress = (event?: any) => {
+            event?.stopPropagation?.();
             if (isUnavailable) {
                 Alert.alert(t('marketplace.unavailable'), t('marketplace.unavailable_msg'));
                 return;
             }
-            setOrderLoading(item.id);
-            try {
-                const orderRes = await client.post('/orders', { service_id: item.id, share_phone: false });
-                navigation.navigate('OrderReceipt', { orderId: orderRes.data.id, service: item });
-            } catch (e: any) {
-                const detail = e?.response?.data?.detail || t('marketplace.order_create_error');
-                Alert.alert(t('common.error'), typeof detail === 'string' ? detail : JSON.stringify(detail));
-            } finally {
-                setOrderLoading(null);
-            }
+            navigation.navigate('OrderReceipt', { service: item });
         };
 
         return (
             <TouchableOpacity
                 style={[styles.card, isClosest && styles.closestCard, isUnavailable && { opacity: 0.5 }]}
                 onPress={handleBookPress}
-                disabled={orderLoading === item.id}
             >
-                {orderLoading === item.id && (
-                    <View style={styles.cardLoadingOverlay}>
-                        <ActivityIndicator color={COLORS.primary} />
-                    </View>
-                )}
                 <View style={styles.cardTop}>
                     {item.image_url ? (
                         <Image source={{ uri: item.image_url }} style={styles.cardImage} />
@@ -265,7 +250,6 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                         <TouchableOpacity
                             style={[styles.actionBtn, isUnavailable && { backgroundColor: '#ddd' }]}
                             onPress={handleBookPress}
-                            disabled={orderLoading === item.id}
                         >
                             <Text style={[styles.actionBtnText, isUnavailable && { color: '#888' }]}>
                                 {isUnavailable ? t('marketplace.unavailable') : (item.item_type === 'products' ? t('marketplace.actions.buy_now') : t('marketplace.actions.book_now'))}
@@ -400,7 +384,7 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                                         title={item.title}
                                         description={t('marketplace.map_description', { price: item.price, distance: item.distance || '' })}
                                     >
-                                        <Callout onPress={() => navigation.navigate('OrderReceipt', { orderId: 'MOCK-' + item.id, service: item })}>
+                                        <Callout onPress={() => navigation.navigate('OrderReceipt', { service: item })}>
                                             <View style={styles.callout}>
                                                 <Text style={styles.calloutTitle}>{item.title}</Text>
                                                 <Text style={styles.calloutPrice}>${item.price}</Text>
@@ -754,14 +738,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         borderWidth: 2,
         borderColor: COLORS.accent,
-    },
-    cardLoadingOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(255,255,255,0.6)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 10,
-        borderRadius: 16,
     },
     emptyContainer: {
         alignItems: 'center',

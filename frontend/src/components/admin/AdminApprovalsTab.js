@@ -60,6 +60,11 @@ export const AdminApprovalsTab = ({ onBack }) => {
             <View style={s.listCardHeader}>
                 <View style={{ flex: 1 }}>
                     <Text style={s.listCardTitle}>{item.title}</Text>
+                    <Text style={{ fontSize: 11, color: ADMIN_COLORS.textMuted, marginTop: 4 }}>
+                        {item.item_type === 'products'
+                            ? `Stock: ${item.stock_count ?? 'Unlimited'}`
+                            : `Slots: ${item.slots_available ?? 'Unlimited'}`}
+                    </Text>
                     <Text style={s.listCardSub}>Provider: {item.provider_name} • KES {item.price}</Text>
                     <Text style={{ fontSize: 11, color: ADMIN_COLORS.textMuted, marginTop: 4 }}>Category: {item.category} • Type: {item.item_type}</Text>
                 </View>

@@ -50,17 +50,20 @@ export const AdminOrdersTab = ({ onBack }) => {
         if (search.trim()) {
             const q = search.toLowerCase();
             result = result.filter(o =>
+                o.id?.toLowerCase().includes(q) ||
+                o.buyer_email?.toLowerCase().includes(q) ||
                 o.buyer_name?.toLowerCase().includes(q) ||
                 o.provider_name?.toLowerCase().includes(q) ||
-                o.service_title?.toLowerCase().includes(q)
+                o.service_title?.toLowerCase().includes(q) ||
+                o.service_id?.toLowerCase().includes(q)
             );
         }
         setFiltered(result);
     }, [orders, search, statusFilter]);
 
-    const totalRevenue = filtered.reduce((sum, o) => sum + (o.amount || 0), 0);
-    const totalCommission = filtered.reduce((sum, o) => sum + (o.commission || 0), 0);
-    const totalPayout = filtered.reduce((sum, o) => sum + (o.payout || 0), 0);
+    const paidRevenue = filtered.reduce((sum, o) => sum + (o.paid_amount || 0), 0);
+    const paidCommission = filtered.reduce((sum, o) => sum + (o.paid_commission || 0), 0);
+    const paidPayout = filtered.reduce((sum, o) => sum + (o.paid_payout || 0), 0);
 
     const handleCompleteOrder = async (orderId) => {
         Alert.alert(
@@ -143,16 +146,16 @@ export const AdminOrdersTab = ({ onBack }) => {
                 {/* Financials summary */}
                 <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
                     <View style={[s.card, { flex: 1, alignItems: 'center', paddingVertical: 10, marginBottom: 4 }]}>
-                        <Text style={{ fontSize: 14, fontWeight: '800', color: ADMIN_COLORS.success }}>KES {totalRevenue.toLocaleString()}</Text>
-                        <Text style={{ fontSize: 9, color: ADMIN_COLORS.textMuted }}>Revenue</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: ADMIN_COLORS.success }}>KES {paidRevenue.toLocaleString()}</Text>
+                        <Text style={{ fontSize: 9, color: ADMIN_COLORS.textMuted }}>Paid Revenue</Text>
                     </View>
                     <View style={[s.card, { flex: 1, alignItems: 'center', paddingVertical: 10, marginBottom: 4 }]}>
-                        <Text style={{ fontSize: 14, fontWeight: '800', color: ADMIN_COLORS.accent }}>KES {totalCommission.toLocaleString()}</Text>
-                        <Text style={{ fontSize: 9, color: ADMIN_COLORS.textMuted }}>Commission</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: ADMIN_COLORS.accent }}>KES {paidCommission.toLocaleString()}</Text>
+                        <Text style={{ fontSize: 9, color: ADMIN_COLORS.textMuted }}>Paid Commission</Text>
                     </View>
                     <View style={[s.card, { flex: 1, alignItems: 'center', paddingVertical: 10, marginBottom: 4 }]}>
-                        <Text style={{ fontSize: 14, fontWeight: '800', color: ADMIN_COLORS.chart5 }}>KES {totalPayout.toLocaleString()}</Text>
-                        <Text style={{ fontSize: 9, color: ADMIN_COLORS.textMuted }}>Seller Payouts</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: ADMIN_COLORS.chart5 }}>KES {paidPayout.toLocaleString()}</Text>
+                        <Text style={{ fontSize: 9, color: ADMIN_COLORS.textMuted }}>Paid Payouts</Text>
                     </View>
                 </View>
 
@@ -231,16 +234,16 @@ export const AdminOrdersTab = ({ onBack }) => {
                                 {/* Financial Breakdown */}
                                 <View style={s.financialRow}>
                                     <View style={s.financialItem}>
-                                        <Text style={s.financialLabel}>Total Paid</Text>
-                                        <Text style={s.financialValue}>KES {item.amount}</Text>
+                                        <Text style={s.financialLabel}>{item.is_paid ? 'Total Paid' : 'Order Amount'}</Text>
+                                        <Text style={s.financialValue}>KES {(item.is_paid ? item.paid_amount : item.amount || 0).toLocaleString()}</Text>
                                     </View>
                                     <View style={s.financialItem}>
                                         <Text style={s.financialLabel}>Commission (23.5%)</Text>
-                                        <Text style={[s.financialValue, { color: ADMIN_COLORS.accent }]}>KES {item.commission}</Text>
+                                        <Text style={[s.financialValue, { color: ADMIN_COLORS.accent }]}>KES {(item.paid_commission || 0).toLocaleString()}</Text>
                                     </View>
                                     <View style={s.financialItem}>
                                         <Text style={s.financialLabel}>Seller Payout</Text>
-                                        <Text style={[s.financialValue, { color: ADMIN_COLORS.success }]}>KES {item.payout}</Text>
+                                        <Text style={[s.financialValue, { color: ADMIN_COLORS.success }]}>KES {(item.paid_payout || 0).toLocaleString()}</Text>
                                     </View>
                                 </View>
 

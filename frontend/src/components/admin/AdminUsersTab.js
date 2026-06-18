@@ -7,12 +7,13 @@ import { Ionicons } from '@expo/vector-icons';
 import client from '../../api/client';
 import { adminStyles as s, ADMIN_COLORS } from './AdminStyles';
 
-const ROLE_FILTERS = ['All', 'buyer', 'provider', 'admin'];
+const ROLE_FILTERS = ['All', 'buyer', 'provider', 'admin', 'super_admin', 'suspended'];
 const ROLE_COLORS = {
     admin: ADMIN_COLORS.danger,
     provider: ADMIN_COLORS.chart1,
     buyer: ADMIN_COLORS.success,
     super_admin: ADMIN_COLORS.accent,
+    suspended: ADMIN_COLORS.textMuted,
 };
 
 export const AdminUsersTab = ({ onBack }) => {
@@ -46,6 +47,7 @@ export const AdminUsersTab = ({ onBack }) => {
             result = result.filter(u =>
                 u.full_name?.toLowerCase().includes(q) ||
                 u.email?.toLowerCase().includes(q) ||
+                u.id?.toLowerCase().includes(q) ||
                 u.phone_number?.includes(q)
             );
         }
@@ -155,7 +157,18 @@ export const AdminUsersTab = ({ onBack }) => {
                                     <Text style={{ fontSize: 12, color: ADMIN_COLORS.textSecondary, marginLeft: 6 }}>{item.phone_number}</Text>
                                 </View>
                             )}
-                            {item.role !== 'admin' && (
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 }}>
+                                <Text style={{ fontSize: 11, color: ADMIN_COLORS.textMuted }}>Dogs: {item.dog_count || 0}</Text>
+                                <Text style={{ fontSize: 11, color: ADMIN_COLORS.textMuted }}>Listings: {item.listing_count || 0}</Text>
+                                <Text style={{ fontSize: 11, color: ADMIN_COLORS.textMuted }}>Orders: {item.order_count || 0}</Text>
+                                <Text style={{ fontSize: 11, color: ADMIN_COLORS.textMuted }}>Paid: {item.paid_order_count || 0}</Text>
+                            </View>
+                            {item.created_at && (
+                                <Text style={{ fontSize: 11, color: ADMIN_COLORS.textMuted, marginTop: 6 }}>
+                                    Joined {new Date(item.created_at).toLocaleDateString()}
+                                </Text>
+                            )}
+                            {!['admin', 'super_admin', 'suspended'].includes(item.role) && (
                                 <View style={s.actionRow}>
                                     <TouchableOpacity 
                                         style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.dangerBg }]}

@@ -68,7 +68,7 @@ export const AuthProvider = ({ children }) => {
             });
             await setAppLanguage(userRes.data.language || 'en');
             setUserInfo(userRes.data);
-            setIsAdmin(userRes.data.role === 'admin');
+            setIsAdmin(userRes.data.role === 'admin' || userRes.data.role === 'super_admin');
             await Storage.setItemAsync('userInfo', JSON.stringify(userRes.data));
             return true;
 
@@ -93,7 +93,7 @@ export const AuthProvider = ({ children }) => {
             await setAppLanguage(user.language || 'en');
             setUserToken(access_token);
             setUserInfo(user);
-            setIsAdmin(user.role === 'admin');
+            setIsAdmin(user.role === 'admin' || user.role === 'super_admin');
             
             await Storage.setItemAsync('userToken', access_token);
             await Storage.setItemAsync('userInfo', JSON.stringify(user));
@@ -227,14 +227,14 @@ export const AuthProvider = ({ children }) => {
                     const parsedInfo = JSON.parse(userInfoStr);
                     await setAppLanguage(parsedInfo.language || 'en');
                     setUserInfo(parsedInfo);
-                    setIsAdmin(parsedInfo.role === 'admin');
+                    setIsAdmin(parsedInfo.role === 'admin' || parsedInfo.role === 'super_admin');
                 }
 
                 // Refresh user info in background
                 client.get('/users/me').then(async res => {
                     await setAppLanguage(res.data.language || 'en');
                     setUserInfo(res.data);
-                    setIsAdmin(res.data.role === 'admin');
+                    setIsAdmin(res.data.role === 'admin' || res.data.role === 'super_admin');
                     Storage.setItemAsync('userInfo', JSON.stringify(res.data));
                 }).catch(e => { if (__DEV__) console.log("Failed to refresh user info", e); });
             }

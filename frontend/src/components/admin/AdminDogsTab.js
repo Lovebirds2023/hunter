@@ -94,7 +94,7 @@ export const AdminDogsTab = ({ onBack }) => {
                                     <View style={{ height: 6, backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 3, overflow: 'hidden' }}>
                                         <View style={{ 
                                             height: '100%', 
-                                            width: `${(count / dogs.length) * 100}%`, 
+                                            width: `${dogs.length > 0 ? (count / dogs.length) * 100 : 0}%`,
                                             backgroundColor: i === 0 ? ADMIN_COLORS.accent : ADMIN_COLORS.chart1,
                                             borderRadius: 3 
                                         }} />

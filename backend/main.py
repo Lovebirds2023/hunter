@@ -863,7 +863,44 @@ PAID_ORDER_STATES = {
 def order_status_value(status):
     if hasattr(status, "value"):
         return status.value
-    return str(status or "").lower()
+    raw = str(status or "").strip()
+    if "." in raw:
+        raw = raw.rsplit(".", 1)[-1]
+    return raw.lower()
+
+def order_status_filter_values(*statuses):
+    values = set()
+    for status in statuses:
+        value = order_status_value(status)
+        if not value:
+            continue
+        values.add(value)
+        values.add(value.upper())
+        values.add(f"OrderStatus.{value.upper()}")
+    return list(values)
+
+PAID_ORDER_STATUS_VALUES = order_status_filter_values(
+    models.OrderStatus.PAID,
+    models.OrderStatus.COMPLETED,
+    models.OrderStatus.SETTLED,
+)
+PENDING_ORDER_STATUS_VALUES = order_status_filter_values(models.OrderStatus.PENDING)
+
+def support_status_key(status):
+    raw = str(status or "open").strip().lower().replace("_", "-")
+    if raw in {"in progress", "in-progress", "inprogress"}:
+        return "in-progress"
+    if raw == "resolved":
+        return "resolved"
+    return "open"
+
+def support_status_label(status):
+    labels = {
+        "open": "Open",
+        "in-progress": "In-Progress",
+        "resolved": "Resolved",
+    }
+    return labels.get(support_status_key(status), "Open")
 
 def is_order_paid(order: models.Order) -> bool:
     return order_status_value(order.status) in PAID_ORDER_STATES
@@ -1027,10 +1064,9 @@ def get_my_earnings(db: Session = Depends(database.get_db), current_user: models
         return {"wallet": {"total_earned": 0, "in_escrow": 0, "available": 0, "settled": 0}, "earnings": []}
 
     # Get all orders for those services that have been paid or beyond
-    paid_statuses = [models.OrderStatus.PAID, models.OrderStatus.COMPLETED, models.OrderStatus.SETTLED]
     orders = db.query(models.Order).filter(
         models.Order.service_id.in_(service_ids),
-        models.Order.status.in_(paid_statuses)
+        models.Order.status.in_(PAID_ORDER_STATUS_VALUES)
     ).order_by(models.Order.created_at.desc()).all()
 
     earnings = []
@@ -1043,7 +1079,7 @@ def get_my_earnings(db: Session = Depends(database.get_db), current_user: models
         service = db.query(models.Service).filter(models.Service.id == order.service_id).first()
         buyer = db.query(models.User).filter(models.User.id == order.buyer_id).first()
         payout = order.payout or 0
-        status_lower = (order.status or "").lower()
+        status_lower = order_status_value(order.status)
 
         total_earned += payout
 
@@ -1670,7 +1706,7 @@ def export_data(
     current_user: models.User = Depends(get_current_user)
 ):
     # Expanded Access: Allow Admins AND Partners/Providers (if authorized)
-    if current_user.role not in [models.UserRole.ADMIN, models.UserRole.PROVIDER]:
+    if current_user.role not in [models.UserRole.ADMIN.value, models.UserRole.SUPER_ADMIN.value, models.UserRole.PROVIDER.value]:
         raise HTTPException(status_code=403, detail="Not authorized")
         
     # Create Workbook
@@ -1687,68 +1723,129 @@ def export_data(
             query = query.filter(models.Registration.event_id == event_id)
         
         registrations = query.all()
-        headers = ["Registration ID", "Event ID", "User ID", "Dog ID", "Status", "Role", "Check-in Time", "Created At"]
+        headers = ["Registration ID", "Event ID", "Event Title", "User ID", "User Name", "User Email", "Dog ID", "Dog Name", "Status", "Role", "Check-in Time", "Created At"]
         ws.append(headers)
         for cell in ws[1]: cell.font = header_font
         
         for reg in registrations:
-            ws.append([reg.id, reg.event_id, reg.user_id, reg.dog_id, reg.status, reg.role, str(reg.check_in_time), str(reg.created_at)])
+            event = db.query(models.Event).filter(models.Event.id == reg.event_id).first()
+            user = db.query(models.User).filter(models.User.id == reg.user_id).first()
+            dog = db.query(models.Dog).filter(models.Dog.id == reg.dog_id).first() if reg.dog_id else None
+            ws.append([
+                reg.id, reg.event_id, event.title if event else None,
+                reg.user_id, user.full_name if user else None, user.email if user else None,
+                reg.dog_id, dog.name if dog else None,
+                reg.status, reg.role, str(reg.check_in_time), str(reg.created_at)
+            ])
             
     elif type == "events":
         events = db.query(models.Event).all()
-        headers = ["Event ID", "Title", "Date", "Location", "Organizer ID", "Category"]
+        headers = ["Event ID", "Title", "Date", "Location", "Organizer ID", "Organizer Name", "Organizer Email", "Category", "Registrations", "Check-ins"]
         ws.append(headers)
         for cell in ws[1]: cell.font = header_font
         for ev in events:
-            ws.append([ev.id, ev.title, str(ev.start_time), ev.location, ev.organizer_id, ev.category])
+            organizer = db.query(models.User).filter(models.User.id == ev.organizer_id).first()
+            registrations = db.query(models.Registration).filter(models.Registration.event_id == ev.id).count()
+            checkins = db.query(models.Registration).filter(models.Registration.event_id == ev.id, models.Registration.status == "checked-in").count()
+            ws.append([
+                ev.id, ev.title, str(ev.start_time), ev.location, ev.organizer_id,
+                organizer.full_name if organizer else None, organizer.email if organizer else None,
+                ev.category, registrations, checkins
+            ])
 
     elif type == "users":
         users = db.query(models.User).all()
-        headers = ["User ID", "Full Name", "Email", "Role", "Phone", "Country", "Created At"]
+        headers = ["User ID", "Full Name", "Email", "Role", "Phone", "Country", "Dogs", "Listings", "Orders", "Paid Orders", "Average Rating", "Total Ratings", "Created At"]
         ws.append(headers)
         for cell in ws[1]: cell.font = header_font
         for u in users:
-            ws.append([u.id, u.full_name, u.email, u.role, u.phone_number, u.country, str(u.created_at)])
+            dog_count = db.query(models.Dog).filter(models.Dog.owner_id == u.id).count()
+            listing_count = db.query(models.Service).filter(models.Service.provider_id == u.id).count()
+            order_count = db.query(models.Order).filter(models.Order.buyer_id == u.id).count()
+            paid_order_count = db.query(models.Order).filter(
+                models.Order.buyer_id == u.id,
+                models.Order.status.in_(PAID_ORDER_STATUS_VALUES),
+            ).count()
+            ws.append([
+                u.id, u.full_name, u.email, u.role, u.phone_number, u.country,
+                dog_count, listing_count, order_count, paid_order_count,
+                u.average_rating or 0, u.total_ratings or 0, str(u.created_at)
+            ])
 
     elif type == "orders":
         orders = db.query(models.Order).all()
-        headers = ["Order ID", "Buyer ID", "Service ID", "Amount", "Commission", "Payout", "Status", "Created At"]
+        headers = ["Order ID", "Buyer ID", "Buyer Name", "Buyer Email", "Service ID", "Service Title", "Provider ID", "Provider Name", "Amount", "Paid Amount", "Commission", "Paid Commission", "Payout", "Paid Payout", "Status", "Is Paid", "Created At"]
         ws.append(headers)
         for cell in ws[1]: cell.font = header_font
         for o in orders:
-            ws.append([o.id, o.buyer_id, o.service_id, o.amount, o.commission, o.payout, o.status, str(o.created_at)])
+            buyer = db.query(models.User).filter(models.User.id == o.buyer_id).first()
+            service = db.query(models.Service).filter(models.Service.id == o.service_id).first()
+            provider = db.query(models.User).filter(models.User.id == service.provider_id).first() if service else None
+            status_value = order_status_value(o.status)
+            paid = status_value in PAID_ORDER_STATES
+            amount = float(o.amount or 0)
+            commission = float(o.commission or 0)
+            payout = float(o.payout or 0)
+            ws.append([
+                o.id, o.buyer_id, buyer.full_name if buyer else None, buyer.email if buyer else None,
+                o.service_id, service.title if service else None, service.provider_id if service else None,
+                provider.full_name if provider else None, amount, amount if paid else 0,
+                commission, commission if paid else 0, payout, payout if paid else 0,
+                status_value, "Yes" if paid else "No", str(o.created_at)
+            ])
 
     elif type == "dogs":
         dogs = db.query(models.Dog).all()
-        headers = ["Dog ID", "Name", "Breed", "Owner ID", "Age", "Nose-PID", "Created At"]
+        headers = ["Dog ID", "Name", "Breed", "Owner ID", "Owner Name", "Owner Email", "Age", "Health Records", "Nose-PID", "Created At"]
         ws.append(headers)
         for cell in ws[1]: cell.font = header_font
         for d in dogs:
-            ws.append([d.id, d.name, d.breed, d.owner_id, d.age, "Yes" if d.nose_print_image else "No", str(d.created_at) if hasattr(d, 'created_at') else "N/A"])
+            owner = db.query(models.User).filter(models.User.id == d.owner_id).first()
+            health_records = db.query(models.HealthRecord).filter(models.HealthRecord.dog_id == d.id).count()
+            ws.append([
+                d.id, d.name, d.breed, d.owner_id, owner.full_name if owner else None,
+                owner.email if owner else None, d.age, health_records,
+                "Yes" if d.nose_print_descriptor or d.nose_print_image else "No",
+                str(d.created_at) if hasattr(d, 'created_at') else "N/A"
+            ])
 
     elif type == "cases":
         cases = db.query(models.CaseReport).all()
-        headers = ["Case ID", "Title", "Type", "Status", "Author ID", "Approved", "Created At"]
+        headers = ["Case ID", "Title", "Type", "Status", "Author ID", "Author Name", "Author Email", "Approved", "Rejection Reason", "Created At"]
         ws.append(headers)
         for cell in ws[1]: cell.font = header_font
         for c in cases:
-            ws.append([c.id, c.title, c.case_type, c.status, c.author_id, "Yes" if c.is_approved else "No", str(c.created_at)])
+            author = db.query(models.User).filter(models.User.id == c.author_id).first()
+            ws.append([
+                c.id, c.title, c.case_type, c.status, c.author_id,
+                author.full_name if author else None, author.email if author else None,
+                "Yes" if c.is_approved else "No", c.rejection_reason, str(c.created_at)
+            ])
 
     elif type == "community":
         posts = db.query(models.CommunityMessage).all()
-        headers = ["Post ID", "Author ID", "Content", "Flags", "Hidden", "Created At"]
+        headers = ["Post ID", "Author ID", "Author Name", "Author Email", "Content", "Reactions", "Flags", "Hidden", "Created At"]
         ws.append(headers)
         for cell in ws[1]: cell.font = header_font
         for p in posts:
-            ws.append([p.id, p.author_id, p.content, p.flag_count, "Yes" if p.is_hidden else "No", str(p.created_at)])
+            author = db.query(models.User).filter(models.User.id == p.author_id).first()
+            reaction_count = db.query(models.ChatReaction).filter(models.ChatReaction.message_id == p.id).count()
+            ws.append([
+                p.id, p.author_id, author.full_name if author else None, author.email if author else None,
+                p.content, reaction_count, p.flag_count, "Yes" if p.is_hidden else "No", str(p.created_at)
+            ])
 
     elif type == "support":
         tickets = db.query(models.SupportTicket).all()
-        headers = ["Ticket ID", "User ID", "Subject", "Status", "Created At", "Updated At"]
+        headers = ["Ticket ID", "User ID", "User Name", "User Email", "Subject", "Status", "Admin Reply", "Created At", "Updated At"]
         ws.append(headers)
         for cell in ws[1]: cell.font = header_font
         for t in tickets:
-            ws.append([t.id, t.user_id, t.subject, t.status, str(t.created_at), str(t.updated_at)])
+            user = db.query(models.User).filter(models.User.id == t.user_id).first()
+            ws.append([
+                t.id, t.user_id, user.full_name if user else None, user.email if user else None,
+                t.subject, support_status_label(t.status), t.admin_reply, str(t.created_at), str(t.updated_at)
+            ])
 
             
     # Save to buffer
@@ -1896,7 +1993,7 @@ def live_log_observation(
 # --- Admin Dashboard API ---
 
 def require_admin(current_user: models.User = Depends(get_current_user)):
-    if current_user.role != models.UserRole.ADMIN:
+    if current_user.role not in {models.UserRole.ADMIN.value, models.UserRole.SUPER_ADMIN.value}:
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
 
@@ -1976,10 +2073,10 @@ def admin_stats(db: Session = Depends(database.get_db), admin: models.User = Dep
     
     from sqlalchemy import func
     total_revenue = db.query(func.coalesce(func.sum(models.Order.amount), 0)).filter(
-        models.Order.status.in_([models.OrderStatus.PAID, models.OrderStatus.COMPLETED, models.OrderStatus.SETTLED])
+        models.Order.status.in_(PAID_ORDER_STATUS_VALUES)
     ).scalar()
     total_commission = db.query(func.coalesce(func.sum(models.Order.commission), 0)).filter(
-        models.Order.status.in_([models.OrderStatus.PAID, models.OrderStatus.COMPLETED, models.OrderStatus.SETTLED])
+        models.Order.status.in_(PAID_ORDER_STATUS_VALUES)
     ).scalar()
     
     return {
@@ -1993,22 +2090,38 @@ def admin_stats(db: Session = Depends(database.get_db), admin: models.User = Dep
 
 @app.get("/admin/users")
 def admin_list_users(db: Session = Depends(database.get_db), admin: models.User = Depends(require_admin)):
-    users = db.query(models.User).all()
-    return [
-        {
+    users = db.query(models.User).order_by(models.User.created_at.desc()).all()
+    result = []
+    for u in users:
+        dog_count = db.query(models.Dog).filter(models.Dog.owner_id == u.id).count()
+        listing_count = db.query(models.Service).filter(models.Service.provider_id == u.id).count()
+        order_count = db.query(models.Order).filter(models.Order.buyer_id == u.id).count()
+        paid_order_count = db.query(models.Order).filter(
+            models.Order.buyer_id == u.id,
+            models.Order.status.in_(PAID_ORDER_STATUS_VALUES),
+        ).count()
+        result.append({
             "id": u.id,
             "full_name": u.full_name,
             "email": u.email,
             "phone_number": u.phone_number,
             "role": u.role,
-            "bio": u.bio
-        }
-        for u in users
-    ]
+            "bio": u.bio,
+            "country": u.country,
+            "preferred_currency": u.preferred_currency,
+            "average_rating": u.average_rating or 0,
+            "total_ratings": u.total_ratings or 0,
+            "dog_count": dog_count,
+            "listing_count": listing_count,
+            "order_count": order_count,
+            "paid_order_count": paid_order_count,
+            "created_at": str(u.created_at) if u.created_at else None,
+        })
+    return result
 
 @app.get("/admin/orders")
 def admin_list_orders(db: Session = Depends(database.get_db), admin: models.User = Depends(require_admin)):
-    orders = db.query(models.Order).all()
+    orders = db.query(models.Order).order_by(models.Order.created_at.desc()).all()
     result = []
     for order in orders:
         service = db.query(models.Service).filter(models.Service.id == order.service_id).first()
@@ -2016,23 +2129,38 @@ def admin_list_orders(db: Session = Depends(database.get_db), admin: models.User
         provider = None
         if service:
             provider = db.query(models.User).filter(models.User.id == service.provider_id).first()
+        status_value = order_status_value(order.status)
+        is_paid = status_value in PAID_ORDER_STATES
+        amount = float(order.amount or 0)
+        commission = float(order.commission or 0)
+        payout = float(order.payout or 0)
         result.append({
             "id": order.id,
             "buyer_name": buyer.full_name if buyer else "Unknown",
             "buyer_email": buyer.email if buyer else "",
+            "buyer_phone": buyer.phone_number if buyer else None,
+            "buyer_id": order.buyer_id,
             "provider_name": provider.full_name if provider else "Unknown",
             "provider_id": service.provider_id if service else None,
             "service_title": service.title if service else "Unknown",
-            "amount": order.amount,
-            "commission": order.commission,
-            "payout": order.payout,
-            "status": order.status,
+            "service_id": order.service_id,
+            "item_type": service.item_type if service else None,
+            "amount": amount,
+            "commission": commission,
+            "payout": payout,
+            "paid_amount": amount if is_paid else 0,
+            "paid_commission": commission if is_paid else 0,
+            "paid_payout": payout if is_paid else 0,
+            "status": status_value,
+            "is_paid": is_paid,
             "share_phone": order.share_phone,
+            "service_stock_count": service.stock_count if service else None,
+            "service_slots_available": service.slots_available if service else None,
             "form_responses": [
                 {
-                    "label": r.field.label,
+                    "label": r.field.label if r.field else "Question",
                     "answer": r.answer_value
-                } for r in order.form_responses
+                } for r in (order.responses or [])
             ],
             "created_at": str(order.created_at) if order.created_at else None
         })
@@ -2048,13 +2176,13 @@ def admin_complete_order(
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    if order.status != models.OrderStatus.PAID:
+    if order_status_value(order.status) != models.OrderStatus.PAID.value:
         raise HTTPException(
             status_code=400,
             detail=f"Order must be in 'paid' status to mark as completed. Current status: {order.status}"
         )
 
-    order.status = models.OrderStatus.COMPLETED
+    order.status = models.OrderStatus.COMPLETED.value
     db.commit()
     return {"message": "Order marked as completed. Seller payout is now ready for approval.", "status": order.status}
 
@@ -2068,7 +2196,7 @@ def admin_settle_order(
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    if order.status != models.OrderStatus.COMPLETED:
+    if order_status_value(order.status) != models.OrderStatus.COMPLETED.value:
         raise HTTPException(
             status_code=400,
             detail=f"Order must be in 'completed' status to settle. Current status: {order.status}"
@@ -2103,7 +2231,7 @@ def admin_settle_order(
     db.add(tx)
 
     # Update order status to SETTLED
-    order.status = models.OrderStatus.SETTLED
+    order.status = models.OrderStatus.SETTLED.value
     db.commit()
 
     # Send notification to provider
@@ -2129,10 +2257,23 @@ def admin_settle_order(
 
 @app.get("/admin/services")
 def admin_list_services(db: Session = Depends(database.get_db), admin: models.User = Depends(require_admin)):
-    services = db.query(models.Service).all()
+    from sqlalchemy import func
+    services = db.query(models.Service).order_by(models.Service.title.asc()).all()
     result = []
     for s in services:
         provider = db.query(models.User).filter(models.User.id == s.provider_id).first()
+        paid_order_count = db.query(models.Order).filter(
+            models.Order.service_id == s.id,
+            models.Order.status.in_(PAID_ORDER_STATUS_VALUES),
+        ).count()
+        pending_order_count = db.query(models.Order).filter(
+            models.Order.service_id == s.id,
+            models.Order.status.in_(PENDING_ORDER_STATUS_VALUES),
+        ).count()
+        paid_revenue = db.query(func.coalesce(func.sum(models.Order.amount), 0)).filter(
+            models.Order.service_id == s.id,
+            models.Order.status.in_(PAID_ORDER_STATUS_VALUES),
+        ).scalar()
         result.append({
             "id": s.id,
             "title": s.title,
@@ -2141,9 +2282,18 @@ def admin_list_services(db: Session = Depends(database.get_db), admin: models.Us
             "category": s.category,
             "item_type": s.item_type,
             "is_published": s.is_published,
+            "admin_approved": s.admin_approved,
+            "rejection_reason": s.rejection_reason,
+            "stock_count": s.stock_count,
+            "slots_available": s.slots_available,
+            "is_busy": s.is_busy,
             "provider_name": provider.full_name if provider else "Unknown",
             "provider_id": s.provider_id,
-            "image_url": s.image_url
+            "provider_email": provider.email if provider else None,
+            "image_url": s.image_url,
+            "paid_order_count": paid_order_count,
+            "pending_order_count": pending_order_count,
+            "paid_revenue": round(float(paid_revenue or 0), 2),
         })
     return result
 
@@ -2154,8 +2304,14 @@ class ApprovalRequest(BaseModel):
 
 @app.get("/admin/pending-approvals")
 def admin_list_pending(db: Session = Depends(database.get_db), admin: models.User = Depends(require_admin)):
-    pending_services = db.query(models.Service).filter(models.Service.admin_approved == False).all()
-    pending_reports = db.query(models.CaseReport).filter(models.CaseReport.is_approved == False).all()
+    pending_services = db.query(models.Service).filter(
+        models.Service.admin_approved == False,
+        models.Service.rejection_reason.is_(None),
+    ).order_by(models.Service.title.asc()).all()
+    pending_reports = db.query(models.CaseReport).filter(
+        models.CaseReport.is_approved == False,
+        models.CaseReport.rejection_reason.is_(None),
+    ).order_by(models.CaseReport.created_at.desc()).all()
     
     services_out = []
     for s in pending_services:
@@ -2163,8 +2319,11 @@ def admin_list_pending(db: Session = Depends(database.get_db), admin: models.Use
         services_out.append({
             "id": s.id, "title": s.title, "description": s.description, "price": s.price,
             "category": s.category, "item_type": s.item_type,
+            "stock_count": s.stock_count, "slots_available": s.slots_available,
+            "is_published": s.is_published, "admin_approved": s.admin_approved,
             "provider_name": provider.full_name if provider else "Unknown",
-            "provider_id": s.provider_id
+            "provider_id": s.provider_id,
+            "provider_email": provider.email if provider else None,
         })
     
     reports_out = []
@@ -2172,8 +2331,9 @@ def admin_list_pending(db: Session = Depends(database.get_db), admin: models.Use
         author = db.query(models.User).filter(models.User.id == r.author_id).first()
         reports_out.append({
             "id": r.id, "title": r.title, "description": r.description,
-            "case_type": r.case_type, "location": r.location,
+            "case_type": r.case_type, "location": r.location, "status": r.status,
             "author_name": author.full_name if author else "Unknown",
+            "author_id": r.author_id,
             "created_at": str(r.created_at)
         })
         
@@ -2198,6 +2358,8 @@ def admin_approve_item(
         if req.is_approved:
             item.is_published = True
             item.rejection_reason = None
+        else:
+            item.is_published = False
     elif item_type == "report":
         item = db.query(models.CaseReport).filter(models.CaseReport.id == item_id).first()
         if not item: raise HTTPException(status_code=404, detail="Report not found")
@@ -2205,6 +2367,9 @@ def admin_approve_item(
         item.rejection_reason = req.rejection_reason
     else:
         raise HTTPException(status_code=400, detail="Invalid item type")
+
+    if not req.is_approved and not item.rejection_reason:
+        item.rejection_reason = "Rejected by admin"
         
     db.commit()
     
@@ -2288,13 +2453,21 @@ def admin_analytics(db: Session = Depends(database.get_db), admin: models.User =
     new_orders_prev_30d = db.query(models.Order).filter(
         models.Order.created_at >= sixty_days_ago, models.Order.created_at < thirty_days_ago
     ).count()
+    new_paid_orders_30d = db.query(models.Order).filter(
+        models.Order.status.in_(PAID_ORDER_STATUS_VALUES),
+        models.Order.created_at >= thirty_days_ago,
+    ).count()
+    new_paid_orders_prev_30d = db.query(models.Order).filter(
+        models.Order.status.in_(PAID_ORDER_STATUS_VALUES),
+        models.Order.created_at >= sixty_days_ago,
+        models.Order.created_at < thirty_days_ago,
+    ).count()
 
-    paid_statuses = [models.OrderStatus.PAID, models.OrderStatus.COMPLETED, models.OrderStatus.SETTLED]
     revenue_30d = float(db.query(func.coalesce(func.sum(models.Order.amount), 0)).filter(
-        models.Order.status.in_(paid_statuses), models.Order.created_at >= thirty_days_ago
+        models.Order.status.in_(PAID_ORDER_STATUS_VALUES), models.Order.created_at >= thirty_days_ago
     ).scalar())
     revenue_prev_30d = float(db.query(func.coalesce(func.sum(models.Order.amount), 0)).filter(
-        models.Order.status.in_(paid_statuses),
+        models.Order.status.in_(PAID_ORDER_STATUS_VALUES),
         models.Order.created_at >= sixty_days_ago, models.Order.created_at < thirty_days_ago
     ).scalar())
 
@@ -2304,14 +2477,19 @@ def admin_analytics(db: Session = Depends(database.get_db), admin: models.User =
 
     # --- Orders by status ---
     status_counts = db.query(models.Order.status, func.count(models.Order.id)).group_by(models.Order.status).all()
-    orders_by_status = {status: count for status, count in status_counts}
+    orders_by_status = {}
+    for status, count in status_counts:
+        key = order_status_value(status)
+        orders_by_status[key] = orders_by_status.get(key, 0) + count
 
-    # --- Top services by order count ---
+    # --- Top services by paid order count/revenue ---
     top_services_q = db.query(
         models.Service.title,
         func.count(models.Order.id).label("order_count"),
         func.coalesce(func.sum(models.Order.amount), 0).label("revenue")
-    ).join(models.Order, models.Order.service_id == models.Service.id).group_by(
+    ).join(models.Order, models.Order.service_id == models.Service.id).filter(
+        models.Order.status.in_(PAID_ORDER_STATUS_VALUES)
+    ).group_by(
         models.Service.id, models.Service.title
     ).order_by(func.count(models.Order.id).desc()).limit(5).all()
     top_services = [{"title": t, "order_count": c, "revenue": round(float(r), 2)} for t, c, r in top_services_q]
@@ -2328,9 +2506,10 @@ def admin_analytics(db: Session = Depends(database.get_db), admin: models.User =
     recent_orders = db.query(models.Order).order_by(models.Order.created_at.desc()).limit(5).all()
     for o in recent_orders:
         svc = db.query(models.Service.title).filter(models.Service.id == o.service_id).scalar()
+        status_label = order_status_value(o.status).replace("_", " ").title()
         recent_activity.append({
             "type": "order", "icon": "cart",
-            "description": f"New order for {svc or 'Unknown'}",
+            "description": f"{status_label} order for {svc or 'Unknown'}",
             "time": str(o.created_at)
         })
     recent_cases = db.query(models.CaseReport).order_by(models.CaseReport.created_at.desc()).limit(3).all()
@@ -2351,28 +2530,38 @@ def admin_analytics(db: Session = Depends(database.get_db), admin: models.User =
     flagged_posts = db.query(models.CommunityMessage).filter(models.CommunityMessage.flag_count > 0).count()
 
     # --- Support stats ---
-    open_tickets = db.query(models.SupportTicket).filter(models.SupportTicket.status == "Open").count()
-    total_tickets = db.query(models.SupportTicket).count()
+    all_ticket_statuses = db.query(models.SupportTicket.status).all()
+    open_tickets = sum(1 for (ticket_status,) in all_ticket_statuses if support_status_key(ticket_status) != "resolved")
+    total_tickets = len(all_ticket_statuses)
 
     # --- Pending approvals count ---
-    pending_services = db.query(models.Service).filter(models.Service.admin_approved == False).count()
-    pending_reports = db.query(models.CaseReport).filter(models.CaseReport.is_approved == False).count()
+    pending_services = db.query(models.Service).filter(
+        models.Service.admin_approved == False,
+        models.Service.rejection_reason.is_(None),
+    ).count()
+    pending_reports = db.query(models.CaseReport).filter(
+        models.CaseReport.is_approved == False,
+        models.CaseReport.rejection_reason.is_(None),
+    ).count()
 
     # --- Monthly revenue (last 6 months) ---
     monthly_revenue = []
     month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     for i in range(5, -1, -1):
-        month_start = (now.replace(day=1) - timedelta(days=i * 30)).replace(day=1)
+        month_index = (now.year * 12 + now.month - 1) - i
+        month_year = month_index // 12
+        month_number = month_index % 12 + 1
+        month_start = now.replace(year=month_year, month=month_number, day=1, hour=0, minute=0, second=0, microsecond=0)
         if month_start.month == 12:
             month_end = month_start.replace(year=month_start.year + 1, month=1)
         else:
             month_end = month_start.replace(month=month_start.month + 1)
         rev = float(db.query(func.coalesce(func.sum(models.Order.amount), 0)).filter(
-            models.Order.status.in_(paid_statuses),
+            models.Order.status.in_(PAID_ORDER_STATUS_VALUES),
             models.Order.created_at >= month_start, models.Order.created_at < month_end
         ).scalar())
         comm = float(db.query(func.coalesce(func.sum(models.Order.commission), 0)).filter(
-            models.Order.status.in_(paid_statuses),
+            models.Order.status.in_(PAID_ORDER_STATUS_VALUES),
             models.Order.created_at >= month_start, models.Order.created_at < month_end
         ).scalar())
         monthly_revenue.append({
@@ -2390,15 +2579,19 @@ def admin_analytics(db: Session = Depends(database.get_db), admin: models.User =
         "total_users": db.query(models.User).count(),
         "total_services": db.query(models.Service).count(),
         "total_orders": db.query(models.Order).count(),
+        "total_paid_orders": db.query(models.Order).filter(models.Order.status.in_(PAID_ORDER_STATUS_VALUES)).count(),
+        "pending_orders": db.query(models.Order).filter(models.Order.status.in_(PENDING_ORDER_STATUS_VALUES)).count(),
         "total_events": total_events,
         "total_revenue": round(float(db.query(func.coalesce(func.sum(models.Order.amount), 0)).filter(
-            models.Order.status.in_(paid_statuses)).scalar()), 2),
+            models.Order.status.in_(PAID_ORDER_STATUS_VALUES)).scalar()), 2),
         "total_commission": round(float(db.query(func.coalesce(func.sum(models.Order.commission), 0)).filter(
-            models.Order.status.in_(paid_statuses)).scalar()), 2),
+            models.Order.status.in_(PAID_ORDER_STATUS_VALUES)).scalar()), 2),
         "new_users_30d": new_users_30d,
         "new_users_prev_30d": new_users_prev_30d,
         "new_orders_30d": new_orders_30d,
         "new_orders_prev_30d": new_orders_prev_30d,
+        "new_paid_orders_30d": new_paid_orders_30d,
+        "new_paid_orders_prev_30d": new_paid_orders_prev_30d,
         "revenue_30d": round(revenue_30d, 2),
         "revenue_prev_30d": round(revenue_prev_30d, 2),
         "users_by_role": users_by_role,
@@ -2770,15 +2963,20 @@ async def initiate_payment(
     if order.buyer_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
 
+    ipn_url = os.getenv("PESAPAL_IPN_URL")
+    callback_url = os.getenv("PESAPAL_CALLBACK_URL")
+    if not ipn_url or not callback_url:
+        raise HTTPException(status_code=500, detail="Pesapal checkout is not configured. Please set PESAPAL_IPN_URL and PESAPAL_CALLBACK_URL.")
+
     # 1. Register IPN
-    ipn_res = pesapal.register_ipn(os.getenv("PESAPAL_IPN_URL"))
+    ipn_res = pesapal.register_ipn(ipn_url)
     ipn_id = ipn_res.get("ipn_id")
     
     if not ipn_id:
-        raise HTTPException(status_code=500, detail="Failed to register IPN with Pesapal")
+        detail = ipn_res.get("error") or ipn_res.get("message") or ipn_res
+        raise HTTPException(status_code=502, detail=f"Failed to register IPN with Pesapal: {detail}")
         
     # 2. Submit Order
-    callback_url = os.getenv("PESAPAL_CALLBACK_URL")
     order_res = pesapal.submit_order(
         order_id=order_id,
         amount=order.amount,
@@ -2788,6 +2986,9 @@ async def initiate_payment(
         callback_url=callback_url,
         ipn_id=ipn_id
     )
+    if not order_res.get("redirect_url"):
+        detail = order_res.get("error") or order_res.get("message") or order_res
+        raise HTTPException(status_code=502, detail=f"Failed to start Pesapal checkout: {detail}")
     
     return order_res
 
@@ -3087,8 +3288,18 @@ def get_all_support_tickets(
     for t in tickets:
         u = db.query(models.User).filter(models.User.id == t.user_id).first()
         results.append({
-            "id": t.id, "subject": t.subject, "message": t.message, "status": t.status,
-            "user_name": u.full_name if u else "Unknown", "created_at": str(t.created_at)
+            "id": t.id,
+            "subject": t.subject,
+            "message": t.message,
+            "status": support_status_label(t.status),
+            "status_key": support_status_key(t.status),
+            "admin_reply": t.admin_reply,
+            "images": t.images or [],
+            "user_id": t.user_id,
+            "user_name": u.full_name if u else "Unknown",
+            "user_email": u.email if u else None,
+            "created_at": str(t.created_at),
+            "updated_at": str(t.updated_at) if t.updated_at else None,
         })
     return results
 
@@ -3107,7 +3318,8 @@ def reply_support_ticket(
         raise HTTPException(status_code=404, detail="Ticket not found")
     
     ticket.admin_reply = req.message
-    ticket.status = "In-Progress"
+    ticket.status = "in-progress"
+    ticket.updated_at = datetime.utcnow()
     db.commit()
     return {"message": "Reply sent"}
 
@@ -3121,7 +3333,8 @@ def resolve_support_ticket(
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
     
-    ticket.status = "Resolved"
+    ticket.status = "resolved"
+    ticket.updated_at = datetime.utcnow()
     db.commit()
     return {"message": "Ticket resolved"}
 
@@ -3297,6 +3510,7 @@ def create_support_ticket(
         user_id=current_user.id,
         subject=ticket.subject,
         message=ticket.message,
+        status="open",
         images=ticket.images
     )
     db.add(new_ticket)
@@ -3331,6 +3545,7 @@ def reply_to_support_ticket(
     
     ticket.admin_reply = reply.admin_reply
     ticket.status = "resolved"
+    ticket.updated_at = datetime.utcnow()
     db.commit()
     
     # Notify User

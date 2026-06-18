@@ -17,7 +17,7 @@ const getEventStatus = (startTime, endTime) => {
     return { label: 'Past', color: ADMIN_COLORS.textMuted, icon: 'checkmark-circle-outline' };
 };
 
-export const AdminEventsTab = ({ onBack }) => {
+export const AdminEventsTab = ({ onBack, navigation }) => {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);

@@ -14,9 +14,22 @@ import { useCurrency } from '../context/CurrencyContext';
 
 type Step = 'form' | 'checkout' | 'success';
 
+const getStoredItem = async (key: string) => {
+    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+        return localStorage.getItem(key);
+    }
+    return SecureStore.getItemAsync(key);
+};
+
 export const OrderReceiptScreen = ({ route, navigation }: any) => {
     const { t } = useTranslation();
-    const { service } = route.params; // We expect the service object
+    const { service, orderId: routeOrderId } = route.params || {}; // We expect the service object
+    const normalizedRouteOrderId = routeOrderId ? String(routeOrderId) : '';
+    const initialOrderId = normalizedRouteOrderId &&
+        !normalizedRouteOrderId.startsWith('MOCK-') &&
+        !['undefined', 'null', 'new'].includes(normalizedRouteOrderId.toLowerCase())
+        ? normalizedRouteOrderId
+        : null;
     
     const [step, setStep] = useState<Step>('checkout');
     const [formFields, setFormFields] = useState<any[]>([]);
@@ -26,7 +39,7 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
     const [submitting, setSubmitting] = useState(false);
     
     // Receipt/Success state
-    const [orderId, setOrderId] = useState<string | null>(null);
+    const [orderId, setOrderId] = useState<string | null>(initialOrderId);
     const [rating, setRating] = useState(0);
     const [comment, setComment] = useState('');
     const [isDownloading, setIsDownloading] = useState(false);
@@ -43,8 +56,10 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
 
     const initFlow = async () => {
         try {
+            if (!service) return;
+
             // Fetch User for preferred currency and Karma
-            const userStr = await SecureStore.getItemAsync('user');
+            const userStr = await getStoredItem('userInfo') || await getStoredItem('user');
             if (userStr) {
                 const userObj = JSON.parse(userStr);
                 setPreferredCurrency(userObj.preferred_currency || 'KES');
@@ -79,7 +94,33 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
         setStep('checkout');
     };
 
+    const openPaymentUrl = async (url: string, checkoutWindow?: any) => {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            if (checkoutWindow && !checkoutWindow.closed) {
+                checkoutWindow.location.href = url;
+                checkoutWindow.focus?.();
+                return true;
+            }
+            window.location.href = url;
+            return true;
+        }
+
+        const canOpen = await Linking.canOpenURL(url);
+        if (!canOpen) return false;
+        await Linking.openURL(url);
+        return true;
+    };
+
     const handlePlaceOrder = async () => {
+        let checkoutWindow: any = null;
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            checkoutWindow = window.open('', '_blank');
+            if (checkoutWindow) {
+                checkoutWindow.document.title = 'Lovedogs 360 Checkout';
+                checkoutWindow.document.body.innerHTML = '<p style="font-family: sans-serif; padding: 24px;">Opening secure checkout...</p>';
+            }
+        }
+
         setSubmitting(true);
         try {
             const orderData = {
@@ -91,10 +132,13 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
                 }))
             };
 
-            // Step 1: Create the order
-            const result = await createOrder(orderData);
-            const newOrderId = result.id;
-            setOrderId(newOrderId);
+            // Step 1: Create the order, unless this screen was opened with an existing unpaid order.
+            let newOrderId = orderId;
+            if (!newOrderId) {
+                const result = await createOrder(orderData);
+                newOrderId = result.id;
+                setOrderId(newOrderId);
+            }
 
             // Step 2: Get user info for payment initiation
             const userRes = await client.get('/users/me');
@@ -112,9 +156,8 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
             if (paymentRes.redirect_url) {
                 setPaymentTrackingId(paymentRes.order_tracking_id || paymentRes.OrderTrackingId || null);
                 // Step 4: Redirect to Pesapal secure checkout page
-                const canOpen = await Linking.canOpenURL(paymentRes.redirect_url);
-                if (canOpen) {
-                    await Linking.openURL(paymentRes.redirect_url);
+                const opened = await openPaymentUrl(paymentRes.redirect_url, checkoutWindow);
+                if (opened) {
                     Alert.alert(
                         t('common.success'),
                         t('checkout.payment_opened', { defaultValue: 'Payment page opened. Complete payment, then return here for your receipt.' })
@@ -127,6 +170,9 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
                 throw new Error(t('checkout.no_payment_url'));
             }
         } catch (error: any) {
+            if (checkoutWindow && !checkoutWindow.closed) {
+                checkoutWindow.close();
+            }
             console.error('Order/Payment creation error:', error);
             const detail = error.response?.data?.detail || t('checkout.process_failed');
             Alert.alert(t('checkout.payment_failed'), typeof detail === 'string' ? detail : JSON.stringify(detail));
@@ -140,10 +186,7 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
     };
 
     const getStoredToken = async () => {
-        if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
-            return localStorage.getItem('userToken');
-        }
-        return SecureStore.getItemAsync('userToken');
+        return getStoredItem('userToken');
     };
 
     const verifyPaymentStatus = async () => {
@@ -299,6 +342,25 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
         </View>
     );
 
+    if (!service) {
+        return (
+            <SafeAreaView style={styles.safeArea}>
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                        <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>{t('checkout.review_pay')}</Text>
+                    <View style={{ width: 40 }} />
+                </View>
+                <View style={styles.center}>
+                    <Text style={styles.missingText}>
+                        {t('marketplace.orders.missing_order', { defaultValue: 'Order not found. Please return to the marketplace and try again.' })}
+                    </Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
     // STEP 1: Registration Form
     if (step === 'form') {
         return (
@@ -334,7 +396,7 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
         return (
             <SafeAreaView style={styles.safeArea}>
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={() => setFormFields.length > 0 ? setStep('form') : navigation.goBack()} style={styles.backButton}>
+                    <TouchableOpacity onPress={() => formFields.length > 0 ? setStep('form') : navigation.goBack()} style={styles.backButton}>
                         <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>{t('checkout.review_pay')}</Text>
@@ -479,6 +541,7 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
 const styles = StyleSheet.create({
     safeArea: { flex: 1, backgroundColor: '#fff' },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    missingText: { color: COLORS.textSecondary, fontSize: 15, paddingHorizontal: 24, textAlign: 'center' },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: SPACING.md, borderBottomWidth: 1, borderBottomColor: '#eee', backgroundColor: '#fff' },
     headerTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.primary },
     backButton: { padding: 4 },
