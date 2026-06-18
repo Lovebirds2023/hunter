@@ -52,6 +52,16 @@ interface BuyerOrder {
     created_at: string;
 }
 
+interface WithdrawalItem {
+    id: string;
+    amount: number;
+    status: 'pending' | 'completed' | 'failed' | string;
+    method?: string | null;
+    destination?: string | null;
+    created_at?: string | null;
+    processed_at?: string | null;
+}
+
 export const PayoutsScreen = () => {
     const { t } = useTranslation();
     const navigation: any = useNavigation();
@@ -64,6 +74,7 @@ export const PayoutsScreen = () => {
     // Seller state
     const [wallet, setWallet] = useState<WalletSummary>({ total_earned: 0, in_escrow: 0, available: 0, settled: 0 });
     const [earnings, setEarnings] = useState<EarningItem[]>([]);
+    const [withdrawals, setWithdrawals] = useState<WithdrawalItem[]>([]);
     const [receiptOrderId, setReceiptOrderId] = useState<string | null>(null);
     const [withdrawing, setWithdrawing] = useState(false);
 
@@ -77,6 +88,7 @@ export const PayoutsScreen = () => {
                 const res = await client.get('/my-earnings');
                 setWallet(res.data.wallet);
                 setEarnings(res.data.earnings);
+                setWithdrawals(res.data.withdrawals || []);
             }
             // Always fetch buyer orders (providers can also be buyers)
             const ordersRes = await client.get('/my-orders');
@@ -124,6 +136,22 @@ export const PayoutsScreen = () => {
             default:
                 return { color: '#999', bg: '#f5f5f5', label: status, icon: 'help-circle' as const };
         }
+    };
+
+    const getWithdrawalStatusStyle = (status: string) => {
+        const s = String(status || '').toLowerCase();
+        if (s === 'completed') {
+            return { color: '#1565C0', bg: '#E3F2FD', icon: 'checkmark-circle' as const, label: t('payouts.status.completed') };
+        }
+        if (s === 'failed') {
+            return { color: '#C62828', bg: '#FFEBEE', icon: 'close-circle' as const, label: t('payouts.status.failed', { defaultValue: 'Failed' }) };
+        }
+        return { color: '#EF6C00', bg: '#FFF3E0', icon: 'time-outline' as const, label: t('payouts.status.pending', { defaultValue: 'Pending' }) };
+    };
+
+    const formatDate = (value?: string | null) => {
+        if (!value) return '';
+        return new Date(value).toLocaleDateString();
     };
 
     const canDownloadReceipt = (status?: string) => {
@@ -183,6 +211,12 @@ export const PayoutsScreen = () => {
                 method: wallet.payment_method
             });
             setWallet(res.data.wallet);
+            if (res.data.withdrawal) {
+                setWithdrawals(prev => [
+                    res.data.withdrawal,
+                    ...prev.filter(item => item.id !== res.data.withdrawal.id)
+                ]);
+            }
             Alert.alert(t('common.success'), res.data.message || t('payouts.withdrawal_requested', { defaultValue: 'Withdrawal request submitted.' }));
         } catch (error: any) {
             const detail = error.response?.data?.detail || error.message || t('payouts.withdrawal_failed', { defaultValue: 'Could not request withdrawal.' });
@@ -318,6 +352,49 @@ export const PayoutsScreen = () => {
                                     {t('payouts.escrow_info')}
                                 </Text>
                             </View>
+
+                            {withdrawals.length > 0 && (
+                                <>
+                                    <Text style={styles.sectionTitle}>
+                                        {t('payouts.withdrawal_history', { defaultValue: 'Withdrawal History' })}
+                                    </Text>
+                                    {withdrawals.map((withdrawal) => {
+                                        const withdrawalStatus = getWithdrawalStatusStyle(withdrawal.status);
+                                        return (
+                                            <View key={withdrawal.id} style={styles.withdrawalHistoryCard}>
+                                                <View style={styles.withdrawalHistoryHeader}>
+                                                    <View>
+                                                        <Text style={styles.withdrawalHistoryAmount}>
+                                                            KES {(withdrawal.amount || 0).toLocaleString()}
+                                                        </Text>
+                                                        <Text style={styles.withdrawalHistoryDestination}>
+                                                            {(withdrawal.method || 'payout').toUpperCase()} - {withdrawal.destination || t('profile_screen.not_configured', { defaultValue: 'Not configured' })}
+                                                        </Text>
+                                                    </View>
+                                                    <View style={[styles.withdrawalStatusBadge, { backgroundColor: withdrawalStatus.bg }]}>
+                                                        <Ionicons name={withdrawalStatus.icon} size={14} color={withdrawalStatus.color} />
+                                                        <Text style={[styles.withdrawalStatusText, { color: withdrawalStatus.color }]}>
+                                                            {withdrawalStatus.label}
+                                                        </Text>
+                                                    </View>
+                                                </View>
+                                                <View style={styles.withdrawalDateRow}>
+                                                    {withdrawal.created_at ? (
+                                                        <Text style={styles.withdrawalDateText}>
+                                                            {t('payouts.requested_on', { defaultValue: 'Requested' })}: {formatDate(withdrawal.created_at)}
+                                                        </Text>
+                                                    ) : null}
+                                                    {withdrawal.processed_at ? (
+                                                        <Text style={styles.withdrawalDateText}>
+                                                            {t('payouts.paid_on', { defaultValue: 'Paid' })}: {formatDate(withdrawal.processed_at)}
+                                                        </Text>
+                                                    ) : null}
+                                                </View>
+                                            </View>
+                                        );
+                                    })}
+                                </>
+                            )}
 
                             {/* Earnings List */}
                             {earnings.length > 0 && (
@@ -629,6 +706,41 @@ const styles = StyleSheet.create({
     },
     receiptActionDisabled: { opacity: 0.6 },
     receiptActionText: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
+    withdrawalHistoryCard: {
+        backgroundColor: COLORS.white,
+        borderRadius: 14,
+        padding: SPACING.md,
+        marginBottom: SPACING.md,
+        borderWidth: 1,
+        borderColor: '#E3E7EE',
+    },
+    withdrawalHistoryHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+    },
+    withdrawalHistoryAmount: { fontSize: 17, fontWeight: '800', color: COLORS.text },
+    withdrawalHistoryDestination: { fontSize: 12, color: '#777', marginTop: 3 },
+    withdrawalStatusBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 10,
+    },
+    withdrawalStatusText: { fontSize: 11, fontWeight: '800' },
+    withdrawalDateRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 10,
+        borderTopWidth: 1,
+        borderTopColor: '#EEF1F6',
+        marginTop: 12,
+        paddingTop: 10,
+    },
+    withdrawalDateText: { fontSize: 11, color: '#777', fontWeight: '600' },
 
     // Buyer Order Card
     buyerOrderCard: {

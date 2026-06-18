@@ -221,7 +221,8 @@ class Transaction(Base):
     status = Column(String) # "pending", "completed", "failed"
     payout_method = Column(String, nullable=True)
     destination = Column(String, nullable=True)
-    processed_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    processed_at = Column(DateTime, nullable=True)
     
     order = relationship("Order", back_populates="transactions")
     user = relationship("User", back_populates="payouts")

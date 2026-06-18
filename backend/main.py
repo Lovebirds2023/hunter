@@ -228,6 +228,60 @@ KARMA_MIN_REWARD_PER_ORDER = 5
 KARMA_MAX_REWARD_PER_ORDER = 500
 KARMA_CASE_REPORT_REWARD = 10
 KARMA_CASE_COMMENT_REWARD = 2
+MARKETPLACE_MARKUP_RATE = 0.235
+MARKETPLACE_PRICE_MULTIPLIER = 1 + MARKETPLACE_MARKUP_RATE
+MIN_MARKETPLACE_LISTING_PRICE_KES = 500.0
+FALLBACK_EXCHANGE_RATES = {
+    "USD": 1.0,
+    "KES": 129.0,
+    "EUR": 0.92,
+    "GBP": 0.78,
+}
+
+def get_rate_for_currency(currency: Optional[str]) -> Optional[float]:
+    normalized = (currency or "KES").strip().upper()
+    live_rates = exchange_rates_cache.get("rates") if "exchange_rates_cache" in globals() else {}
+    rates = {**FALLBACK_EXCHANGE_RATES, **(live_rates or {})}
+    try:
+        return float(rates.get(normalized))
+    except (TypeError, ValueError):
+        return None
+
+def convert_amount(amount: float, from_currency: Optional[str], to_currency: Optional[str]) -> Optional[float]:
+    amount = float(amount or 0)
+    from_rate = get_rate_for_currency(from_currency)
+    to_rate = get_rate_for_currency(to_currency)
+    if not from_rate or not to_rate:
+        return None
+    return (amount / from_rate) * to_rate
+
+def minimum_listing_price_for_currency(currency: Optional[str]) -> float:
+    converted = convert_amount(MIN_MARKETPLACE_LISTING_PRICE_KES, "KES", currency or "KES")
+    return round(converted if converted is not None else MIN_MARKETPLACE_LISTING_PRICE_KES, 2)
+
+def validate_marketplace_base_price(base_price: float, currency: Optional[str]) -> float:
+    currency_code = (currency or "KES").strip().upper()
+    if base_price is None or float(base_price or 0) <= 0:
+        raise HTTPException(status_code=400, detail="Enter a valid listing price")
+
+    final_price = round(float(base_price) * MARKETPLACE_PRICE_MULTIPLIER, 2)
+    final_price_kes = convert_amount(final_price, currency_code, "KES")
+    if final_price_kes is None:
+        raise HTTPException(status_code=400, detail=f"Currency {currency_code} is not supported for marketplace pricing")
+
+    if final_price_kes + 0.01 < MIN_MARKETPLACE_LISTING_PRICE_KES:
+        minimum_final = minimum_listing_price_for_currency(currency_code)
+        minimum_base = round(minimum_final / MARKETPLACE_PRICE_MULTIPLIER, 2)
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Minimum allowed final listing price is KES {MIN_MARKETPLACE_LISTING_PRICE_KES:,.0f} "
+                f"or about {currency_code} {minimum_final:,.2f}. "
+                f"Enter at least {currency_code} {minimum_base:,.2f} before marketplace mark-up."
+            )
+        )
+
+    return final_price
 
 def calculate_karma_reward(amount: float) -> int:
     """1 point per KES 100, with a small minimum and abuse-safe cap."""
@@ -369,6 +423,8 @@ try:
                ADD COLUMN IF NOT EXISTS payout_method VARCHAR;""",
             """ALTER TABLE transactions
                ADD COLUMN IF NOT EXISTS destination VARCHAR;""",
+            """ALTER TABLE transactions
+               ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;""",
             """ALTER TABLE transactions
                ADD COLUMN IF NOT EXISTS processed_at TIMESTAMP;""",
             """CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);""",
@@ -836,7 +892,7 @@ def create_service(
     current_user: models.User = Depends(get_current_user)
 ):
     # Apply 23.5% platform fee markup to the provider's price
-    final_price = round(service.price * 1.235, 2)
+    final_price = validate_marketplace_base_price(service.price, service.currency)
 
     new_service = models.Service(
         id=str(uuid.uuid4()),
@@ -1305,6 +1361,7 @@ def request_withdrawal(
         status="pending",
         payout_method=method,
         destination=destination,
+        created_at=datetime.utcnow(),
         processed_at=None,
     )
     db.add(withdrawal)
@@ -1339,6 +1396,7 @@ def request_withdrawal(
         "withdrawal_id": withdrawal.id,
         "amount": amount,
         "status": withdrawal.status,
+        "withdrawal": serialize_withdrawal(db, withdrawal),
         "wallet": get_provider_wallet_summary(db, current_user),
     }
 
@@ -1353,8 +1411,23 @@ def serialize_withdrawal(db: Session, withdrawal: models.Transaction):
         "status": withdrawal.status,
         "method": withdrawal.payout_method,
         "destination": withdrawal.destination,
-        "created_at": str(withdrawal.processed_at) if withdrawal.processed_at else None,
+        "created_at": str(withdrawal.created_at) if getattr(withdrawal, "created_at", None) else None,
+        "processed_at": str(withdrawal.processed_at) if withdrawal.processed_at else None,
     }
+
+def get_user_withdrawals(db: Session, user_id: str):
+    withdrawals = db.query(models.Transaction).filter(
+        models.Transaction.user_id == user_id,
+        models.Transaction.type == "withdrawal",
+    ).order_by(models.Transaction.created_at.desc().nullslast()).limit(25).all()
+    return [serialize_withdrawal(db, withdrawal) for withdrawal in withdrawals]
+
+@app.get("/withdrawals")
+def list_my_withdrawals(
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    return get_user_withdrawals(db, current_user.id)
 
 @app.get("/admin/withdrawals")
 def admin_list_withdrawals(
@@ -1396,15 +1469,24 @@ def admin_complete_withdrawal(
             models.Order.status.in_(order_status_filter_values(models.OrderStatus.COMPLETED)),
         ).order_by(models.Order.created_at.asc()).all()
 
-    available_total = round(sum(float(order.payout or 0) for order in completed_orders), 2)
     withdrawal_amount = round(float(withdrawal.amount or 0), 2)
-    if abs(available_total - withdrawal_amount) > 0.01:
+    remaining = withdrawal_amount
+    orders_to_settle = []
+    for order in completed_orders:
+        payout = round(float(order.payout or 0), 2)
+        if payout <= remaining + 0.01:
+            orders_to_settle.append(order)
+            remaining = round(remaining - payout, 2)
+        if abs(remaining) <= 0.01:
+            break
+
+    if abs(remaining) > 0.01:
         raise HTTPException(
             status_code=400,
-            detail="Withdrawal amount does not match the seller's available completed payout balance"
+            detail="Withdrawal amount does not match available completed payouts"
         )
 
-    for order in completed_orders:
+    for order in orders_to_settle:
         order.status = models.OrderStatus.SETTLED.value
 
     withdrawal.status = "completed"
@@ -1433,7 +1515,11 @@ def get_my_earnings(db: Session = Depends(database.get_db), current_user: models
     service_ids = [s.id for s in my_services]
 
     if not service_ids:
-        return {"wallet": get_provider_wallet_summary(db, current_user), "earnings": []}
+        return {
+            "wallet": get_provider_wallet_summary(db, current_user),
+            "earnings": [],
+            "withdrawals": get_user_withdrawals(db, current_user.id),
+        }
 
     # Get all orders for those services that have been paid or beyond
     orders = db.query(models.Order).filter(
@@ -1489,7 +1575,8 @@ def get_my_earnings(db: Session = Depends(database.get_db), current_user: models
         "wallet": {
             **get_provider_wallet_summary(db, current_user),
         },
-        "earnings": earnings
+        "earnings": earnings,
+        "withdrawals": get_user_withdrawals(db, current_user.id),
     }
 
 # --- Ratings API ---
@@ -2015,7 +2102,10 @@ def update_service(
     update_data = service_update.dict(exclude_unset=True)
     # Apply the same marketplace markup used during creation.
     if "price" in update_data:
-        update_data["price"] = round(update_data["price"] * 1.235, 2)
+        update_data["price"] = validate_marketplace_base_price(
+            update_data["price"],
+            update_data.get("currency", service.currency),
+        )
 
     for key, value in update_data.items():
         setattr(service, key, value)

@@ -8,6 +8,25 @@ import { COLORS, SPACING } from '../constants/theme';
 import client from '../api/client';
 import { Button } from '../components/Button';
 import * as Location from 'expo-location';
+import { useCurrency } from '../context/CurrencyContext';
+
+const MARKETPLACE_MARKUP_RATE = 0.235;
+const MARKETPLACE_PRICE_MULTIPLIER = 1 + MARKETPLACE_MARKUP_RATE;
+const MIN_LISTING_PRICE_KES = 500;
+const FALLBACK_EXCHANGE_RATES = {
+    USD: 1,
+    KES: 129,
+    EUR: 0.92,
+    GBP: 0.78,
+};
+
+const convertAmount = (amount, fromCurrency, toCurrency, rates) => {
+    const mergedRates = { ...FALLBACK_EXCHANGE_RATES, ...(rates || {}) };
+    const rateFrom = Number(mergedRates[fromCurrency] || 0);
+    const rateTo = Number(mergedRates[toCurrency] || 0);
+    if (!rateFrom || !rateTo) return amount;
+    return (Number(amount || 0) / rateFrom) * rateTo;
+};
 
 // Category Definitions
 const SERVICE_CATEGORIES = [
@@ -32,6 +51,7 @@ const PRODUCT_CATEGORIES = [
 
 const CreateServiceScreen = ({ route, navigation }) => {
     const { t } = useTranslation();
+    const { rates, formatCurrency } = useCurrency();
     const { service } = route.params || {};
     const isEditing = !!service;
 
@@ -53,6 +73,19 @@ const CreateServiceScreen = ({ route, navigation }) => {
     const [loading, setLoading] = useState(false);
     const [fetchingLocation, setFetchingLocation] = useState(false);
     const [formFields, setFormFields] = useState([]);
+    const parsedPrice = Number.parseFloat(price || '0');
+    const numericPrice = Number.isFinite(parsedPrice) ? parsedPrice : 0;
+    const finalListingPrice = numericPrice * MARKETPLACE_PRICE_MULTIPLIER;
+    const minimumFinalPrice = convertAmount(MIN_LISTING_PRICE_KES, 'KES', currency, rates);
+    const minimumBasePrice = minimumFinalPrice / MARKETPLACE_PRICE_MULTIPLIER;
+    const hasPriceValue = String(price || '').trim().length > 0;
+    const isPriceBelowMinimum = hasPriceValue && finalListingPrice + 0.01 < minimumFinalPrice;
+    const minimumNotice = t('marketplace.create.minimum_price_notice', {
+        defaultValue: 'Minimum allowed final listing price is KES 500 or equivalent. For {{currency}}, enter at least {{base}} before mark-up so the final price reaches {{final}}.',
+        currency,
+        base: formatCurrency(minimumBasePrice, currency),
+        final: formatCurrency(minimumFinalPrice, currency),
+    });
 
     const getCurrentLocation = async () => {
         setFetchingLocation(true);
@@ -121,13 +154,21 @@ const CreateServiceScreen = ({ route, navigation }) => {
             Alert.alert(t('common.error'), t('marketplace.create.error_fill'));
             return;
         }
+        if (!Number.isFinite(parsedPrice) || numericPrice <= 0) {
+            Alert.alert(t('common.error'), t('marketplace.create.error_price_invalid', { defaultValue: 'Enter a valid listing price.' }));
+            return;
+        }
+        if (isPriceBelowMinimum) {
+            Alert.alert(t('common.error'), minimumNotice);
+            return;
+        }
 
         setLoading(true);
         try {
             const data = {
                 title,
                 description,
-                price: parseFloat(price), // Send base price directly to backend
+                price: numericPrice, // Send base price directly to backend
                 item_type: itemType,
                 category,
                 image_url: images.length > 0 ? images[0] : null,
@@ -154,7 +195,8 @@ const CreateServiceScreen = ({ route, navigation }) => {
             navigation.goBack();
         } catch (error) {
             console.error(error);
-            Alert.alert(t('common.error'), isEditing ? t('marketplace.create.error_update') : t('marketplace.create.error_create'));
+            const detail = error.response?.data?.detail;
+            Alert.alert(t('common.error'), detail || (isEditing ? t('marketplace.create.error_update') : t('marketplace.create.error_create')));
         } finally {
             setLoading(false);
         }
@@ -270,13 +312,24 @@ const CreateServiceScreen = ({ route, navigation }) => {
                     {/* Pricing Helper Text */}
                     {price ? (
                         <View style={styles.feeBreakdown}>
-                            <Text style={styles.feeText}>{t('marketplace.create.base_price')}: <Text style={{fontWeight: 'bold'}}>{currency} {parseFloat(price).toFixed(2)}</Text></Text>
-                            <Text style={styles.feeText}>{t('marketplace.create.markup')}: {currency} {(parseFloat(price) * 0.235).toFixed(2)}</Text>
+                            <Text style={styles.feeText}>{t('marketplace.create.base_price')}: <Text style={{fontWeight: 'bold'}}>{currency} {numericPrice.toFixed(2)}</Text></Text>
+                            <Text style={styles.feeText}>{t('marketplace.create.markup')}: {currency} {(numericPrice * MARKETPLACE_MARKUP_RATE).toFixed(2)}</Text>
                             <Text style={styles.totalPriceText}>
-                                {t('marketplace.create.final_price')}: {currency} {(parseFloat(price || 0) * 1.235).toFixed(2)}
+                                {t('marketplace.create.final_price')}: {currency} {finalListingPrice.toFixed(2)}
                             </Text>
                         </View>
                     ) : null}
+
+                    <View style={[styles.minimumPriceNotice, isPriceBelowMinimum && styles.minimumPriceNoticeError]}>
+                        <Ionicons
+                            name={isPriceBelowMinimum ? 'alert-circle-outline' : 'information-circle-outline'}
+                            size={18}
+                            color={isPriceBelowMinimum ? COLORS.error : COLORS.primary}
+                        />
+                        <Text style={[styles.minimumPriceNoticeText, isPriceBelowMinimum && styles.minimumPriceNoticeTextError]}>
+                            {minimumNotice}
+                        </Text>
+                    </View>
 
                     {/* Inventory / Stock */}
                     {itemType === 'products' ? (
@@ -413,7 +466,7 @@ const CreateServiceScreen = ({ route, navigation }) => {
                     <Button
                         title={loading ? (isEditing ? t('common.updating') : t('common.creating')) : (isEditing ? t('marketplace.create.title_edit') : t('marketplace.create.title_new'))}
                         onPress={handleSubmit}
-                        disabled={loading}
+                        disabled={loading || isPriceBelowMinimum}
                         style={{ marginTop: 20 }}
                     />
 
@@ -488,6 +541,10 @@ const styles = StyleSheet.create({
     feeBreakdown: { backgroundColor: '#f0f4ff', padding: 15, borderRadius: 10, marginTop: -15, marginBottom: 20, borderWidth: 1, borderColor: '#dce5ff' },
     feeText: { fontSize: 13, color: '#333', marginBottom: 4 },
     totalPriceText: { fontSize: 15, fontWeight: 'bold', color: COLORS.primary, marginTop: 5, paddingTop: 5, borderTopWidth: 1, borderTopColor: '#dce5ff' },
+    minimumPriceNotice: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#F5F7FF', borderWidth: 1, borderColor: '#DCE5FF', borderRadius: 10, padding: 12, marginTop: -8, marginBottom: 20 },
+    minimumPriceNoticeError: { backgroundColor: '#FFF4F4', borderColor: '#FFD0D0' },
+    minimumPriceNoticeText: { flex: 1, color: COLORS.primary, fontSize: 12, lineHeight: 17, fontWeight: '600' },
+    minimumPriceNoticeTextError: { color: COLORS.error },
     publishContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
