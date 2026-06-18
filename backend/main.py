@@ -602,7 +602,13 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 
 @app.post("/auth/google", response_model=schemas.GoogleLoginResponse)
 async def google_auth(request: schemas.GoogleLoginRequest, db: Session = Depends(database.get_db)):
-    id_info = auth.verify_google_token(request.id_token)
+    try:
+        id_info = auth.verify_google_token(request.id_token)
+    except auth.GoogleVerificationUnavailable:
+        raise HTTPException(
+            status_code=503,
+            detail="Google login is temporarily unavailable. Please try again shortly."
+        )
     if not id_info:
         raise HTTPException(status_code=400, detail="Invalid Google token")
     

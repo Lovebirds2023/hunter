@@ -29,26 +29,53 @@ const SocialLoginButton = ({ imageUri, label, onPress, disabled }) => (
 
 const GoogleSignInButton = ({ googleLogin, label, disabledLabel, onAuthNotice }) => {
     const [request, response, promptAsync] = Google.useIdTokenAuthRequest(getGoogleAuthRequestConfig());
+    const [googleLoading, setGoogleLoading] = useState(false);
 
     React.useEffect(() => {
+        let isMounted = true;
+        const finishLoading = () => {
+            if (isMounted) setGoogleLoading(false);
+        };
+
         if (response?.type === 'success') {
             const idToken = getGoogleIdTokenFromResponse(response);
             if (idToken) {
-                googleLogin(idToken);
+                googleLogin(idToken).finally(finishLoading);
             } else {
+                finishLoading();
                 onAuthNotice('Google did not return an ID token. Please try again or use email/password.');
             }
         } else if (response?.type === 'error') {
+            finishLoading();
             onAuthNotice(response.error?.message || 'Google login failed before reaching the server.');
+        } else if (response?.type === 'cancel' || response?.type === 'dismiss') {
+            finishLoading();
         }
+
+        return () => {
+            isMounted = false;
+        };
     }, [response, googleLogin, onAuthNotice]);
+
+    const handleGooglePress = async () => {
+        setGoogleLoading(true);
+        try {
+            const result = await promptAsync();
+            if (result?.type && result.type !== 'success') {
+                setGoogleLoading(false);
+            }
+        } catch (error) {
+            setGoogleLoading(false);
+            onAuthNotice(error?.message || 'Could not open Google login. Please try again.');
+        }
+    };
 
     return (
         <SocialLoginButton
             imageUri="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg"
-            label={request ? label : disabledLabel}
-            onPress={() => promptAsync()}
-            disabled={!request}
+            label={googleLoading ? 'Opening Google...' : request ? label : disabledLabel}
+            onPress={handleGooglePress}
+            disabled={!request || googleLoading}
         />
     );
 };

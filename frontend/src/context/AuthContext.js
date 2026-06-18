@@ -32,6 +32,9 @@ export const AuthProvider = ({ children }) => {
     const clearAuthNotice = () => setAuthNotice(null);
 
     const getFriendlyAuthError = (error, fallback) => {
+        if (error?.code === 'ECONNABORTED') {
+            return 'The login request took too long. Please try again in a moment.';
+        }
         if (error?.message === 'Network Error') {
             return 'Could not reach the server. Check your connection and try again.';
         }
@@ -87,7 +90,7 @@ export const AuthProvider = ({ children }) => {
         setIsLoading(true);
         clearAuthNotice();
         try {
-            const response = await client.post('/auth/google', { id_token: idToken });
+            const response = await client.post('/auth/google', { id_token: idToken }, { timeout: 15000 });
             
             const { access_token, user } = response.data;
             await setAppLanguage(user.language || 'en');

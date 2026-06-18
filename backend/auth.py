@@ -23,7 +23,30 @@ GOOGLE_IOS_CLIENT_ID = os.getenv("GOOGLE_IOS_CLIENT_ID")
 GOOGLE_ANDROID_CLIENT_ID = os.getenv("GOOGLE_ANDROID_CLIENT_ID")
 
 from google.oauth2 import id_token
+from google.auth.exceptions import GoogleAuthError
 from google.auth.transport import requests
+
+class GoogleVerificationUnavailable(Exception):
+    pass
+
+class GoogleOAuthRequest:
+    def __init__(self, timeout=8):
+        self.timeout = timeout
+        self.request = requests.Request()
+
+    def __call__(self, url, method="GET", body=None, headers=None, timeout=None, **kwargs):
+        if isinstance(timeout, (int, float)):
+            effective_timeout = min(timeout, self.timeout)
+        else:
+            effective_timeout = self.timeout
+        return self.request(
+            url,
+            method=method,
+            body=body,
+            headers=headers,
+            timeout=effective_timeout,
+            **kwargs,
+        )
 
 def verify_google_token(token: str):
     audiences = [
@@ -31,14 +54,30 @@ def verify_google_token(token: str):
         for client_id in [GOOGLE_CLIENT_ID, GOOGLE_IOS_CLIENT_ID, GOOGLE_ANDROID_CLIENT_ID]
         if client_id
     ]
-    for audience in audiences:
+    if not audiences:
+        logger.warning("Google OAuth verification is not configured with any client IDs.")
+        return None
+
+    try:
+        token_audience = jwt.get_unverified_claims(token).get("aud")
+    except Exception:
+        token_audience = None
+
+    if token_audience in audiences:
+        audiences_to_try = [token_audience]
+    else:
+        audiences_to_try = audiences
+
+    google_request = GoogleOAuthRequest(timeout=8)
+    for audience in audiences_to_try:
         try:
-            return id_token.verify_oauth2_token(token, requests.Request(), audience)
+            return id_token.verify_oauth2_token(token, google_request, audience)
         except ValueError as exc:
             logger.info("Google token audience check failed for configured client: %s", exc)
             continue
-    if not audiences:
-        logger.warning("Google OAuth verification is not configured with any client IDs.")
+        except GoogleAuthError as exc:
+            logger.warning("Google token verification could not reach Google: %s", exc)
+            raise GoogleVerificationUnavailable("Google token verification is temporarily unavailable") from exc
     return None
 
 import bcrypt
