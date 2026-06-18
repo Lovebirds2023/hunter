@@ -2161,6 +2161,9 @@ def export_data(
     # Expanded Access: Allow Admins AND Partners/Providers (if authorized)
     if current_user.role not in [models.UserRole.ADMIN.value, models.UserRole.SUPER_ADMIN.value, models.UserRole.PROVIDER.value]:
         raise HTTPException(status_code=403, detail="Not authorized")
+    valid_export_types = {"registrations", "events", "users", "orders", "dogs", "cases", "community", "support"}
+    if type not in valid_export_types:
+        raise HTTPException(status_code=400, detail=f"Unsupported export type: {type}")
         
     # Create Workbook
     wb = openpyxl.Workbook()

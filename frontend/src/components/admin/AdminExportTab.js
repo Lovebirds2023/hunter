@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import {
-    View, Text, TouchableOpacity, ActivityIndicator, Alert, ScrollView
+    View, Text, TouchableOpacity, ActivityIndicator, Alert, ScrollView, Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
+import { encode as encodeBase64 } from 'base64-arraybuffer';
 import client from '../../api/client';
 import { adminStyles as s, ADMIN_COLORS } from './AdminStyles';
 
@@ -31,14 +32,30 @@ export const AdminExportTab = ({ onBack }) => {
             });
 
             const fileName = `ld360_${type}_${new Date().toISOString().split('T')[0]}.xlsx`;
-            const fileUri = `${FileSystem.documentDirectory}${fileName}`;
 
-            // Convert arraybuffer to base64 for Expo FileSystem
-            const base64 = btoa(
-                new Uint8Array(response.data)
-                    .reduce((data, byte) => data + String.fromCharCode(byte), '')
-            );
+            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                const blob = new Blob([response.data], {
+                    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                });
+                const blobUrl = window.URL.createObjectURL(blob);
+                const link = window.document.createElement('a');
+                link.href = blobUrl;
+                link.download = fileName;
+                link.rel = 'noopener';
+                window.document.body.appendChild(link);
+                link.click();
+                link.remove();
+                window.setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
+                return;
+            }
 
+            const fileRoot = FileSystem.documentDirectory || FileSystem.cacheDirectory;
+            if (!fileRoot) {
+                throw new Error('Export storage is not available on this device.');
+            }
+
+            const fileUri = `${fileRoot}${fileName}`;
+            const base64 = encodeBase64(response.data);
             await FileSystem.writeAsStringAsync(fileUri, base64, {
                 encoding: FileSystem.EncodingType.Base64,
             });
