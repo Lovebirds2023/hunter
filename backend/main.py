@@ -226,6 +226,8 @@ KARMA_MAX_ORDER_DISCOUNT_RATE = 0.20
 KARMA_REWARD_AMOUNT_STEP = 100
 KARMA_MIN_REWARD_PER_ORDER = 5
 KARMA_MAX_REWARD_PER_ORDER = 500
+KARMA_CASE_REPORT_REWARD = 10
+KARMA_CASE_COMMENT_REWARD = 2
 
 def calculate_karma_reward(amount: float) -> int:
     """1 point per KES 100, with a small minimum and abuse-safe cap."""
@@ -324,6 +326,8 @@ try:
             """ALTER TABLE users
                ADD COLUMN IF NOT EXISTS google_id VARCHAR(255) UNIQUE;""",
             """ALTER TABLE users
+               ADD COLUMN IF NOT EXISTS payment_method VARCHAR;""",
+            """ALTER TABLE users
                ALTER COLUMN hashed_password DROP NOT NULL;""",
             """ALTER TABLE users
                ALTER COLUMN full_name DROP NOT NULL;""",
@@ -361,6 +365,10 @@ try:
                ADD COLUMN IF NOT EXISTS discount_amount DOUBLE PRECISION DEFAULT 0;""",
             """ALTER TABLE orders
                ADD COLUMN IF NOT EXISTS karma_points_redeemed INTEGER DEFAULT 0;""",
+            """ALTER TABLE transactions
+               ADD COLUMN IF NOT EXISTS payout_method VARCHAR;""",
+            """ALTER TABLE transactions
+               ADD COLUMN IF NOT EXISTS destination VARCHAR;""",
             """CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);""",
             """CREATE INDEX IF NOT EXISTS idx_users_auth_provider ON users(auth_provider);""",
             """CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);""",
@@ -653,6 +661,11 @@ async def update_user_me(
         user.mpesa_phone_number = user_update.mpesa_phone_number
     if user_update.preferred_currency is not None:
         user.preferred_currency = user_update.preferred_currency
+    if user_update.payment_method is not None:
+        payment_method = user_update.payment_method.strip().lower() if user_update.payment_method else None
+        if payment_method and payment_method not in {"mpesa", "card"}:
+            raise HTTPException(status_code=400, detail="Payment method must be mpesa or card")
+        user.payment_method = payment_method
     
     db.commit()
     db.refresh(user)
@@ -1188,6 +1201,133 @@ def get_my_orders(db: Session = Depends(database.get_db), current_user: models.U
         })
     return result
 
+def get_payout_destination(user: models.User, method: Optional[str] = None) -> Optional[str]:
+    payout_method = (method or getattr(user, "payment_method", None) or "").strip().lower()
+    if payout_method == "mpesa":
+        return user.mpesa_phone_number
+    if payout_method == "card":
+        return "Pesapal card/bank payout"
+    return None
+
+def get_provider_wallet_summary(db: Session, user: models.User):
+    services = db.query(models.Service).filter(models.Service.provider_id == user.id).all()
+    service_ids = [s.id for s in services]
+    total_earned = 0.0
+    in_escrow = 0.0
+    available_gross = 0.0
+    settled = 0.0
+
+    if service_ids:
+        orders = db.query(models.Order).filter(
+            models.Order.service_id.in_(service_ids),
+            models.Order.status.in_(PAID_ORDER_STATUS_VALUES)
+        ).all()
+        for order in orders:
+            payout = float(order.payout or 0)
+            status_lower = order_status_value(order.status)
+            total_earned += payout
+            if status_lower == models.OrderStatus.PAID.value:
+                in_escrow += payout
+            elif status_lower == models.OrderStatus.COMPLETED.value:
+                available_gross += payout
+            elif status_lower == models.OrderStatus.SETTLED.value:
+                settled += payout
+
+    pending_withdrawal = sum(float(t.amount or 0) for t in db.query(models.Transaction).filter(
+        models.Transaction.user_id == user.id,
+        models.Transaction.type == "withdrawal",
+        models.Transaction.status == "pending",
+    ).all())
+    available = max(available_gross - pending_withdrawal, 0.0)
+    payment_method = (getattr(user, "payment_method", None) or "").strip().lower() or None
+
+    return {
+        "currency": user.preferred_currency or "KES",
+        "total_earned": round(total_earned, 2),
+        "in_escrow": round(in_escrow, 2),
+        "available": round(available, 2),
+        "available_before_pending_withdrawals": round(available_gross, 2),
+        "pending_withdrawal": round(pending_withdrawal, 2),
+        "settled": round(settled, 2),
+        "withdrawable": round(available, 2),
+        "payment_method": payment_method,
+        "payout_destination": get_payout_destination(user, payment_method),
+    }
+
+@app.get("/wallet/summary")
+def wallet_summary(
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    return get_provider_wallet_summary(db, current_user)
+
+@app.post("/withdrawals/request")
+def request_withdrawal(
+    req: schemas.WithdrawalRequest,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    wallet = get_provider_wallet_summary(db, current_user)
+    available = float(wallet["withdrawable"] or 0)
+    amount = round(float(req.amount or available), 2)
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="No available balance to withdraw")
+    if amount > available:
+        raise HTTPException(status_code=400, detail="Withdrawal amount exceeds available balance")
+
+    method = (req.method or current_user.payment_method or "").strip().lower()
+    if method not in {"mpesa", "card"}:
+        raise HTTPException(status_code=400, detail="Set a payout method first")
+
+    destination = get_payout_destination(current_user, method)
+    if method == "mpesa" and not destination:
+        raise HTTPException(status_code=400, detail="Add your M-Pesa phone number before requesting withdrawal")
+
+    withdrawal = models.Transaction(
+        id=str(uuid.uuid4()),
+        order_id=None,
+        user_id=current_user.id,
+        amount=amount,
+        type="withdrawal",
+        status="pending",
+        payout_method=method,
+        destination=destination,
+    )
+    db.add(withdrawal)
+
+    add_notification(
+        db,
+        current_user.id,
+        "Withdrawal Requested",
+        f"Your KES {amount:,.2f} withdrawal request is pending admin processing.",
+        "payout",
+        commit=False,
+    )
+
+    admins = db.query(models.User).filter(models.User.role.in_([
+        models.UserRole.ADMIN.value,
+        models.UserRole.SUPER_ADMIN.value,
+    ])).all()
+    destination_label = destination or "Pesapal card/bank payout"
+    for admin_user in admins:
+        add_notification(
+            db,
+            admin_user.id,
+            "Seller Withdrawal Request",
+            f"{current_user.full_name or current_user.email} requested KES {amount:,.2f} to {method.upper()} ({destination_label}).",
+            "payout",
+            commit=False,
+        )
+
+    db.commit()
+    return {
+        "message": "Withdrawal request submitted",
+        "withdrawal_id": withdrawal.id,
+        "amount": amount,
+        "status": withdrawal.status,
+        "wallet": get_provider_wallet_summary(db, current_user),
+    }
+
 @app.get("/my-earnings")
 def get_my_earnings(db: Session = Depends(database.get_db), current_user: models.User = Depends(get_current_user)):
     """Seller sees all earnings from their services, with escrow/available status."""
@@ -1196,7 +1336,7 @@ def get_my_earnings(db: Session = Depends(database.get_db), current_user: models
     service_ids = [s.id for s in my_services]
 
     if not service_ids:
-        return {"wallet": {"total_earned": 0, "in_escrow": 0, "available": 0, "settled": 0}, "earnings": []}
+        return {"wallet": get_provider_wallet_summary(db, current_user), "earnings": []}
 
     # Get all orders for those services that have been paid or beyond
     orders = db.query(models.Order).filter(
@@ -1250,10 +1390,7 @@ def get_my_earnings(db: Session = Depends(database.get_db), current_user: models
 
     return {
         "wallet": {
-            "total_earned": round(total_earned, 2),
-            "in_escrow": round(in_escrow, 2),
-            "available": round(available, 2),
-            "settled": round(settled, 2)
+            **get_provider_wallet_summary(db, current_user),
         },
         "earnings": earnings
     }
@@ -2347,12 +2484,12 @@ def admin_complete_order(
             db,
             service.provider_id,
             "Delivery confirmed",
-            f"Delivery for '{item_title}' has been confirmed. Your payout is ready for admin approval.",
+            f"Delivery for '{item_title}' has been confirmed. Your payout is now available for withdrawal.",
             "delivery",
             commit=False
         )
     db.commit()
-    return {"message": "Order marked as completed. Seller payout is now ready for approval.", "status": order.status}
+    return {"message": "Order marked as completed. Seller payout is now available for withdrawal.", "status": order.status}
 
 @app.post("/admin/orders/{order_id}/settle")
 def admin_settle_order(
@@ -2376,6 +2513,7 @@ def admin_settle_order(
         raise HTTPException(status_code=404, detail="Service not found for this order")
 
     provider_id = service.provider_id
+    provider = db.query(models.User).filter(models.User.id == provider_id).first()
     payout_amount = order.payout or 0
 
     # Credit the provider's wallet (create wallet if it doesn't exist)
@@ -2394,7 +2532,9 @@ def admin_settle_order(
         user_id=provider_id,
         amount=payout_amount,
         type="payout",
-        status="completed"
+        status="completed",
+        payout_method=getattr(provider, "payment_method", None),
+        destination=get_payout_destination(provider) if provider else None
     )
     db.add(tx)
 
@@ -2404,13 +2544,14 @@ def admin_settle_order(
 
     # Send notification to provider
     try:
-        provider = db.query(models.User).filter(models.User.id == provider_id).first()
+        destination = get_payout_destination(provider) if provider else None
+        destination_text = f" to {destination}" if destination else ""
         notification = models.Notification(
             id=str(uuid.uuid4()),
             user_id=provider_id,
             title="Payout Approved! 💰",
-            message=f"Your payout of KES {payout_amount:,.2f} for '{service.title}' has been approved and settled.",
-            type="info"
+            message=f"Your payout of KES {payout_amount:,.2f} for '{service.title}' has been approved and settled{destination_text}.",
+            type="payout"
         )
         db.add(notification)
         db.commit()
@@ -2933,9 +3074,23 @@ def create_case_report(
     db.commit()
     db.refresh(new_report)
     
-    # Award Karma for reporting a case
-    award_karma(db, current_user.id, 10, "case_report", f"Reported case: {new_report.title}")
-
+    # Award points for useful community safety reporting.
+    award_karma(
+        db,
+        current_user.id,
+        KARMA_CASE_REPORT_REWARD,
+        "case_report",
+        f"Reported case: {new_report.title}",
+        commit=False,
+    )
+    add_notification(
+        db,
+        current_user.id,
+        "Points earned",
+        f"You earned {KARMA_CASE_REPORT_REWARD} points for reporting '{new_report.title}'.",
+        "reward",
+        commit=True,
+    )
 
     return {
         **{c.name: getattr(new_report, c.name) for c in new_report.__table__.columns},
@@ -3042,9 +3197,22 @@ def add_case_comment(
     db.commit()
     db.refresh(new_comment)
     
-    # Award Karma for commenting on a case
-    award_karma(db, current_user.id, 2, "comment", f"Commented on case: {report.title}")
-
+    award_karma(
+        db,
+        current_user.id,
+        KARMA_CASE_COMMENT_REWARD,
+        "comment",
+        f"Commented on case: {report.title}",
+        commit=False,
+    )
+    add_notification(
+        db,
+        current_user.id,
+        "Points earned",
+        f"You earned {KARMA_CASE_COMMENT_REWARD} points for commenting on '{report.title}'.",
+        "reward",
+        commit=True,
+    )
 
     return {
         **{c.name: getattr(new_comment, c.name) for c in new_comment.__table__.columns},

@@ -87,13 +87,13 @@ export const AdminOrdersTab = ({ onBack }) => {
         if (Platform.OS === 'web') {
             confirmAdminAction(
                 'Confirm Delivery',
-                'Mark this order as completed (service delivered)? This will enable payout approval.',
+                'Mark this order as completed (service delivered)? This will make the seller payout available for withdrawal.',
                 'Confirm Delivery',
                 async () => {
                     setActioningId(orderId);
                     try {
                         const res = await client.post(`/admin/orders/${orderId}/complete`);
-                        Alert.alert('Success', res.data?.message || 'Order marked as completed. You can now approve the seller payout.');
+                        Alert.alert('Success', res.data?.message || 'Order marked as completed. Seller payout is now available for withdrawal.');
                         fetchOrders(true);
                     } catch (e) {
                         const msg = e.response?.data?.detail || 'Failed to complete order.';
@@ -108,7 +108,7 @@ export const AdminOrdersTab = ({ onBack }) => {
 
         Alert.alert(
             'Confirm Delivery',
-            'Mark this order as completed (service delivered)? This will enable payout approval.',
+            'Mark this order as completed (service delivered)? This will make the seller payout available for withdrawal.',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -117,7 +117,7 @@ export const AdminOrdersTab = ({ onBack }) => {
                         setActioningId(orderId);
                         try {
                             await client.post(`/admin/orders/${orderId}/complete`);
-                            Alert.alert('✅ Success', 'Order marked as completed. You can now approve the seller payout.');
+                            Alert.alert('Success', 'Order marked as completed. Seller payout is now available for withdrawal.');
                             fetchOrders(true);
                         } catch (e) {
                             const msg = e.response?.data?.detail || 'Failed to complete order.';

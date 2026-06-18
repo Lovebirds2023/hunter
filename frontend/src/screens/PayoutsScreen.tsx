@@ -18,7 +18,12 @@ interface WalletSummary {
     total_earned: number;
     in_escrow: number;
     available: number;
+    withdrawable?: number;
+    pending_withdrawal?: number;
     settled: number;
+    currency?: string;
+    payment_method?: string | null;
+    payout_destination?: string | null;
 }
 
 interface EarningItem {
@@ -49,7 +54,7 @@ interface BuyerOrder {
 
 export const PayoutsScreen = () => {
     const { t } = useTranslation();
-    const navigation = useNavigation();
+    const navigation: any = useNavigation();
     const { userInfo } = useContext(AuthContext);
     const isProvider = userInfo?.role === 'provider' || userInfo?.role === 'admin' || userInfo?.role === 'super_admin';
 
@@ -60,6 +65,7 @@ export const PayoutsScreen = () => {
     const [wallet, setWallet] = useState<WalletSummary>({ total_earned: 0, in_escrow: 0, available: 0, settled: 0 });
     const [earnings, setEarnings] = useState<EarningItem[]>([]);
     const [receiptOrderId, setReceiptOrderId] = useState<string | null>(null);
+    const [withdrawing, setWithdrawing] = useState(false);
 
     // Buyer state
     const [buyerOrders, setBuyerOrders] = useState<BuyerOrder[]>([]);
@@ -145,6 +151,47 @@ export const PayoutsScreen = () => {
         }
     };
 
+    const getPayoutMethodLabel = () => {
+        if (wallet.payment_method === 'mpesa') {
+            return wallet.payout_destination ? `M-Pesa - ${wallet.payout_destination}` : 'M-Pesa';
+        }
+        if (wallet.payment_method === 'card') {
+            return 'Card / Pesapal';
+        }
+        return t('profile_screen.not_configured', { defaultValue: 'Not configured' });
+    };
+
+    const handleRequestWithdrawal = async () => {
+        const amount = wallet.withdrawable ?? wallet.available ?? 0;
+        if (amount <= 0) {
+            Alert.alert(t('common.error'), t('payouts.no_available_withdrawal', { defaultValue: 'No available balance to withdraw yet.' }));
+            return;
+        }
+        if (!wallet.payment_method) {
+            Alert.alert(
+                t('common.error'),
+                t('payouts.configure_payout_first', { defaultValue: 'Please set your payout method in profile first.' }),
+                [{ text: t('profile_screen.setup', { defaultValue: 'Setup' }), onPress: () => navigation.navigate('Profile') }]
+            );
+            return;
+        }
+
+        setWithdrawing(true);
+        try {
+            const res = await client.post('/withdrawals/request', {
+                amount,
+                method: wallet.payment_method
+            });
+            setWallet(res.data.wallet);
+            Alert.alert(t('common.success'), res.data.message || t('payouts.withdrawal_requested', { defaultValue: 'Withdrawal request submitted.' }));
+        } catch (error: any) {
+            const detail = error.response?.data?.detail || error.message || t('payouts.withdrawal_failed', { defaultValue: 'Could not request withdrawal.' });
+            Alert.alert(t('common.error'), typeof detail === 'string' ? detail : JSON.stringify(detail));
+        } finally {
+            setWithdrawing(false);
+        }
+    };
+
     if (loading) {
         return (
             <ThemeBackground>
@@ -227,6 +274,40 @@ export const PayoutsScreen = () => {
                                             <Text style={styles.walletStatLabel}>{t('payouts.status.settled')}</Text>
                                         </View>
                                     </View>
+                                </View>
+
+                                <View style={styles.withdrawPanel}>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.withdrawLabel}>{t('payouts.withdraw_to', { defaultValue: 'Withdraw to' })}</Text>
+                                        <Text style={styles.withdrawMethod}>{getPayoutMethodLabel()}</Text>
+                                        {(wallet.pending_withdrawal || 0) > 0 && (
+                                            <Text style={styles.pendingWithdrawalText}>
+                                                {t('payouts.pending_withdrawal', {
+                                                    defaultValue: 'Pending withdrawal: KES {{amount}}',
+                                                    amount: (wallet.pending_withdrawal || 0).toLocaleString()
+                                                })}
+                                            </Text>
+                                        )}
+                                    </View>
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.withdrawButton,
+                                            ((wallet.withdrawable ?? wallet.available ?? 0) <= 0 || withdrawing) && styles.withdrawButtonDisabled
+                                        ]}
+                                        onPress={handleRequestWithdrawal}
+                                        disabled={(wallet.withdrawable ?? wallet.available ?? 0) <= 0 || withdrawing}
+                                    >
+                                        {withdrawing ? (
+                                            <ActivityIndicator size="small" color={COLORS.primaryDark} />
+                                        ) : (
+                                            <>
+                                                <Ionicons name="cash-outline" size={16} color={COLORS.primaryDark} />
+                                                <Text style={styles.withdrawButtonText}>
+                                                    {t('payouts.withdraw', { defaultValue: 'Withdraw' })}
+                                                </Text>
+                                            </>
+                                        )}
+                                    </TouchableOpacity>
                                 </View>
                             </LinearGradient>
 
@@ -482,6 +563,19 @@ const styles = StyleSheet.create({
     walletStatDot: { width: 8, height: 8, borderRadius: 4 },
     walletStatAmount: { color: COLORS.white, fontSize: 13, fontWeight: '700' },
     walletStatLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 10, marginTop: 1 },
+    withdrawPanel: {
+        flexDirection: 'row', alignItems: 'center', gap: 12,
+        borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', marginTop: 16, paddingTop: 14,
+    },
+    withdrawLabel: { color: 'rgba(255,255,255,0.45)', fontSize: 10, textTransform: 'uppercase', fontWeight: '700' },
+    withdrawMethod: { color: COLORS.white, fontSize: 13, fontWeight: '700', marginTop: 2 },
+    pendingWithdrawalText: { color: COLORS.accent, fontSize: 11, fontWeight: '700', marginTop: 5 },
+    withdrawButton: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+        backgroundColor: COLORS.accent, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10,
+    },
+    withdrawButtonDisabled: { opacity: 0.5 },
+    withdrawButtonText: { color: COLORS.primaryDark, fontSize: 12, fontWeight: '800' },
 
     // Info Banner
     infoBanner: {

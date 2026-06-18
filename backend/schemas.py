@@ -27,6 +27,7 @@ class UserUpdate(BaseModel):
     language: Optional[str] = None
     mpesa_phone_number: Optional[str] = None
     preferred_currency: Optional[str] = None
+    payment_method: Optional[str] = None
     is_online: Optional[bool] = None
     last_seen: Optional[datetime.datetime] = None
     karma_points: Optional[int] = None
@@ -40,6 +41,7 @@ class UserResponse(UserBase):
     bio: Optional[str] = None
     mpesa_phone_number: Optional[str] = None
     preferred_currency: Optional[str] = None
+    payment_method: Optional[str] = None
     average_rating: float = 0.0
     total_ratings: int = 0
     is_online: bool = False
@@ -610,4 +612,8 @@ class KarmaTransactionResponse(BaseModel):
 
 class KarmaRedeemRequest(BaseModel):
     amount_to_redeem: int
+
+class WithdrawalRequest(BaseModel):
+    amount: Optional[float] = None
+    method: Optional[str] = None
 

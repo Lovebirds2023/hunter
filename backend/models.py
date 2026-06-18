@@ -39,6 +39,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     timezone = Column(String, nullable=True)
     preferred_currency = Column(String, nullable=True)
+    payment_method = Column(String, nullable=True) # mpesa, card
     mpesa_phone_number = Column(String, nullable=True)
     average_rating = Column(Float, default=0.0)
     total_ratings = Column(Integer, default=0)
@@ -218,6 +219,8 @@ class Transaction(Base):
     amount = Column(Float)
     type = Column(String) # "escrow", "payout", "refund"
     status = Column(String) # "pending", "completed", "failed"
+    payout_method = Column(String, nullable=True)
+    destination = Column(String, nullable=True)
     processed_at = Column(DateTime, default=datetime.datetime.utcnow)
     
     order = relationship("Order", back_populates="transactions")

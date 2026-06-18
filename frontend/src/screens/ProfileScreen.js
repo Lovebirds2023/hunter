@@ -41,6 +41,7 @@ export const ProfileScreen = ({ navigation }) => {
     const initialCountryCode = userInfo?.country || '+254';
     const initialCountryCodeSelection = getCountryCodeSelection(initialCountryCode);
     const [dogs, setDogs] = useState([]);
+    const [dashboardStats, setDashboardStats] = useState({ dogs: null, activities: null, deals: null });
     const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
 
@@ -61,6 +62,7 @@ export const ProfileScreen = ({ navigation }) => {
     const [paymentMethod, setPaymentMethod] = useState(userInfo?.payment_method || '');
     // Cards are processed via Pesapal's secure hosted checkout — we never store card numbers or CVV.
     const [mpesaPhone, setMpesaPhone] = useState(userInfo?.mpesa_phone_number || '');
+    const [walletSummary, setWalletSummary] = useState({ currency: 'KES', available: 0, pending_withdrawal: 0 });
 
     // Reset local state when userInfo changes (from backend sync)
     useEffect(() => {
@@ -98,7 +100,9 @@ export const ProfileScreen = ({ navigation }) => {
     const fetchMyDogs = async () => {
         try {
             const res = await client.get('/my-dogs');
-            setDogs(res.data);
+            const dogList = Array.isArray(res.data) ? res.data : [];
+            setDogs(dogList);
+            setDashboardStats(prev => ({ ...prev, dogs: dogList.length }));
         } catch (e) {
             if (__DEV__) console.log('Error fetching dogs', e);
         } finally {
@@ -106,9 +110,49 @@ export const ProfileScreen = ({ navigation }) => {
         }
     };
 
+    const fetchDashboardStats = async () => {
+        const [registrationsRes, ordersRes, earningsRes] = await Promise.allSettled([
+            client.get('/my-registrations'),
+            client.get('/my-orders'),
+            client.get('/my-earnings'),
+        ]);
+
+        const registrations = registrationsRes.status === 'fulfilled' && Array.isArray(registrationsRes.value.data)
+            ? registrationsRes.value.data
+            : [];
+        const orders = ordersRes.status === 'fulfilled' && Array.isArray(ordersRes.value.data)
+            ? ordersRes.value.data
+            : [];
+        const earnings = earningsRes.status === 'fulfilled' && Array.isArray(earningsRes.value.data?.earnings)
+            ? earningsRes.value.data.earnings
+            : [];
+
+        const dealIds = new Set([
+            ...orders.map(order => order.id).filter(Boolean),
+            ...earnings.map(earning => earning.id).filter(Boolean),
+        ]);
+
+        setDashboardStats(prev => ({
+            ...prev,
+            activities: registrations.length,
+            deals: dealIds.size,
+        }));
+    };
+
+    const fetchWalletSummary = async () => {
+        try {
+            const res = await client.get('/wallet/summary');
+            setWalletSummary(res.data);
+        } catch (e) {
+            if (__DEV__) console.log('Error fetching wallet summary', e);
+        }
+    };
+
     useFocusEffect(
         React.useCallback(() => {
             fetchMyDogs();
+            fetchWalletSummary();
+            fetchDashboardStats();
         }, [])
     );
 
@@ -153,6 +197,7 @@ export const ProfileScreen = ({ navigation }) => {
                 country: editCountryCode,
                 language: editLanguage,
                 profile_image: editAvatar,
+                payment_method: paymentMethod || null,
                 // Only store payout preference and M-Pesa phone (never card numbers/CVV)
                 mpesa_phone_number: paymentMethod === 'mpesa' ? mpesaPhone : (userInfo?.mpesa_phone_number || null),
             };
@@ -162,6 +207,7 @@ export const ProfileScreen = ({ navigation }) => {
             }
             setIsEditing(false);
             setIsPaymentEditing(false);
+            fetchWalletSummary();
             Alert.alert(t('common.success'), t('profile_screen.success_msg'));
         } catch (error) {
             Alert.alert(t('common.error'), t('profile_screen.error_msg'));
@@ -191,6 +237,8 @@ export const ProfileScreen = ({ navigation }) => {
             <Ionicons name="chevron-forward" size={20} color={COLORS.gray} />
         </TouchableOpacity>
     );
+
+    const statValue = (value) => value === null || value === undefined ? '...' : value;
 
     return (
         <SafeAreaView style={styles.container}>
@@ -250,15 +298,15 @@ export const ProfileScreen = ({ navigation }) => {
 
                     <View style={styles.statsContainer}>
                         <TouchableOpacity style={styles.statBox} onPress={() => navigation.navigate('DogIdentity')}>
-                            <Text style={styles.statNumber}>{userInfo?.dogs?.length || 0}</Text>
+                            <Text style={styles.statNumber}>{statValue(dashboardStats.dogs)}</Text>
                             <Text style={styles.statLabel}>{t('profile_screen.dogs_stat')}</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.statBox} onPress={() => navigation.navigate('Events')}>
-                            <Text style={styles.statNumber}>{userInfo?.activities?.length || 0}</Text>
+                        <TouchableOpacity style={styles.statBox} onPress={() => navigation.navigate('Events', { screen: 'MyRegistrations' })}>
+                            <Text style={styles.statNumber}>{statValue(dashboardStats.activities)}</Text>
                             <Text style={styles.statLabel}>{t('profile_screen.activities_stat')}</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.statBox} onPress={() => navigation.navigate('Marketplace')}>
-                            <Text style={styles.statNumber}>{userInfo?.transactions?.length || 0}</Text>
+                        <TouchableOpacity style={styles.statBox} onPress={() => navigation.navigate('Payouts')}>
+                            <Text style={styles.statNumber}>{statValue(dashboardStats.deals)}</Text>
                             <Text style={styles.statLabel}>{t('profile_screen.deals_stat')}</Text>
                         </TouchableOpacity>
                     </View>
@@ -358,7 +406,14 @@ export const ProfileScreen = ({ navigation }) => {
                             <Text style={styles.walletLabel}>{t('profile_screen.available_balance')}</Text>
                             <Ionicons name="wallet" size={24} color={COLORS.accent} />
                         </View>
-                        <Text style={styles.walletBalance}>{userInfo?.currency || 'KES'} 0.00</Text>
+                        <Text style={styles.walletBalance}>
+                            {walletSummary?.currency || userInfo?.preferred_currency || 'KES'} {(walletSummary?.available || 0).toLocaleString()}
+                        </Text>
+                        {(walletSummary?.pending_withdrawal || 0) > 0 && (
+                            <Text style={styles.walletPendingText}>
+                                Pending withdrawal: KES {(walletSummary.pending_withdrawal || 0).toLocaleString()}
+                            </Text>
+                        )}
                         
                         <View style={styles.walletFooter}>
                             <View>
@@ -579,7 +634,7 @@ export const ProfileScreen = ({ navigation }) => {
                             <TouchableOpacity onPress={() => setIsPaymentEditing(false)} style={[styles.saveBtn, { flex: 1, backgroundColor: '#f0f0f0', elevation: 0 }]}>
                                 <Text style={[styles.btnText, { color: COLORS.gray }]}>{t('profile_screen.back')}</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => setIsPaymentEditing(false)} style={[styles.saveBtn, { flex: 2, backgroundColor: COLORS.accent }]}>
+                            <TouchableOpacity onPress={handleSaveGlobal} style={[styles.saveBtn, { flex: 2, backgroundColor: COLORS.accent }]}>
                                 <Text style={[styles.btnText, { color: COLORS.primaryDark }]}>{t('profile_screen.apply_payout')}</Text>
                             </TouchableOpacity>
                         </View>
@@ -630,6 +685,7 @@ const styles = StyleSheet.create({
     walletHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     walletLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 'bold' },
     walletBalance: { fontSize: 36, fontWeight: 'bold', color: COLORS.white, marginVertical: 15 },
+    walletPendingText: { color: COLORS.accent, fontSize: 12, fontWeight: '700', marginTop: -8, marginBottom: 10 },
     walletFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingTop: 15 },
     payoutMethodLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 4 },
     payoutMethodValue: { color: COLORS.white, fontSize: 14, fontWeight: 'bold' },
