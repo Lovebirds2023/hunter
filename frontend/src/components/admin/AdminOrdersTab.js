@@ -209,6 +209,27 @@ export const AdminOrdersTab = ({ onBack }) => {
         );
     };
 
+    const handleCancelOrder = async (order) => {
+        confirmAdminAction(
+            'Cancel Pending Order',
+            `Cancel this unpaid pending order for ${order.buyer_name || 'buyer'}?\n\nService: ${order.service_title}\nNo payment, payout, or inventory will be changed.`,
+            'Cancel Order',
+            async () => {
+                setActioningId(order.id);
+                try {
+                    const res = await client.post(`/orders/${order.id}/cancel`);
+                    Alert.alert('Order Cancelled', res.data?.message || 'Order cancelled successfully.');
+                    fetchOrders(true);
+                } catch (e) {
+                    const msg = e.response?.data?.detail || 'Failed to cancel order.';
+                    Alert.alert('Error', msg);
+                } finally {
+                    setActioningId(null);
+                }
+            }
+        );
+    };
+
     const getStatusLabel = (status) => {
         const s = (status || '').toLowerCase();
         switch (s) {
@@ -423,6 +444,33 @@ export const AdminOrdersTab = ({ onBack }) => {
                                 )}
 
                                 {/* === ACTION BUTTONS === */}
+                                {statusLower === 'pending' && (
+                                    <View style={{ marginTop: 12 }}>
+                                        <TouchableOpacity
+                                            style={[s.actionBtn, {
+                                                backgroundColor: `${ADMIN_COLORS.danger}12`,
+                                                flex: 1,
+                                                paddingVertical: 10,
+                                                justifyContent: 'center',
+                                                borderWidth: 1,
+                                                borderColor: `${ADMIN_COLORS.danger}40`,
+                                            }]}
+                                            onPress={() => handleCancelOrder(item)}
+                                            disabled={isActioning}
+                                        >
+                                            {isActioning ? (
+                                                <ActivityIndicator size="small" color={ADMIN_COLORS.danger} />
+                                            ) : (
+                                                <>
+                                                    <Ionicons name="close-circle-outline" size={16} color={ADMIN_COLORS.danger} />
+                                                    <Text style={[s.actionBtnText, { color: ADMIN_COLORS.danger, fontWeight: '700' }]}>
+                                                        Cancel Pending Order
+                                                    </Text>
+                                                </>
+                                            )}
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
                                 {/* Step 1: Paid → Completed (Confirm Delivery) */}
                                 {statusLower === 'paid' && (
                                     <View style={{ marginTop: 12 }}>

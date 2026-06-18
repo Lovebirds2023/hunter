@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useContext } from 'react';
 import {
     View, Text, StyleSheet, SafeAreaView, ScrollView,
-    TouchableOpacity, ActivityIndicator, RefreshControl, Alert
+    TouchableOpacity, ActivityIndicator, RefreshControl, Alert, Platform
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { ThemeBackground } from '../components/ThemeBackground';
@@ -76,6 +76,7 @@ export const PayoutsScreen = () => {
     const [earnings, setEarnings] = useState<EarningItem[]>([]);
     const [withdrawals, setWithdrawals] = useState<WithdrawalItem[]>([]);
     const [receiptOrderId, setReceiptOrderId] = useState<string | null>(null);
+    const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
     const [withdrawing, setWithdrawing] = useState(false);
 
     // Buyer state
@@ -177,6 +178,48 @@ export const PayoutsScreen = () => {
         } finally {
             setReceiptOrderId(null);
         }
+    };
+
+    const handleCancelOrder = async (orderId: string) => {
+        const cancelOrder = async () => {
+            setCancellingOrderId(orderId);
+            try {
+                const res = await client.post(`/orders/${orderId}/cancel`);
+                Alert.alert(
+                    t('common.success'),
+                    res.data?.message || t('payouts.order_cancelled', { defaultValue: 'Order cancelled successfully.' })
+                );
+                fetchData(true);
+            } catch (error: any) {
+                const detail = error.response?.data?.detail || error.message || t('payouts.cancel_failed', { defaultValue: 'Could not cancel this order.' });
+                Alert.alert(t('common.error'), typeof detail === 'string' ? detail : JSON.stringify(detail));
+            } finally {
+                setCancellingOrderId(null);
+            }
+        };
+
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            const confirmed = window.confirm(
+                t('payouts.cancel_pending_order_confirm', {
+                    defaultValue: 'Cancel this unpaid pending order? No payment, payout, or inventory will be changed.'
+                })
+            );
+            if (confirmed) {
+                cancelOrder();
+            }
+            return;
+        }
+
+        Alert.alert(
+            t('payouts.cancel_pending_order', { defaultValue: 'Cancel Pending Order' }),
+            t('payouts.cancel_pending_order_confirm', {
+                defaultValue: 'Cancel this unpaid pending order? No payment, payout, or inventory will be changed.'
+            }),
+            [
+                { text: t('common.cancel'), style: 'cancel' },
+                { text: t('payouts.cancel_order_action', { defaultValue: 'Cancel Order' }), style: 'destructive', onPress: cancelOrder }
+            ]
+        );
     };
 
     const getPayoutMethodLabel = () => {
@@ -578,6 +621,28 @@ export const PayoutsScreen = () => {
                                             </TouchableOpacity>
                                         )}
 
+                                        {(order.status || '').toLowerCase() === 'pending' && (
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.cancelOrderAction,
+                                                    cancellingOrderId === order.id && styles.receiptActionDisabled
+                                                ]}
+                                                onPress={() => handleCancelOrder(order.id)}
+                                                disabled={cancellingOrderId === order.id}
+                                            >
+                                                {cancellingOrderId === order.id ? (
+                                                    <ActivityIndicator size="small" color="#C62828" />
+                                                ) : (
+                                                    <>
+                                                        <Ionicons name="close-circle-outline" size={16} color="#C62828" />
+                                                        <Text style={styles.cancelOrderActionText}>
+                                                            {t('payouts.cancel_order_action', { defaultValue: 'Cancel Order' })}
+                                                        </Text>
+                                                    </>
+                                                )}
+                                            </TouchableOpacity>
+                                        )}
+
                                         {order.created_at && (
                                             <Text style={styles.dateText}>
                                                 {new Date(order.created_at).toLocaleDateString()}
@@ -706,6 +771,13 @@ const styles = StyleSheet.create({
     },
     receiptActionDisabled: { opacity: 0.6 },
     receiptActionText: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
+    cancelOrderAction: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+        borderWidth: 1, borderColor: '#C62828', borderRadius: 10,
+        paddingVertical: 9, paddingHorizontal: 12, marginTop: 12,
+        backgroundColor: '#fff',
+    },
+    cancelOrderActionText: { fontSize: 13, fontWeight: '700', color: '#C62828' },
     withdrawalHistoryCard: {
         backgroundColor: COLORS.white,
         borderRadius: 14,

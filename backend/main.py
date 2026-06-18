@@ -1060,7 +1060,11 @@ def is_pesapal_payment_successful(status_res: dict) -> bool:
     return str(status_code) == "1" or str(status_text).strip().lower() in {"completed", "paid", "success", "successful"}
 
 def mark_order_paid(db: Session, order: models.Order) -> bool:
-    if is_order_paid(order):
+    current_status = order_status_value(order.status)
+    if current_status in PAID_ORDER_STATES:
+        return False
+
+    if current_status != models.OrderStatus.PENDING.value:
         return False
 
     service = db.query(models.Service).filter(models.Service.id == order.service_id).first()
@@ -1189,19 +1193,76 @@ def create_order(
     return new_order
 
 @app.post("/orders/{order_id}/pay")
-def pay_order(order_id: str, db: Session = Depends(database.get_db), current_user: models.User = Depends(get_current_user)):
+def pay_order(
+    order_id: str,
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin)
+):
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    if order.buyer_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
+
+    if order_status_value(order.status) == models.OrderStatus.CANCELLED.value:
+        raise HTTPException(status_code=400, detail="Cancelled orders cannot be marked as paid")
+
     if is_order_paid(order):
         return {"message": "Order already paid", "status": order.status}
 
-    mark_order_paid(db, order)
+    if not mark_order_paid(db, order):
+        raise HTTPException(status_code=400, detail="Only pending orders can be marked as paid")
+
     db.commit()
-    return {"message": "Order paid successfully", "status": order.status}
+    return {"message": "Order payment confirmed by admin", "status": order.status}
+
+@app.post("/orders/{order_id}/cancel")
+def cancel_order(
+    order_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    is_admin = current_user.role in {models.UserRole.ADMIN.value, models.UserRole.SUPER_ADMIN.value}
+    if order.buyer_id != current_user.id and not is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    current_status = order_status_value(order.status)
+    if current_status == models.OrderStatus.CANCELLED.value:
+        return {"message": "Order is already cancelled", "status": order.status}
+
+    if current_status != models.OrderStatus.PENDING.value:
+        raise HTTPException(
+            status_code=400,
+            detail="Only unpaid pending orders can be cancelled. Paid orders require refund support."
+        )
+
+    service = db.query(models.Service).filter(models.Service.id == order.service_id).first()
+    item_title = service.title if service else "Marketplace item"
+    item_label = "product" if service and service.item_type == "products" else "service"
+
+    order.status = models.OrderStatus.CANCELLED.value
+    add_notification(
+        db,
+        order.buyer_id,
+        "Order Cancelled",
+        f"Your unpaid {item_label} order for '{item_title}' has been cancelled.",
+        "order",
+        commit=False,
+    )
+    if service and service.provider_id:
+        add_notification(
+            db,
+            service.provider_id,
+            "Pending Order Cancelled",
+            f"The pending {item_label} order for '{item_title}' was cancelled before payment. No payout or inventory was affected.",
+            "order",
+            commit=False,
+        )
+
+    db.commit()
+    return {"message": "Order cancelled successfully", "status": order.status}
 
 @app.get("/orders/{order_id}/receipt")
 def get_order_receipt(order_id: str, db: Session = Depends(database.get_db), current_user: models.User = Depends(get_current_user)):
@@ -3510,8 +3571,8 @@ async def pesapal_callback(OrderTrackingId: str, OrderMerchantReference: str, db
     status_res = pesapal.get_transaction_status(OrderTrackingId)
     order = db.query(models.Order).filter(models.Order.id == OrderMerchantReference).first()
     if order and is_pesapal_payment_successful(status_res):
-        mark_order_paid(db, order)
-        db.commit()
+        if mark_order_paid(db, order):
+            db.commit()
     return {"status": "processed", "order_status": order.status if order else None, "data": status_res}
 
 @app.get("/payments/status/{order_id}")
@@ -3531,10 +3592,12 @@ async def payment_status(
     payment_success = is_order_paid(order)
     if tracking_id and not payment_success:
         status_res = pesapal.get_transaction_status(tracking_id)
-        payment_success = is_pesapal_payment_successful(status_res)
-        if payment_success:
-            mark_order_paid(db, order)
+        pesapal_success = is_pesapal_payment_successful(status_res)
+        if pesapal_success and mark_order_paid(db, order):
             db.commit()
+            payment_success = True
+        else:
+            payment_success = is_order_paid(order)
 
     return {
         "order_id": order.id,
@@ -3553,8 +3616,8 @@ async def pesapal_ipn(OrderTrackingId: str, OrderMerchantReference: str, OrderNo
     status_res = pesapal.get_transaction_status(OrderTrackingId)
     order = db.query(models.Order).filter(models.Order.id == OrderMerchantReference).first()
     if order and is_pesapal_payment_successful(status_res):
-        mark_order_paid(db, order)
-        db.commit()
+        if mark_order_paid(db, order):
+            db.commit()
     return {"status": "acknowledged"}
 # =====================================================
 # Community Hub & Social Endpoints
