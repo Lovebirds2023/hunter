@@ -1,176 +1,325 @@
 """
-Receipt PDF Generator for Lovedogs 360
-Uses reportlab to create a properly formatted order receipt PDF.
+Receipt PDF generator for Lovedogs 360.
 """
 import io
+import os
 from datetime import datetime
+from xml.sax.saxutils import escape as xml_escape
 
 try:
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import cm
     from reportlab.lib import colors
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
-    from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import cm
+    from reportlab.platypus import (
+        HRFlowable,
+        Image,
+        Paragraph,
+        SimpleDocTemplate,
+        Spacer,
+        Table,
+        TableStyle,
+    )
+
     REPORTLAB_AVAILABLE = True
 except ImportError:
     REPORTLAB_AVAILABLE = False
 
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LOGO_PATH = os.path.join(BASE_DIR, "assets", "lovedogs360-logo.png")
+
+
+def _safe(value, default="N/A"):
+    if value is None:
+        return default
+    text = str(value).strip()
+    return text if text else default
+
+
+def _clip(value, limit=180):
+    text = _safe(value)
+    if len(text) <= limit:
+        return text
+    return f"{text[: limit - 3].rstrip()}..."
+
+
+def _money(value):
+    return f"KES {float(value or 0):,.2f}"
+
+
+def _status_label(status):
+    raw = str(status or "unknown").strip()
+    if "." in raw:
+        raw = raw.rsplit(".", 1)[-1]
+    return raw.replace("_", " ").upper()
+
+
+def _paid_status(status):
+    return _status_label(status) in {"PAID", "COMPLETED", "SETTLED"}
+
+
+def _p(value, style):
+    return Paragraph(xml_escape(_safe(value)), style)
+
+
+def _label_value(label, value, label_style, value_style):
+    return [_p(label, label_style), _p(value, value_style)]
+
+
+def _section_title(title, width, style, primary_color):
+    section = Table([[Paragraph(xml_escape(title), style)]], colWidths=[width])
+    section.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), primary_color),
+        ("BOX", (0, 0), (-1, -1), 0.5, primary_color),
+        ("TOPPADDING", (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+    ]))
+    return section
+
+
+def _draw_page_brand(canvas, doc):
+    primary_color = colors.HexColor("#3B145F")
+    accent_color = colors.HexColor("#D4AF37")
+    muted_color = colors.HexColor("#777777")
+    page_width, page_height = A4
+
+    canvas.saveState()
+    canvas.setStrokeColor(accent_color)
+    canvas.setLineWidth(0.75)
+    canvas.line(doc.leftMargin, page_height - 1.35 * cm, page_width - doc.rightMargin, page_height - 1.35 * cm)
+
+    if os.path.exists(LOGO_PATH):
+        canvas.drawImage(
+            LOGO_PATH,
+            doc.leftMargin,
+            page_height - 1.18 * cm,
+            width=1.05 * cm,
+            height=0.7 * cm,
+            preserveAspectRatio=True,
+            mask="auto",
+        )
+
+    canvas.setFont("Helvetica-Bold", 8)
+    canvas.setFillColor(primary_color)
+    canvas.drawString(doc.leftMargin + 1.25 * cm, page_height - 0.86 * cm, "LOVEDOGS 360")
+
+    canvas.setFont("Helvetica", 8)
+    canvas.setFillColor(muted_color)
+    canvas.drawRightString(page_width - doc.rightMargin, 0.85 * cm, f"Page {doc.page}")
+    canvas.drawString(doc.leftMargin, 0.85 * cm, "Official Lovedogs 360 receipt")
+    canvas.restoreState()
+
+
 def generate_receipt_pdf(order, service, buyer, provider):
-    """Generate a PDF receipt for a paid order."""
-    
+    """Generate a branded PDF receipt for a paid order."""
+
     if not REPORTLAB_AVAILABLE:
-        # Fallback: return minimal valid PDF if reportlab is not installed
-        return b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF"
+        return (
+            b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"
+            b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n"
+            b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>\nendobj\n"
+            b"trailer\n<< /Root 1 0 R >>\n%%EOF"
+        )
 
     buffer = io.BytesIO()
-
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        rightMargin=2 * cm,
-        leftMargin=2 * cm,
-        topMargin=2 * cm,
-        bottomMargin=2 * cm,
+        rightMargin=1.7 * cm,
+        leftMargin=1.7 * cm,
+        topMargin=2.2 * cm,
+        bottomMargin=1.5 * cm,
+        title=f"Lovedogs 360 Receipt {order.id}",
+        author="Lovedogs 360",
     )
 
     styles = getSampleStyleSheet()
-    PRIMARY_COLOR = colors.HexColor("#4B0082")
-    ACCENT_COLOR = colors.HexColor("#D4AF37")
-    LIGHT_GRAY = colors.HexColor("#F5F5F5")
-    DARK_GRAY = colors.HexColor("#333333")
+    primary_color = colors.HexColor("#3B145F")
+    accent_color = colors.HexColor("#D4AF37")
+    ink_color = colors.HexColor("#222222")
+    muted_color = colors.HexColor("#666666")
+    soft_panel = colors.HexColor("#F8F6FB")
+    soft_gold = colors.HexColor("#FFF7DF")
+    rule_color = colors.HexColor("#E7E1EE")
+    success_color = colors.HexColor("#1F7A4D")
 
-    # Custom styles
-    title_style = ParagraphStyle(
-        "CustomTitle",
+    brand_style = ParagraphStyle(
+        "Brand",
         parent=styles["Title"],
-        fontSize=26,
-        textColor=PRIMARY_COLOR,
-        spaceAfter=4,
-        alignment=TA_CENTER,
         fontName="Helvetica-Bold",
-    )
-    subtitle_style = ParagraphStyle(
-        "Subtitle",
-        parent=styles["Normal"],
-        fontSize=10,
-        textColor=colors.HexColor("#888888"),
+        fontSize=24,
+        leading=28,
+        textColor=primary_color,
         alignment=TA_CENTER,
-        spaceAfter=4,
+        spaceAfter=2,
     )
-    section_header_style = ParagraphStyle(
-        "SectionHeader",
+    receipt_style = ParagraphStyle(
+        "ReceiptLabel",
         parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=11,
+        leading=14,
+        textColor=muted_color,
+        alignment=TA_CENTER,
+        spaceAfter=8,
+    )
+    section_style = ParagraphStyle(
+        "Section",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
         fontSize=10,
+        leading=12,
         textColor=colors.white,
-        fontName="Helvetica-Bold",
         alignment=TA_LEFT,
     )
-    body_style = ParagraphStyle(
-        "Body",
+    label_style = ParagraphStyle(
+        "Label",
         parent=styles["Normal"],
-        fontSize=10,
-        textColor=DARK_GRAY,
-        spaceAfter=4,
-        leading=16,
-    )
-    footer_style = ParagraphStyle(
-        "Footer",
-        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
         fontSize=8,
-        textColor=colors.HexColor("#999999"),
+        leading=10,
+        textColor=muted_color,
+    )
+    value_style = ParagraphStyle(
+        "Value",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=9.5,
+        leading=13,
+        textColor=ink_color,
+    )
+    value_bold_style = ParagraphStyle(
+        "ValueBold",
+        parent=value_style,
+        fontName="Helvetica-Bold",
+        textColor=primary_color,
+    )
+    amount_style = ParagraphStyle(
+        "Amount",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=19,
+        leading=23,
+        textColor=primary_color,
+        alignment=TA_RIGHT,
+    )
+    note_style = ParagraphStyle(
+        "Note",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=8,
+        leading=11,
+        textColor=muted_color,
         alignment=TA_CENTER,
     )
 
-    # --- Build content ---
     story = []
-
-    # Logo / Branding
-    story.append(Paragraph("🐾 Lovedogs 360", title_style))
-    story.append(Paragraph("Official Order Receipt", subtitle_style))
-    story.append(HRFlowable(width="100%", thickness=2, color=ACCENT_COLOR, spaceAfter=12))
-
-    # Order info header
+    content_width = doc.width
     order_date = order.created_at.strftime("%B %d, %Y at %H:%M") if order.created_at else "N/A"
-    story.append(Paragraph(f"<b>Order ID:</b> {order.id}", body_style))
-    story.append(Paragraph(f"<b>Date:</b> {order_date}", body_style))
-    story.append(Paragraph(f"<b>Status:</b> {'PAID ✓' if str(order.status).lower() in ['paid', 'completed', 'settled'] else str(order.status).upper()}", body_style))
-    story.append(Spacer(1, 0.4 * cm))
+    generated_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    status_label = _status_label(order.status)
+    status_color = "#1F7A4D" if _paid_status(order.status) else "#3B145F"
 
-    # Service details table
-    service_title = service.title if service else "N/A"
-    service_desc = (service.description[:80] + "...") if service and service.description and len(service.description) > 80 else (service.description or "N/A")
-    provider_name = provider.full_name if provider else "N/A"
-    provider_email = provider.email if provider else "N/A"
+    if os.path.exists(LOGO_PATH):
+        logo = Image(LOGO_PATH, width=5.1 * cm, height=3.4 * cm)
+        logo.hAlign = "CENTER"
+        story.append(logo)
+        story.append(Spacer(1, 0.1 * cm))
 
-    section_data_service = [
-        [Paragraph("SERVICE DETAILS", section_header_style)],
+    story.append(Paragraph("LOVEDOGS 360", brand_style))
+    story.append(Paragraph("Official Order Receipt", receipt_style))
+    story.append(HRFlowable(width="100%", thickness=1.4, color=accent_color, spaceAfter=10))
+
+    meta_left = [
+        Paragraph("RECEIPT", label_style),
+        Paragraph(xml_escape(_safe(order.id)), value_bold_style),
+        Spacer(1, 0.12 * cm),
+        Paragraph("ISSUED", label_style),
+        Paragraph(xml_escape(order_date), value_style),
     ]
-    service_section = Table(section_data_service, colWidths=["100%"])
-    service_section.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), PRIMARY_COLOR),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-    ]))
-    story.append(service_section)
-
-    service_data = [
-        ["Service Name:", service_title],
-        ["Description:", service_desc],
-        ["Provider:", provider_name],
-        ["Provider Email:", provider_email],
+    meta_right = [
+        Paragraph("AMOUNT PAID", label_style),
+        Paragraph(_money(order.amount), amount_style),
+        Spacer(1, 0.12 * cm),
+        Paragraph("STATUS", label_style),
+        Paragraph(f'<font color="{status_color}"><b>{xml_escape(status_label)}</b></font>', value_style),
     ]
-    service_table = Table(service_data, colWidths=[4 * cm, None])
-    service_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (0, -1), LIGHT_GRAY),
-        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("TEXTCOLOR", (0, 0), (-1, -1), DARK_GRAY),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E0E0E0")),
+    meta_table = Table([[meta_left, meta_right]], colWidths=[content_width * 0.58, content_width * 0.42])
+    meta_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), soft_gold),
+        ("BOX", (0, 0), (-1, -1), 0.75, accent_color),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 12),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
+        ("LEFTPADDING", (0, 0), (-1, -1), 14),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 14),
     ]))
-    story.append(service_table)
-    story.append(Spacer(1, 0.4 * cm))
+    story.append(meta_table)
+    story.append(Spacer(1, 0.45 * cm))
 
-    # Buyer details
-    buyer_name = buyer.full_name if buyer else "N/A"
-    buyer_email = buyer.email if buyer else "N/A"
-    buyer_phone = buyer.phone_number if buyer else "N/A"
+    service_title = _safe(getattr(service, "title", None), "Marketplace item")
+    item_type = _safe(getattr(service, "item_type", None), "Listing").replace("_", " ").title()
+    service_desc = _clip(getattr(service, "description", None), 220)
+    provider_name = _safe(getattr(provider, "full_name", None), "Seller")
+    provider_email = _safe(getattr(provider, "email", None), "Not provided")
+    buyer_name = _safe(getattr(buyer, "full_name", None), "Customer")
+    buyer_email = _safe(getattr(buyer, "email", None), "Not provided")
+    buyer_phone = _safe(getattr(buyer, "phone_number", None), "Not provided")
 
-    section_data_buyer = [[Paragraph("CUSTOMER DETAILS", section_header_style)]]
-    buyer_section = Table(section_data_buyer, colWidths=["100%"])
-    buyer_section.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), PRIMARY_COLOR),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-    ]))
-    story.append(buyer_section)
-
-    buyer_data = [
-        ["Name:", buyer_name],
-        ["Email:", buyer_email],
-        ["Phone:", buyer_phone or "Not provided"],
+    story.append(_section_title("ORDER DETAILS", content_width, section_style, primary_color))
+    order_rows = [
+        _label_value("Item", service_title, label_style, value_bold_style),
+        _label_value("Type", item_type, label_style, value_style),
+        _label_value("Description", service_desc, label_style, value_style),
     ]
-    buyer_table = Table(buyer_data, colWidths=[4 * cm, None])
-    buyer_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (0, -1), LIGHT_GRAY),
-        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("TEXTCOLOR", (0, 0), (-1, -1), DARK_GRAY),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E0E0E0")),
+    order_table = Table(order_rows, colWidths=[4.1 * cm, content_width - 4.1 * cm])
+    order_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+        ("BACKGROUND", (0, 0), (0, -1), soft_panel),
+        ("BOX", (0, 0), (-1, -1), 0.5, rule_color),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, rule_color),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
     ]))
-    story.append(buyer_table)
-    story.append(Spacer(1, 0.4 * cm))
+    story.append(order_table)
+    story.append(Spacer(1, 0.35 * cm))
 
-    # Payment breakdown
+    story.append(_section_title("PARTIES", content_width, section_style, primary_color))
+    party_table = Table([
+        [
+            [
+                Paragraph("CUSTOMER", label_style),
+                Paragraph(xml_escape(buyer_name), value_bold_style),
+                Paragraph(xml_escape(buyer_email), value_style),
+                Paragraph(xml_escape(buyer_phone), value_style),
+            ],
+            [
+                Paragraph("SELLER", label_style),
+                Paragraph(xml_escape(provider_name), value_bold_style),
+                Paragraph(xml_escape(provider_email), value_style),
+            ],
+        ]
+    ], colWidths=[content_width / 2, content_width / 2])
+    party_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+        ("BOX", (0, 0), (-1, -1), 0.5, rule_color),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, rule_color),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 12),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
+        ("LEFTPADDING", (0, 0), (-1, -1), 12),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+    ]))
+    story.append(party_table)
+    story.append(Spacer(1, 0.35 * cm))
+
     gross = float(order.amount or 0)
     discount = float(getattr(order, "discount_amount", 0) or 0)
     points_redeemed = int(getattr(order, "karma_points_redeemed", 0) or 0)
@@ -178,47 +327,55 @@ def generate_receipt_pdf(order, service, buyer, provider):
     commission = float(order.commission or 0)
     payout = float(order.payout or 0)
 
-    section_data_pay = [[Paragraph("PAYMENT BREAKDOWN", section_header_style)]]
-    pay_section = Table(section_data_pay, colWidths=["100%"])
-    pay_section.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), PRIMARY_COLOR),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-    ]))
-    story.append(pay_section)
-
-    pay_data = [["Listing Price:", f"KES {listing_total:,.2f}"]]
+    story.append(_section_title("PAYMENT SUMMARY", content_width, section_style, primary_color))
+    payment_rows = [
+        [_p("Listing price", value_style), Paragraph(_money(listing_total), value_style)],
+    ]
     if discount > 0:
-        pay_data.append(["Points Discount:", f"-KES {discount:,.2f} ({points_redeemed} points)"])
-    pay_data.extend([
-        ["Total Charged:", f"KES {gross:,.2f}"],
-        ["Platform Fee (23.5%):", f"KES {commission:,.2f}"],
-        ["Provider Payout:", f"KES {payout:,.2f}"],
+        payment_rows.append([
+            _p(f"Points discount ({points_redeemed} points)", value_style),
+            Paragraph(f"-{_money(discount)}", value_style),
+        ])
+    payment_rows.extend([
+        [_p("Total charged", value_bold_style), Paragraph(_money(gross), value_bold_style)],
+        [_p("Platform fee", value_style), Paragraph(_money(commission), value_style)],
+        [_p("Seller payout", value_style), Paragraph(_money(payout), value_style)],
     ])
-    pay_table = Table(pay_data, colWidths=[5 * cm, None])
-    pay_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (0, -1), LIGHT_GRAY),
-        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
-        ("TEXTCOLOR", (0, -1), (-1, -1), PRIMARY_COLOR),
-        ("FONTSIZE", (0, 0), (-1, -1), 10),
-        ("TEXTCOLOR", (0, 0), (-1, -1), DARK_GRAY),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E0E0E0")),
-        ("LINEABOVE", (0, -1), (-1, -1), 1.5, ACCENT_COLOR),
+    payment_table = Table(payment_rows, colWidths=[content_width * 0.62, content_width * 0.38])
+    payment_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+        ("BOX", (0, 0), (-1, -1), 0.5, rule_color),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, rule_color),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("BACKGROUND", (0, 2 if discount > 0 else 1), (-1, 2 if discount > 0 else 1), soft_gold),
+        ("LINEABOVE", (0, 2 if discount > 0 else 1), (-1, 2 if discount > 0 else 1), 1.0, accent_color),
     ]))
-    story.append(pay_table)
+    story.append(payment_table)
+    story.append(Spacer(1, 0.45 * cm))
 
-    # Footer
-    story.append(Spacer(1, 1 * cm))
-    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#E0E0E0"), spaceAfter=8))
-    story.append(Paragraph("Thank you for using Lovedogs 360 — The World's #1 Dog Wellbeing Platform", footer_style))
-    story.append(Paragraph(f"Generated on {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC  •  lovedogs360.com", footer_style))
+    note_table = Table([[
+        Paragraph(
+            "This receipt confirms a Lovedogs 360 marketplace payment. "
+            f"Generated on {xml_escape(generated_at)}.",
+            note_style,
+        )
+    ]], colWidths=[content_width])
+    note_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), soft_panel),
+        ("BOX", (0, 0), (-1, -1), 0.5, rule_color),
+        ("TOPPADDING", (0, 0), (-1, -1), 9),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
+        ("LEFTPADDING", (0, 0), (-1, -1), 12),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+    ]))
+    story.append(note_table)
 
-    doc.build(story)
+    doc.build(story, onFirstPage=_draw_page_brand, onLaterPages=_draw_page_brand)
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes

@@ -369,6 +369,8 @@ try:
                ADD COLUMN IF NOT EXISTS payout_method VARCHAR;""",
             """ALTER TABLE transactions
                ADD COLUMN IF NOT EXISTS destination VARCHAR;""",
+            """ALTER TABLE transactions
+               ADD COLUMN IF NOT EXISTS processed_at TIMESTAMP;""",
             """CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);""",
             """CREATE INDEX IF NOT EXISTS idx_users_auth_provider ON users(auth_provider);""",
             """CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);""",
@@ -624,6 +626,11 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     if user is None:
         raise credentials_exception
     return user
+
+def require_admin(current_user: models.User = Depends(get_current_user)):
+    if current_user.role not in {models.UserRole.ADMIN.value, models.UserRole.SUPER_ADMIN.value}:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
 
 @app.get("/users/me", response_model=schemas.UserResponse)
 async def read_users_me(current_user: models.User = Depends(get_current_user)):
@@ -1269,11 +1276,17 @@ def request_withdrawal(
 ):
     wallet = get_provider_wallet_summary(db, current_user)
     available = float(wallet["withdrawable"] or 0)
+    pending_withdrawal = float(wallet.get("pending_withdrawal") or 0)
+    if pending_withdrawal > 0:
+        raise HTTPException(status_code=400, detail="You already have a pending withdrawal request")
+
     amount = round(float(req.amount or available), 2)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="No available balance to withdraw")
     if amount > available:
         raise HTTPException(status_code=400, detail="Withdrawal amount exceeds available balance")
+    if abs(amount - available) > 0.01:
+        raise HTTPException(status_code=400, detail="Withdraw the full available balance for now")
 
     method = (req.method or current_user.payment_method or "").strip().lower()
     if method not in {"mpesa", "card"}:
@@ -1292,6 +1305,7 @@ def request_withdrawal(
         status="pending",
         payout_method=method,
         destination=destination,
+        processed_at=None,
     )
     db.add(withdrawal)
 
@@ -1326,6 +1340,89 @@ def request_withdrawal(
         "amount": amount,
         "status": withdrawal.status,
         "wallet": get_provider_wallet_summary(db, current_user),
+    }
+
+def serialize_withdrawal(db: Session, withdrawal: models.Transaction):
+    seller = db.query(models.User).filter(models.User.id == withdrawal.user_id).first()
+    return {
+        "id": withdrawal.id,
+        "seller_id": withdrawal.user_id,
+        "seller_name": seller.full_name if seller else "Unknown",
+        "seller_email": seller.email if seller else None,
+        "amount": float(withdrawal.amount or 0),
+        "status": withdrawal.status,
+        "method": withdrawal.payout_method,
+        "destination": withdrawal.destination,
+        "created_at": str(withdrawal.processed_at) if withdrawal.processed_at else None,
+    }
+
+@app.get("/admin/withdrawals")
+def admin_list_withdrawals(
+    status_filter: Optional[str] = None,
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin)
+):
+    query = db.query(models.Transaction).filter(models.Transaction.type == "withdrawal")
+    if status_filter:
+        query = query.filter(models.Transaction.status == status_filter.strip().lower())
+    withdrawals = query.order_by(models.Transaction.processed_at.desc().nullslast()).all()
+    return [serialize_withdrawal(db, withdrawal) for withdrawal in withdrawals]
+
+@app.post("/admin/withdrawals/{withdrawal_id}/complete")
+def admin_complete_withdrawal(
+    withdrawal_id: str,
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin)
+):
+    withdrawal = db.query(models.Transaction).filter(
+        models.Transaction.id == withdrawal_id,
+        models.Transaction.type == "withdrawal",
+    ).first()
+    if not withdrawal:
+        raise HTTPException(status_code=404, detail="Withdrawal request not found")
+    if withdrawal.status != "pending":
+        raise HTTPException(status_code=400, detail=f"Withdrawal is already {withdrawal.status}")
+
+    seller = db.query(models.User).filter(models.User.id == withdrawal.user_id).first()
+    if not seller:
+        raise HTTPException(status_code=404, detail="Seller not found")
+
+    services = db.query(models.Service).filter(models.Service.provider_id == seller.id).all()
+    service_ids = [service.id for service in services]
+    completed_orders = []
+    if service_ids:
+        completed_orders = db.query(models.Order).filter(
+            models.Order.service_id.in_(service_ids),
+            models.Order.status.in_(order_status_filter_values(models.OrderStatus.COMPLETED)),
+        ).order_by(models.Order.created_at.asc()).all()
+
+    available_total = round(sum(float(order.payout or 0) for order in completed_orders), 2)
+    withdrawal_amount = round(float(withdrawal.amount or 0), 2)
+    if abs(available_total - withdrawal_amount) > 0.01:
+        raise HTTPException(
+            status_code=400,
+            detail="Withdrawal amount does not match the seller's available completed payout balance"
+        )
+
+    for order in completed_orders:
+        order.status = models.OrderStatus.SETTLED.value
+
+    withdrawal.status = "completed"
+    withdrawal.processed_at = datetime.utcnow()
+    destination = withdrawal.destination or get_payout_destination(seller, withdrawal.payout_method) or "configured payout destination"
+    add_notification(
+        db,
+        seller.id,
+        "Withdrawal Completed",
+        f"Your KES {withdrawal_amount:,.2f} withdrawal to {destination} has been marked as paid.",
+        "payout",
+        commit=False,
+    )
+    db.commit()
+    return {
+        "message": f"Withdrawal of KES {withdrawal_amount:,.2f} marked as completed.",
+        "withdrawal": serialize_withdrawal(db, withdrawal),
+        "wallet": get_provider_wallet_summary(db, seller),
     }
 
 @app.get("/my-earnings")
@@ -2267,11 +2364,6 @@ def live_log_observation(
 
 
 # --- Admin Dashboard API ---
-
-def require_admin(current_user: models.User = Depends(get_current_user)):
-    if current_user.role not in {models.UserRole.ADMIN.value, models.UserRole.SUPER_ADMIN.value}:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return current_user
 
 def normalize_app_platform(platform: Optional[str]) -> str:
     normalized = (platform or "all").strip().lower()

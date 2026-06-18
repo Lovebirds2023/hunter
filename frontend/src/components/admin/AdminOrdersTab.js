@@ -18,6 +18,7 @@ const STATUS_COLORS = {
 
 export const AdminOrdersTab = ({ onBack }) => {
     const [orders, setOrders] = useState([]);
+    const [withdrawals, setWithdrawals] = useState([]);
     const [filtered, setFiltered] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -28,8 +29,12 @@ export const AdminOrdersTab = ({ onBack }) => {
     const fetchOrders = useCallback(async (silent = false) => {
         if (!silent) setLoading(true);
         try {
-            const res = await client.get('/admin/orders');
-            setOrders(res.data);
+            const [ordersRes, withdrawalsRes] = await Promise.all([
+                client.get('/admin/orders'),
+                client.get('/admin/withdrawals'),
+            ]);
+            setOrders(ordersRes.data);
+            setWithdrawals(withdrawalsRes.data);
         } catch (e) {
             console.error('Orders fetch error:', e);
         } finally {
@@ -64,6 +69,9 @@ export const AdminOrdersTab = ({ onBack }) => {
     const paidRevenue = filtered.reduce((sum, o) => sum + (o.paid_amount || 0), 0);
     const paidCommission = filtered.reduce((sum, o) => sum + (o.paid_commission || 0), 0);
     const paidPayout = filtered.reduce((sum, o) => sum + (o.paid_payout || 0), 0);
+    const pendingWithdrawals = withdrawals.filter(w => (w.status || '').toLowerCase() === 'pending');
+    const pendingWithdrawalTotal = pendingWithdrawals.reduce((sum, w) => sum + (w.amount || 0), 0);
+    const sellersWithPendingWithdrawals = new Set(pendingWithdrawals.map(w => w.seller_id).filter(Boolean));
 
     const confirmAdminAction = (title, message, confirmText, onConfirm) => {
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -180,6 +188,27 @@ export const AdminOrdersTab = ({ onBack }) => {
         );
     };
 
+    const handleCompleteWithdrawal = async (withdrawal) => {
+        confirmAdminAction(
+            'Complete Withdrawal',
+            `Mark KES ${(withdrawal.amount || 0).toLocaleString()} as paid to ${withdrawal.seller_name || 'seller'}?\n\nDestination: ${withdrawal.destination || withdrawal.method || 'Configured payout destination'}`,
+            'Complete Withdrawal',
+            async () => {
+                setActioningId(`withdrawal-${withdrawal.id}`);
+                try {
+                    const res = await client.post(`/admin/withdrawals/${withdrawal.id}/complete`);
+                    Alert.alert('Withdrawal Completed', res.data.message);
+                    fetchOrders(true);
+                } catch (e) {
+                    const msg = e.response?.data?.detail || 'Failed to complete withdrawal.';
+                    Alert.alert('Error', msg);
+                } finally {
+                    setActioningId(null);
+                }
+            }
+        );
+    };
+
     const getStatusLabel = (status) => {
         const s = (status || '').toLowerCase();
         switch (s) {
@@ -201,7 +230,9 @@ export const AdminOrdersTab = ({ onBack }) => {
                     </TouchableOpacity>
                     <View style={{ flex: 1 }}>
                         <Text style={s.sectionTitle}>Order Tracking & Payouts</Text>
-                        <Text style={{ fontSize: 12, color: ADMIN_COLORS.textMuted }}>{orders.length} total orders</Text>
+                        <Text style={{ fontSize: 12, color: ADMIN_COLORS.textMuted }}>
+                            {orders.length} total orders - {pendingWithdrawals.length} pending withdrawals
+                        </Text>
                     </View>
                 </View>
 
@@ -220,6 +251,65 @@ export const AdminOrdersTab = ({ onBack }) => {
                         <Text style={{ fontSize: 9, color: ADMIN_COLORS.textMuted }}>Paid Payouts</Text>
                     </View>
                 </View>
+
+                {pendingWithdrawals.length > 0 && (
+                    <View style={[s.card, { marginBottom: 10, padding: 12 }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <View>
+                                <Text style={{ fontSize: 14, fontWeight: '800', color: ADMIN_COLORS.textPrimary }}>
+                                    Seller Withdrawal Requests
+                                </Text>
+                                <Text style={{ fontSize: 11, color: ADMIN_COLORS.textMuted }}>
+                                    Pending total: KES {pendingWithdrawalTotal.toLocaleString()}
+                                </Text>
+                            </View>
+                            <Ionicons name="cash-outline" size={20} color={ADMIN_COLORS.success} />
+                        </View>
+                        {pendingWithdrawals.map(withdrawal => {
+                            const isWithdrawalActioning = actioningId === `withdrawal-${withdrawal.id}`;
+                            return (
+                                <View
+                                    key={withdrawal.id}
+                                    style={{
+                                        borderTopWidth: 1,
+                                        borderTopColor: ADMIN_COLORS.border,
+                                        paddingTop: 10,
+                                        marginTop: 8,
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 13, fontWeight: '800', color: ADMIN_COLORS.textPrimary }}>
+                                        {withdrawal.seller_name || 'Seller'} - KES {(withdrawal.amount || 0).toLocaleString()}
+                                    </Text>
+                                    <Text style={{ fontSize: 11, color: ADMIN_COLORS.textMuted, marginTop: 2 }}>
+                                        {(withdrawal.method || 'payout').toUpperCase()} - {withdrawal.destination || 'Configured payout destination'}
+                                    </Text>
+                                    <TouchableOpacity
+                                        style={[s.actionBtn, {
+                                            marginTop: 8,
+                                            backgroundColor: `${ADMIN_COLORS.success}15`,
+                                            borderWidth: 1,
+                                            borderColor: `${ADMIN_COLORS.success}40`,
+                                            justifyContent: 'center',
+                                        }]}
+                                        onPress={() => handleCompleteWithdrawal(withdrawal)}
+                                        disabled={isWithdrawalActioning}
+                                    >
+                                        {isWithdrawalActioning ? (
+                                            <ActivityIndicator size="small" color={ADMIN_COLORS.success} />
+                                        ) : (
+                                            <>
+                                                <Ionicons name="checkmark-circle-outline" size={16} color={ADMIN_COLORS.success} />
+                                                <Text style={[s.actionBtnText, { color: ADMIN_COLORS.success, fontWeight: '700' }]}>
+                                                    Mark Withdrawal Paid
+                                                </Text>
+                                            </>
+                                        )}
+                                    </TouchableOpacity>
+                                </View>
+                            );
+                        })}
+                    </View>
+                )}
 
                 {/* Search */}
                 <View style={s.searchContainer}>
@@ -274,6 +364,7 @@ export const AdminOrdersTab = ({ onBack }) => {
                         const statusColor = STATUS_COLORS[item.status] || ADMIN_COLORS.textMuted;
                         const statusLower = (item.status || '').toLowerCase();
                         const isActioning = actioningId === item.id;
+                        const sellerHasPendingWithdrawal = sellersWithPendingWithdrawals.has(item.provider_id);
 
                         return (
                             <View style={s.listCard}>
@@ -362,7 +453,19 @@ export const AdminOrdersTab = ({ onBack }) => {
                                 )}
 
                                 {/* Step 2: Completed → Settled (Approve Payout) */}
-                                {statusLower === 'completed' && (
+                                {statusLower === 'completed' && sellerHasPendingWithdrawal && (
+                                    <View style={{
+                                        marginTop: 12, flexDirection: 'row', alignItems: 'center',
+                                        backgroundColor: `${ADMIN_COLORS.warning}12`, padding: 10, borderRadius: 10
+                                    }}>
+                                        <Ionicons name="time-outline" size={18} color={ADMIN_COLORS.warning} />
+                                        <Text style={{ color: ADMIN_COLORS.warning, fontSize: 12, fontWeight: '700', marginLeft: 8, flex: 1 }}>
+                                            Seller has a pending wallet withdrawal. Complete it from the withdrawal queue above.
+                                        </Text>
+                                    </View>
+                                )}
+
+                                {statusLower === 'completed' && !sellerHasPendingWithdrawal && (
                                     <View style={{ marginTop: 12 }}>
                                         <TouchableOpacity
                                             style={[s.actionBtn, {

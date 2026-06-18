@@ -317,7 +317,7 @@ export const ProfileScreen = ({ navigation }) => {
 
                     <View style={styles.ratingCard}>
                         <View style={styles.ratingInfo}>
-                            <View>
+                            <View style={styles.walletMethodInfo}>
                                 <Text style={styles.ratingNumber}>{(userInfo?.average_rating || 0).toFixed(1)} / 5.0</Text>
                                 <View style={styles.starsRow}>
                                     {[1, 2, 3, 4, 5].map(s => (
@@ -426,9 +426,17 @@ export const ProfileScreen = ({ navigation }) => {
                                         : t('profile_screen.not_configured')}
                                 </Text>
                             </View>
-                            <TouchableOpacity style={styles.configureBtn} onPress={() => setIsPaymentEditing(true)}>
-                                <Text style={styles.configureBtnText}>{paymentMethod ? t('profile_screen.edit') : t('profile_screen.setup')}</Text>
-                            </TouchableOpacity>
+                            <View style={styles.walletActions}>
+                                <TouchableOpacity style={styles.withdrawProfileBtn} onPress={() => navigation.navigate('Payouts')}>
+                                    <Ionicons name="cash-outline" size={15} color={COLORS.primaryDark} />
+                                    <Text style={styles.withdrawProfileBtnText}>
+                                        {t('payouts.withdraw', { defaultValue: 'Withdraw' })}
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.configureBtn} onPress={() => setIsPaymentEditing(true)}>
+                                    <Text style={styles.configureBtnText}>{paymentMethod ? t('profile_screen.edit') : t('profile_screen.setup')}</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </LinearGradient>
 
@@ -686,9 +694,13 @@ const styles = StyleSheet.create({
     walletLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 'bold' },
     walletBalance: { fontSize: 36, fontWeight: 'bold', color: COLORS.white, marginVertical: 15 },
     walletPendingText: { color: COLORS.accent, fontSize: 12, fontWeight: '700', marginTop: -8, marginBottom: 10 },
-    walletFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingTop: 15 },
+    walletFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingTop: 15 },
+    walletMethodInfo: { flex: 1, minWidth: 120 },
     payoutMethodLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 4 },
     payoutMethodValue: { color: COLORS.white, fontSize: 14, fontWeight: 'bold' },
+    walletActions: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' },
+    withdrawProfileBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.white, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20 },
+    withdrawProfileBtnText: { color: COLORS.primaryDark, fontWeight: 'bold', fontSize: 13 },
     configureBtn: { backgroundColor: COLORS.accent, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
     configureBtnText: { color: COLORS.primaryDark, fontWeight: 'bold', fontSize: 13 },
     ratingCard: { backgroundColor: COLORS.white, borderRadius: 20, padding: 25, elevation: 6, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, borderWidth: 1, borderColor: '#f0f0f0' },
