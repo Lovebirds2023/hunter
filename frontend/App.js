@@ -68,6 +68,7 @@ const linking = {
     config: {
         screens: {
             Login: 'login',
+            GoogleAuthCallback: 'auth/google',
             ForgotPassword: 'forgot-password',
             Onboarding: 'onboarding',
             Register: 'register',
@@ -190,14 +191,19 @@ function AppNavigator() {
             {!userToken ? (
                 <>
                     <Stack.Screen name="Login" component={LoginScreen} />
+                    <Stack.Screen name="GoogleAuthCallback" component={LoginScreen} />
                     <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
                     <Stack.Screen name="Onboarding" component={OnboardingScreen} />
                     <Stack.Screen name="Register" component={RegisterScreen} />
                 </>
             ) : isAdmin ? (
-                <Stack.Screen name="AdminDashboard" component={AdminNavigator} />
+                <>
+                    <Stack.Screen name="GoogleAuthCallback" component={AdminNavigator} />
+                    <Stack.Screen name="AdminDashboard" component={AdminNavigator} />
+                </>
             ) : (
                 <>
+                    <Stack.Screen name="GoogleAuthCallback" component={MainTabs} />
                     <Stack.Screen name="Main" component={MainTabs} />
                     <Stack.Screen name="Onboarding" component={OnboardingScreen} />
                     <Stack.Screen name="CreateService" component={CreateServiceScreen} />

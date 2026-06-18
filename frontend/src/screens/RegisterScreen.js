@@ -44,6 +44,7 @@ const RegisterScreen = ({ navigation }) => {
     const [currentStep, setCurrentStep] = useState(1);
     const [showPassword, setShowPassword] = useState(false);
     const [localGoogleNotice, setLocalGoogleNotice] = useState(null);
+    const [googleLoading, setGoogleLoading] = useState(false);
 
     const changeLanguage = async (lng) => {
         setPreferredLanguage(lng);
@@ -96,12 +97,18 @@ const RegisterScreen = ({ navigation }) => {
     const [googleRequest, googleResponse, promptGoogleAsync] = Google.useIdTokenAuthRequest(getGoogleAuthRequestConfig());
 
     React.useEffect(() => {
+        let isMounted = true;
+        const finishLoading = () => {
+            if (isMounted) setGoogleLoading(false);
+        };
+
         if (googleResponse?.type === 'success') {
             const idToken = getGoogleIdTokenFromResponse(googleResponse);
             if (idToken) {
                 setLocalGoogleNotice(null);
-                googleLogin(idToken);
+                googleLogin(idToken).finally(finishLoading);
             } else {
+                finishLoading();
                 clearAuthNotice();
                 setLocalGoogleNotice({
                     type: 'error',
@@ -109,13 +116,37 @@ const RegisterScreen = ({ navigation }) => {
                 });
             }
         } else if (googleResponse?.type === 'error') {
+            finishLoading();
             clearAuthNotice();
             setLocalGoogleNotice({
                 type: 'error',
                 message: googleResponse.error?.message || 'Google signup failed before reaching the server.',
             });
+        } else if (googleResponse?.type === 'cancel' || googleResponse?.type === 'dismiss') {
+            finishLoading();
         }
+
+        return () => {
+            isMounted = false;
+        };
     }, [googleResponse, googleLogin, clearAuthNotice]);
+
+    const handleGoogleSignupPress = async () => {
+        setGoogleLoading(true);
+        try {
+            const result = await promptGoogleAsync();
+            if (result?.type && result.type !== 'success') {
+                setGoogleLoading(false);
+            }
+        } catch (error) {
+            setGoogleLoading(false);
+            clearAuthNotice();
+            setLocalGoogleNotice({
+                type: 'error',
+                message: error?.message || 'Could not open Google signup. Please try again.',
+            });
+        }
+    };
 
     return (
         <ThemeBackground>
@@ -168,15 +199,17 @@ const RegisterScreen = ({ navigation }) => {
                         <>
                             <TouchableOpacity
                                 style={styles.googleSignUpBtn}
-                                onPress={() => promptGoogleAsync()}
-                                disabled={!googleRequest}
+                                onPress={handleGoogleSignupPress}
+                                disabled={!googleRequest || googleLoading}
                                 activeOpacity={0.8}
                             >
                                 <Image 
                                     source={{ uri: "https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" }}
                                     style={styles.googleIcon}
                                 />
-                                <Text style={styles.googleSignUpText}>{t('register.google_signup')}</Text>
+                                <Text style={styles.googleSignUpText}>
+                                    {googleLoading ? 'Opening Google...' : t('register.google_signup')}
+                                </Text>
                             </TouchableOpacity>
                             <View style={styles.divider}>
                                 <View style={styles.line} />
