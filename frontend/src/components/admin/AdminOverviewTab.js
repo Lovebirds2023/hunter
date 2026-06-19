@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import client from '../../api/client';
 import { adminStyles as s, ADMIN_COLORS } from './AdminStyles';
 import { RevenueBarChart, DonutBreakdown } from './ChartComponents';
+import { useAuth } from '../../context/AuthContext';
 
 /* ─── KPI Stat Card ─── */
 const KPICard = ({ icon, label, value, trend, trendUp, color, bgColor }) => (
@@ -106,22 +107,30 @@ function calcTrend(current, previous) {
 
 /* ─── Main Overview Tab ─── */
 export const AdminOverviewTab = ({ onNavigate, onBack }) => {
+    const { logout } = useAuth();
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [errorMessage, setErrorMessage] = useState(null);
 
     const fetchAnalytics = useCallback(async (silent = false) => {
         if (!silent) setLoading(true);
+        setErrorMessage(null);
         try {
             const res = await client.get('/admin/analytics');
             setData(res.data);
         } catch (e) {
-            console.error('Analytics fetch error:', e);
+            if (e?.response?.status === 401) {
+                logout();
+                return;
+            }
+            if (__DEV__) console.error('Analytics fetch error:', e);
+            setErrorMessage('Could not load analytics right now. Pull to refresh or try again.');
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
-    }, []);
+    }, [logout]);
 
     useEffect(() => { fetchAnalytics(); }, [fetchAnalytics]);
     const onRefresh = () => { setRefreshing(true); fetchAnalytics(true); };
@@ -145,13 +154,33 @@ export const AdminOverviewTab = ({ onNavigate, onBack }) => {
         </View>
     );
 
-    if (loading || !data) {
+    if (loading) {
         return (
             <View style={s.screen}>
                 <OverviewHeader />
                 <View style={s.loadingContainer}>
                     <ActivityIndicator size="large" color={ADMIN_COLORS.accent} />
                     <Text style={{ color: ADMIN_COLORS.textMuted, marginTop: 12 }}>Loading analytics...</Text>
+                </View>
+            </View>
+        );
+    }
+
+    if (!data) {
+        return (
+            <View style={s.screen}>
+                <OverviewHeader />
+                <View style={s.loadingContainer}>
+                    <Ionicons name="warning-outline" size={42} color={ADMIN_COLORS.warning} />
+                    <Text style={{ color: ADMIN_COLORS.textPrimary, marginTop: 12, fontWeight: '700', textAlign: 'center' }}>
+                        {errorMessage || 'Analytics are unavailable.'}
+                    </Text>
+                    <TouchableOpacity
+                        onPress={() => fetchAnalytics()}
+                        style={{ marginTop: 16, backgroundColor: ADMIN_COLORS.accent, borderRadius: 12, paddingHorizontal: 18, paddingVertical: 10 }}
+                    >
+                        <Text style={{ color: ADMIN_COLORS.bg, fontWeight: '800' }}>Retry</Text>
+                    </TouchableOpacity>
                 </View>
             </View>
         );

@@ -12,6 +12,7 @@ import { CurrencyProvider } from './src/context/CurrencyContext';
 import { useAppUpdateCheck } from './src/hooks/useAppUpdateCheck';
 import UpdateModal from './src/components/UpdateModal';
 import * as WebBrowser from 'expo-web-browser';
+import AppErrorBoundary from './src/components/AppErrorBoundary';
 
 // Intercept auth redirects globally
 WebBrowser.maybeCompleteAuthSession();
@@ -271,23 +272,25 @@ export default function App() {
         <AuthProvider>
             <SyncProvider>
                 <CurrencyProvider>
-                    <NavigationContainer linking={linking}>
-                        <AppNavigator />
-                        <PlatformDisclaimerModal />
-                        <UpdateModal
-                            visible={updateModalVisible}
-                            versionInfo={updateInfo}
-                            isRequired={isRequiredUpdate}
-                            onClose={() => {
-                                if (!isRequiredUpdate) {
+                    <AppErrorBoundary>
+                        <NavigationContainer linking={linking}>
+                            <AppNavigator />
+                            <PlatformDisclaimerModal />
+                            <UpdateModal
+                                visible={updateModalVisible}
+                                versionInfo={updateInfo}
+                                isRequired={isRequiredUpdate}
+                                onClose={() => {
+                                    if (!isRequiredUpdate) {
+                                        setUpdateModalVisible(false);
+                                    }
+                                }}
+                                onUpdate={() => {
                                     setUpdateModalVisible(false);
-                                }
-                            }}
-                            onUpdate={() => {
-                                setUpdateModalVisible(false);
-                            }}
-                        />
-                    </NavigationContainer>
+                                }}
+                            />
+                        </NavigationContainer>
+                    </AppErrorBoundary>
                 </CurrencyProvider>
             </SyncProvider>
         </AuthProvider>

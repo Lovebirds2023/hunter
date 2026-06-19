@@ -55,11 +55,16 @@ export default function AdminDashboardScreen() {
             data.pending_orders = data.pending_orders || data.orders_by_status?.pending || data.orders_by_status?.PENDING || 0;
             setStats(data);
         } catch (e) {
-            console.error('Quick stats fetch error:', e);
+            if (e?.response?.status === 401) {
+                logout();
+                return;
+            }
+            if (__DEV__) console.error('Quick stats fetch error:', e);
+            setStats(prev => prev || {});
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [logout]);
 
     useEffect(() => {
         fetchQuickStats();

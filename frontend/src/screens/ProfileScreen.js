@@ -35,6 +35,11 @@ const LANGUAGES = [
     { label: "日本語", value: "ja" }
 ];
 
+const toRatingNumber = (value) => {
+    const rating = Number(value);
+    return Number.isFinite(rating) ? rating : 0;
+};
+
 export const ProfileScreen = ({ navigation }) => {
     const { t } = useTranslation();
     const { userInfo, logout, updateUser } = useContext(AuthContext);
@@ -63,6 +68,7 @@ export const ProfileScreen = ({ navigation }) => {
     // Cards are processed via Pesapal's secure hosted checkout — we never store card numbers or CVV.
     const [mpesaPhone, setMpesaPhone] = useState(userInfo?.mpesa_phone_number || '');
     const [walletSummary, setWalletSummary] = useState({ currency: 'KES', available: 0, pending_withdrawal: 0 });
+    const averageRating = toRatingNumber(userInfo?.average_rating);
 
     // Reset local state when userInfo changes (from backend sync)
     useEffect(() => {
@@ -318,12 +324,12 @@ export const ProfileScreen = ({ navigation }) => {
                     <View style={styles.ratingCard}>
                         <View style={styles.ratingInfo}>
                             <View style={styles.walletMethodInfo}>
-                                <Text style={styles.ratingNumber}>{(userInfo?.average_rating || 0).toFixed(1)} / 5.0</Text>
+                                <Text style={styles.ratingNumber}>{averageRating.toFixed(1)} / 5.0</Text>
                                 <View style={styles.starsRow}>
                                     {[1, 2, 3, 4, 5].map(s => (
                                         <Ionicons 
                                             key={s} 
-                                            name={s <= (userInfo?.average_rating || 0) ? "star" : "star-outline"} 
+                                            name={s <= averageRating ? "star" : "star-outline"}
                                             size={16} 
                                             color={COLORS.accent} 
                                         />

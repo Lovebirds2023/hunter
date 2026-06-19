@@ -11,12 +11,7 @@ import { COLORS, SPACING, SIZES } from '../constants/theme';
 import { ThemeBackground } from '../components/ThemeBackground';
 import client from '../api/client';
 import { AuthContext } from '../context/AuthContext';
-import { formatLocationAccuracy } from '../utils/locationAccuracy';
-
-const hasValidCoordinates = (item) => (
-    Number.isFinite(Number(item?.latitude)) &&
-    Number.isFinite(Number(item?.longitude))
-);
+import { formatLocationAccuracy, hasValidCoordinatePair } from '../utils/locationAccuracy';
 
 const CASE_TYPE_CONFIG = {
     rabies_bite: { label: 'Rabies Bite', icon: 'warning', color: '#FF4444' },
@@ -274,7 +269,7 @@ const CaseDetailScreen = ({ route, navigation }) => {
                                 ) : null}
 
                                 {/* Mini Map */}
-                                {hasValidCoordinates(report) && (
+                                {hasValidCoordinatePair(report) && (
                                     <View style={styles.miniMapContainer}>
                                         <MapView
                                             style={styles.miniMap}

@@ -11,6 +11,7 @@ import { COLORS, SPACING } from '../constants/theme';
 import { ThemeBackground } from '../components/ThemeBackground';
 import client from '../api/client';
 import { AuthContext } from '../context/AuthContext';
+import { hasValidCoordinatePair } from '../utils/locationAccuracy';
 
 const CASE_TYPE_CONFIG = {
     rabies_bite: { label: 'Rabies Bite', icon: 'warning', color: '#FF4444' },
@@ -21,11 +22,6 @@ const CASE_TYPE_CONFIG = {
     abuse: { label: 'Abuse Report', icon: 'alert-circle', color: '#CC0000' },
     other: { label: 'Other', icon: 'ellipsis-horizontal', color: '#888888' },
 };
-
-const hasValidCoordinates = (item) => (
-    Number.isFinite(Number(item?.latitude)) &&
-    Number.isFinite(Number(item?.longitude))
-);
 
 const CaseFeedScreen = ({ navigation }) => {
     const { t } = useTranslation();
@@ -72,7 +68,7 @@ const CaseFeedScreen = ({ navigation }) => {
     }, [reports]);
 
     const mappedReports = useMemo(() => {
-        return filteredReports.filter(hasValidCoordinates);
+        return filteredReports.filter(hasValidCoordinatePair);
     }, [filteredReports]);
 
     useEffect(() => {

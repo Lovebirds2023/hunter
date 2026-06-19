@@ -27,6 +27,7 @@ import {
     formatCoordinatePair,
     formatLocationAccuracy,
     getReliableCurrentLocation,
+    hasValidCoordinatePair,
 } from '../utils/locationAccuracy';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -451,7 +452,7 @@ const RegisterScreen = ({ navigation }) => {
                                         ? t('register.location_success')
                                         : t('register.location_benefit')}
                                 </Text>
-                                {locationAllowed && Number.isFinite(Number(location?.latitude)) && Number.isFinite(Number(location?.longitude)) && (
+                                {locationAllowed && hasValidCoordinatePair(location) && (
                                     <Text style={styles.locationAccuracyText}>
                                         {formatLocationAccuracy(locationAccuracy)} | {formatCoordinatePair(location)}
                                     </Text>

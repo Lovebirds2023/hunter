@@ -12,7 +12,9 @@ import {
     formatCoordinatePair,
     formatLocationAccuracy,
     getReliableCurrentLocation,
+    hasValidCoordinatePair,
     reverseGeocodeToAddress,
+    toCoordinateNumber,
 } from '../utils/locationAccuracy';
 
 const MARKETPLACE_MARKUP_RATE = 0.235;
@@ -31,6 +33,13 @@ const convertAmount = (amount, fromCurrency, toCurrency, rates) => {
     const rateTo = Number(mergedRates[toCurrency] || 0);
     if (!rateFrom || !rateTo) return amount;
     return (Number(amount || 0) / rateFrom) * rateTo;
+};
+
+const getEditablePrice = (service) => {
+    if (!service) return '';
+    const servicePrice = Number(service.price);
+    if (!Number.isFinite(servicePrice) || servicePrice <= 0) return '';
+    return (servicePrice / MARKETPLACE_PRICE_MULTIPLIER).toFixed(2);
 };
 
 // Category Definitions
@@ -62,7 +71,7 @@ const CreateServiceScreen = ({ route, navigation }) => {
 
     const [title, setTitle] = useState(service?.title || '');
     const [description, setDescription] = useState(service?.description || '');
-    const [price, setPrice] = useState(service ? (service.price / 1.235).toFixed(2) : '');
+    const [price, setPrice] = useState(getEditablePrice(service));
     const [images, setImages] = useState(service?.images || (service?.image_url ? [service.image_url] : []));
     const [currency, setCurrency] = useState(service?.currency || 'KES');
     const [stockCount, setStockCount] = useState(service?.stock_count !== null && service?.stock_count !== undefined ? service.stock_count.toString() : '');
@@ -79,6 +88,9 @@ const CreateServiceScreen = ({ route, navigation }) => {
     const [loading, setLoading] = useState(false);
     const [fetchingLocation, setFetchingLocation] = useState(false);
     const [formFields, setFormFields] = useState([]);
+    const hasCapturedLocation = hasValidCoordinatePair({ latitude, longitude });
+    const capturedLatitude = toCoordinateNumber(latitude);
+    const capturedLongitude = toCoordinateNumber(longitude);
     const parsedPrice = Number.parseFloat(price || '0');
     const numericPrice = Number.isFinite(parsedPrice) ? parsedPrice : 0;
     const finalListingPrice = numericPrice * MARKETPLACE_PRICE_MULTIPLIER;
@@ -407,16 +419,16 @@ const CreateServiceScreen = ({ route, navigation }) => {
                         >
                             <Ionicons name="location-outline" size={20} color="white" />
                             <Text style={styles.locationBtnText}>
-                                {fetchingLocation ? t('marketplace.create.fetching') : (latitude ? t('marketplace.create.update_location') : t('marketplace.create.get_location'))}
+                                {fetchingLocation ? t('marketplace.create.fetching') : (hasCapturedLocation ? t('marketplace.create.update_location') : t('marketplace.create.get_location'))}
                             </Text>
                         </TouchableOpacity>
 
-                        {Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude)) && (
+                        {hasCapturedLocation && (
                             <View style={styles.locationInfo}>
                                 <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
                                 <View style={{ flex: 1, marginLeft: 6 }}>
                                     <Text style={styles.locationInfoText} numberOfLines={2}>
-                                        {address || t('marketplace.create.coords', { latitude: latitude.toFixed(6), longitude: longitude.toFixed(6) })}
+                                        {address || t('marketplace.create.coords', { latitude: capturedLatitude.toFixed(6), longitude: capturedLongitude.toFixed(6) })}
                                     </Text>
                                     <Text style={styles.locationAccuracyText}>
                                         {formatLocationAccuracy(locationAccuracy)} | {formatCoordinatePair({ latitude, longitude })}

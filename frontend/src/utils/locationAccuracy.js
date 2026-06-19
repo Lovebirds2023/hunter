@@ -3,6 +3,17 @@ import * as Location from 'expo-location';
 export const TARGET_ACCURACY_METERS = 50;
 export const MAX_ACCEPTABLE_ACCURACY_METERS = 150;
 
+export const toCoordinateNumber = (value) => {
+    if (value === null || value === undefined || value === '') return null;
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : null;
+};
+
+export const hasValidCoordinatePair = (coords) => (
+    toCoordinateNumber(coords?.latitude) !== null &&
+    toCoordinateNumber(coords?.longitude) !== null
+);
+
 const timeoutAfter = (ms) => new Promise((_, reject) => {
     const error = new Error('Location request timed out');
     error.code = 'location_timeout';
@@ -48,8 +59,10 @@ const toReliableLocationResult = (location, maxAcceptableAccuracyMeters) => {
 };
 
 export const formatCoordinatePair = (coords) => {
-    if (!Number.isFinite(Number(coords?.latitude)) || !Number.isFinite(Number(coords?.longitude))) return '';
-    return `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`;
+    const latitude = toCoordinateNumber(coords?.latitude);
+    const longitude = toCoordinateNumber(coords?.longitude);
+    if (latitude === null || longitude === null) return '';
+    return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
 };
 
 export const formatLocationAccuracy = (accuracyMeters) => {

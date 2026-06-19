@@ -9,6 +9,11 @@ import client from '../api/client';
 
 const { width } = Dimensions.get('window');
 
+const isUnauthorizedError = (error) => error?.response?.status === 401;
+const getFulfilledArray = (result) => (
+    result.status === 'fulfilled' && Array.isArray(result.value.data) ? result.value.data : []
+);
+
 const HomeScreen = ({ navigation }) => {
     const { t } = useTranslation();
     const { userInfo, logout } = useContext(AuthContext);
@@ -22,20 +27,32 @@ const HomeScreen = ({ navigation }) => {
         const fetchStats = async () => {
             try {
                 // Fetch stats for the dashboard
-                const [dogsRes, casesRes, spotlightRes, healthRes] = await Promise.all([
+                const [dogsRes, casesRes, spotlightRes, healthRes] = await Promise.allSettled([
                     client.get('/my-dogs'),
                     client.get('/cases'),
                     client.get('/spotlight').catch(() => ({ data: null })), // Handle optional spotlight
                     client.get('/health/summary').catch(() => ({ data: null }))
                 ]);
+
+                if ([dogsRes, casesRes, spotlightRes, healthRes].some(result => result.status === 'rejected' && isUnauthorizedError(result.reason))) {
+                    logout();
+                    return;
+                }
+
+                const dogs = getFulfilledArray(dogsRes);
+                const cases = getFulfilledArray(casesRes);
+                const spotlight = spotlightRes.status === 'fulfilled' && Array.isArray(spotlightRes.value.data)
+                    ? spotlightRes.value.data
+                    : [];
+                const healthData = healthRes.status === 'fulfilled' ? healthRes.value.data : null;
                 
                 let combined = [];
-                if (spotlightRes.data && spotlightRes.data.length > 0) {
-                    combined = [...spotlightRes.data];
+                if (spotlight.length > 0) {
+                    combined = [...spotlight];
                 }
                 
-                if (casesRes.data.length > 0) {
-                    const approved = casesRes.data.filter(c => c.is_approved).slice(0, 3);
+                if (cases.length > 0) {
+                    const approved = cases.filter(c => c.is_approved).slice(0, 3);
                     approved.forEach(c => {
                         // Avoid duplicates if a case is already in spotlight
                         if (!combined.some(s => s.target_id === c.id.toString() || s.id === c.id)) {
@@ -49,19 +66,24 @@ const HomeScreen = ({ navigation }) => {
                     });
                 }
                 setSpotlightItems(combined);
+                setHealthSummary(healthData);
                 
                 setStats({
-                    dogsCount: dogsRes.data.length,
-                    casesCount: casesRes.data.length
+                    dogsCount: dogs.length,
+                    casesCount: cases.length
                 });
             } catch (e) {
-                console.error("Failed to fetch dash stats", e);
+                if (isUnauthorizedError(e)) {
+                    logout();
+                    return;
+                }
+                if (__DEV__) console.error("Failed to fetch dash stats", e);
             } finally {
                 setLoading(false);
             }
         };
         fetchStats();
-    }, []);
+    }, [logout]);
 
     // Auto-rotation effect
     useEffect(() => {

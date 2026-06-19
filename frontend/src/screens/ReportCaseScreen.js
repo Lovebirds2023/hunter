@@ -17,6 +17,7 @@ import {
     formatCoordinatePair,
     formatLocationAccuracy,
     getReliableCurrentLocation,
+    hasValidCoordinatePair,
     reverseGeocodeToAddress,
 } from '../utils/locationAccuracy';
 
@@ -308,7 +309,7 @@ const ReportCaseScreen = ({ navigation, route }) => {
                                 <Ionicons name="navigate" size={20} color={COLORS.accent} />
                             </TouchableOpacity>
                         </View>
-                        {Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude)) && (
+                        {hasValidCoordinatePair({ latitude, longitude }) && (
                             <Text style={styles.coordinateText}>
                                 GPS: {formatCoordinatePair({ latitude, longitude })} | {formatLocationAccuracy(locationAccuracy)}
                             </Text>

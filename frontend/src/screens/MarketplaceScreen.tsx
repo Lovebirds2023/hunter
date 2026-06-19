@@ -12,6 +12,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import MapView, { Marker, Callout } from '../components/MapComponent';
 import { useCurrency } from '../context/CurrencyContext';
 import { useAuth } from '../context/AuthContext';
+import { hasValidCoordinatePair } from '../utils/locationAccuracy';
 
 // Platform-aware storage helper
 const Storage = {
@@ -45,10 +46,10 @@ const PRODUCT_CATEGORIES = [
     { title: 'Gear', value: 'therapy gear', icon: 'bandage' },
 ];
 
-const hasValidCoordinatePair = (item: any) => (
-    Number.isFinite(Number(item?.latitude)) &&
-    Number.isFinite(Number(item?.longitude))
-);
+const toRatingNumber = (value: any) => {
+    const rating = Number(value);
+    return Number.isFinite(rating) ? rating : 0;
+};
 
 export const MarketplaceScreen = ({ navigation }: any) => {
     const { t } = useTranslation();
@@ -63,6 +64,15 @@ export const MarketplaceScreen = ({ navigation }: any) => {
     const [showMap, setShowMap] = useState(false);
     const [preferredCurrency, setPreferredCurrency] = useState('KES');
     const { convertPrice, formatCurrency } = useCurrency();
+
+    const navigateAppScreen = (screen: string, params?: any) => {
+        const rootNavigation = navigation.getParent?.()?.getParent?.();
+        if (rootNavigation?.navigate) {
+            rootNavigation.navigate(screen, params);
+            return;
+        }
+        navigation.navigate(screen, params);
+    };
 
     useEffect(() => {
         getUserId();
@@ -167,7 +177,7 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                 Alert.alert(t('marketplace.unavailable'), t('marketplace.unavailable_msg'));
                 return;
             }
-            navigation.navigate('OrderReceipt', { service: item });
+            navigateAppScreen('OrderReceipt', { service: item });
         };
 
         return (
@@ -210,14 +220,14 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                             <View style={styles.ownerActions}>
                                 <TouchableOpacity
                                     style={[styles.editBadge, { marginBottom: 5 }]}
-                                    onPress={() => navigation.navigate('CreateService', { service: item })}
+                                    onPress={() => navigateAppScreen('CreateService', { service: item })}
                                 >
                                     <Ionicons name="pencil" size={14} color="white" />
                                 </TouchableOpacity>
                                 {item.category === 'events & programs' && (
                                     <TouchableOpacity
                                         style={styles.responsesBadge}
-                                        onPress={() => navigation.navigate('ServiceResponses', { 
+                                        onPress={() => navigateAppScreen('ServiceResponses', {
                                             serviceId: item.id, 
                                             serviceTitle: item.title 
                                         })}
@@ -256,7 +266,7 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                     <View style={styles.cardFooter}>
                         <View style={styles.statsRow}>
                             <Ionicons name="star" size={14} color={COLORS.accent} />
-                            <Text style={styles.ratingText}>{(item.provider?.average_rating || 0).toFixed(1)}</Text>
+                            <Text style={styles.ratingText}>{toRatingNumber(item.provider?.average_rating).toFixed(1)}</Text>
                         </View>
                         <TouchableOpacity
                             style={[styles.actionBtn, isUnavailable && { backgroundColor: '#ddd' }]}
@@ -395,7 +405,7 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                                         title={item.title}
                                         description={t('marketplace.map_description', { price: item.price, distance: item.distance || '' })}
                                     >
-                                        <Callout onPress={() => navigation.navigate('OrderReceipt', { service: item })}>
+                                        <Callout onPress={() => navigateAppScreen('OrderReceipt', { service: item })}>
                                             <View style={styles.callout}>
                                                 <Text style={styles.calloutTitle}>{item.title}</Text>
                                                 <Text style={styles.calloutPrice}>${item.price}</Text>
@@ -449,7 +459,7 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                 {/* Floating Action Button */}
                 <TouchableOpacity
                     style={styles.fab}
-                    onPress={() => navigation.navigate('CreateService')}
+                    onPress={() => navigateAppScreen('CreateService')}
                 >
                     <LinearGradient
                         colors={[COLORS.primary, COLORS.primaryDark]}

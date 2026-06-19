@@ -30,7 +30,7 @@ export const MiniBarChart = ({ data = [], color = ADMIN_COLORS.chart1, height = 
 /* ─── Revenue Bar Chart ─── */
 export const RevenueBarChart = ({ data = [] }) => {
     if (!data.length) return null;
-    const maxRevenue = Math.max(...data.map(d => d.revenue), 1);
+    const maxRevenue = Math.max(...data.map(d => Number(d.revenue) || 0), 1);
     const chartHeight = 140;
     const barWidth = Math.min(32, (SCREEN_WIDTH - 100) / data.length);
 
@@ -39,17 +39,19 @@ export const RevenueBarChart = ({ data = [] }) => {
             {/* Chart */}
             <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: chartHeight, paddingHorizontal: 8 }}>
                 {data.map((item, i) => {
-                    const revHeight = (item.revenue / maxRevenue) * (chartHeight - 20);
-                    const commHeight = (item.commission / maxRevenue) * (chartHeight - 20);
+                    const revenue = Number(item.revenue) || 0;
+                    const commission = Number(item.commission) || 0;
+                    const revHeight = (revenue / maxRevenue) * (chartHeight - 20);
+                    const commHeight = (commission / maxRevenue) * (chartHeight - 20);
                     return (
                         <View key={i} style={{ flex: 1, alignItems: 'center', gap: 4 }}>
                             <Text style={{ fontSize: 9, color: ADMIN_COLORS.textMuted, marginBottom: 2 }}>
-                                {item.revenue > 0 ? `${(item.revenue / 1000).toFixed(0)}k` : ''}
+                                {revenue > 0 ? `${(revenue / 1000).toFixed(0)}k` : ''}
                             </Text>
                             <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2 }}>
                                 <View style={{
                                     width: barWidth * 0.45,
-                                    height: item.revenue > 0 ? Math.max(3, revHeight) : 0,
+                                    height: revenue > 0 ? Math.max(3, revHeight) : 0,
                                     backgroundColor: ADMIN_COLORS.chart2,
                                     borderRadius: 4,
                                     borderBottomLeftRadius: 0,
@@ -57,7 +59,7 @@ export const RevenueBarChart = ({ data = [] }) => {
                                 }} />
                                 <View style={{
                                     width: barWidth * 0.45,
-                                    height: item.commission > 0 ? Math.max(3, commHeight) : 0,
+                                    height: commission > 0 ? Math.max(3, commHeight) : 0,
                                     backgroundColor: ADMIN_COLORS.accent,
                                     borderRadius: 4,
                                     borderBottomLeftRadius: 0,

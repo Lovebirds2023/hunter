@@ -31,7 +31,22 @@ export const AuthProvider = ({ children }) => {
 
     const clearAuthNotice = () => setAuthNotice(null);
 
+    const isUnauthorizedError = (error) => error?.response?.status === 401;
+
+    const clearStoredSession = async () => {
+        setUserToken(null);
+        setUserInfo(null);
+        setIsAdmin(false);
+        await Promise.all([
+            Storage.deleteItemAsync('userToken'),
+            Storage.deleteItemAsync('userInfo'),
+        ]);
+    };
+
     const getFriendlyAuthError = (error, fallback) => {
+        if (isUnauthorizedError(error)) {
+            return 'Your session has expired. Please sign in again.';
+        }
         if (error?.code === 'ECONNABORTED') {
             return 'The login request took too long. Please try again in a moment.';
         }
@@ -216,12 +231,7 @@ export const AuthProvider = ({ children }) => {
 
     const logout = () => {
         setIsLoading(true);
-        setUserToken(null);
-        setUserInfo(null);
-        setIsAdmin(false);
-        Storage.deleteItemAsync('userToken');
-        Storage.deleteItemAsync('userInfo');
-        setIsLoading(false);
+        clearStoredSession().finally(() => setIsLoading(false));
     };
 
 
@@ -247,11 +257,20 @@ export const AuthProvider = ({ children }) => {
                     setUserInfo(res.data);
                     setIsAdmin(res.data.role === 'admin' || res.data.role === 'super_admin');
                     Storage.setItemAsync('userInfo', JSON.stringify(res.data));
-                }).catch(e => { if (__DEV__) console.log("Failed to refresh user info", e); });
+                }).catch(async e => {
+                    if (isUnauthorizedError(e)) {
+                        if (__DEV__) console.log("Stored session expired; signing out.");
+                        await clearStoredSession();
+                        return;
+                    }
+                    if (__DEV__) console.log("Failed to refresh user info", e);
+                });
             }
-            setIsLoading(false);
         } catch (e) {
             if (__DEV__) console.log('isLoggedIn error', e);
+            await clearStoredSession();
+        } finally {
+            setIsLoading(false);
         }
     };
 
