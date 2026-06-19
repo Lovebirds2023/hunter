@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import * as Location from 'expo-location';
 import MapView, { Marker, Callout, Circle } from '../components/MapComponent';
+import CasesWebMap from '../components/CasesWebMap';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING } from '../constants/theme';
 import { ThemeBackground } from '../components/ThemeBackground';
@@ -337,11 +338,16 @@ const CaseFeedScreen = ({ navigation }) => {
                 ) : (
                     <View style={styles.mapWrapper}>
                         {Platform.OS === 'web' ? (
-                            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, backgroundColor: 'rgba(255,255,255,0.05)' }}>
-                                <Ionicons name="map-outline" size={60} color={COLORS.accent} style={{ marginBottom: 20 }} />
-                                <Text style={{ color: COLORS.white, fontSize: 18, textAlign: 'center', fontWeight: 'bold' }}>{t('case_actions.map_unavailable_web')}</Text>
-                                <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 14, textAlign: 'center', marginTop: 10 }}>{t('case_actions.switch_to_list')}</Text>
-                            </View>
+                            <CasesWebMap
+                                reports={mappedReports}
+                                userLocation={userLocation}
+                                onReportPress={(report) => navigation.navigate('CaseDetail', { reportId: report.id })}
+                                getReportConfig={(report) => CASE_TYPE_CONFIG[report.case_type] || CASE_TYPE_CONFIG.other}
+                                getReportTypeLabel={(report) => {
+                                    const config = CASE_TYPE_CONFIG[report.case_type] || CASE_TYPE_CONFIG.other;
+                                    return t(`report.types.${report.case_type}`, { defaultValue: config.label });
+                                }}
+                            />
                         ) : (
                             <>
                                 <MapView

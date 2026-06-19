@@ -3,9 +3,10 @@ import { useTranslation } from 'react-i18next';
 import {
     View, Text, StyleSheet, TextInput, ScrollView,
     TouchableOpacity, Image, SafeAreaView, KeyboardAvoidingView,
-    Platform, FlatList, ActivityIndicator, Dimensions
+    Platform, FlatList, ActivityIndicator, Dimensions, Linking
 } from 'react-native';
 import MapView, { Marker } from '../components/MapComponent';
+import CasesWebMap from '../components/CasesWebMap';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, SIZES } from '../constants/theme';
 import { ThemeBackground } from '../components/ThemeBackground';
@@ -59,6 +60,21 @@ const CaseDetailScreen = ({ route, navigation }) => {
         } catch (e) {
             if (__DEV__) console.log('Failed to fetch comments', e);
         }
+    };
+
+    const openExternalMap = () => {
+        if (!hasValidCoordinatePair(report)) return;
+
+        const latitude = Number(report.latitude);
+        const longitude = Number(report.longitude);
+        const label = encodeURIComponent(report.title || 'Case location');
+        const url = Platform.OS === 'ios'
+            ? `http://maps.apple.com/?ll=${latitude},${longitude}&q=${label}`
+            : `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+
+        Linking.openURL(url).catch((error) => {
+            if (__DEV__) console.log('Failed to open map link', error);
+        });
     };
 
     const handleSendComment = async () => {
@@ -271,22 +287,32 @@ const CaseDetailScreen = ({ route, navigation }) => {
                                 {/* Mini Map */}
                                 {hasValidCoordinatePair(report) && (
                                     <View style={styles.miniMapContainer}>
-                                        <MapView
-                                            style={styles.miniMap}
-                                            initialRegion={{
-                                                latitude: Number(report.latitude),
-                                                longitude: Number(report.longitude),
-                                                latitudeDelta: 0.01,
-                                                longitudeDelta: 0.01,
-                                            }}
-                                            scrollEnabled={false}
-                                            zoomEnabled={false}
-                                        >
-                                            <Marker
-                                                coordinate={{ latitude: Number(report.latitude), longitude: Number(report.longitude) }}
-                                                pinColor={config.color}
+                                        {Platform.OS === 'web' ? (
+                                            <CasesWebMap
+                                                reports={[report]}
+                                                compact
+                                                getReportConfig={() => config}
+                                                getReportTypeLabel={() => t(`report.types.${report.case_type}`, { defaultValue: config.label })}
+                                                onReportPress={openExternalMap}
                                             />
-                                        </MapView>
+                                        ) : (
+                                            <MapView
+                                                style={styles.miniMap}
+                                                initialRegion={{
+                                                    latitude: Number(report.latitude),
+                                                    longitude: Number(report.longitude),
+                                                    latitudeDelta: 0.01,
+                                                    longitudeDelta: 0.01,
+                                                }}
+                                                scrollEnabled={false}
+                                                zoomEnabled={false}
+                                            >
+                                                <Marker
+                                                    coordinate={{ latitude: Number(report.latitude), longitude: Number(report.longitude) }}
+                                                    pinColor={config.color}
+                                                />
+                                            </MapView>
+                                        )}
                                         {report.location_accuracy_meters !== null && report.location_accuracy_meters !== undefined && (
                                             <Text style={styles.mapAccuracyText}>
                                                 {formatLocationAccuracy(report.location_accuracy_meters)}
@@ -295,9 +321,7 @@ const CaseDetailScreen = ({ route, navigation }) => {
                                         <View style={styles.mapOverlay}>
                                             <TouchableOpacity
                                                 style={styles.fullMapBtn}
-                                                onPress={() => {
-                                                    // Optional: open in external maps
-                                                }}
+                                                onPress={openExternalMap}
                                             >
                                                 <Ionicons name="map-outline" size={16} color="white" />
                                                 <Text style={styles.fullMapBtnText}>{t('case_detail.incident_spot')}</Text>
