@@ -53,8 +53,9 @@ export const EventsScreen = ({ navigation }) => {
     const renderEventCard = ({ item }) => {
         const date = new Date(item.start_time);
         const isFull = item.capacity > 0 && item.registrant_count >= item.capacity;
+        const hasTiers = Array.isArray(item.ticket_tiers) && item.ticket_tiers.length > 0;
         const ticketPrice = Number(item.ticket_price || 0);
-        const priceLabel = ticketPrice > 0 ? `${item.currency || 'KES'} ${ticketPrice.toLocaleString()}` : 'FREE';
+        const priceLabel = hasTiers ? 'FREE + PAID' : (ticketPrice > 0 ? `${item.currency || 'KES'} ${ticketPrice.toLocaleString()}` : 'FREE');
         const slotsText = item.capacity > 0
             ? `${Math.max(0, item.capacity - (item.registrant_count || 0))} ${t('events.slots_left') || 'left'}`
             : 'OPEN';
@@ -74,8 +75,8 @@ export const EventsScreen = ({ navigation }) => {
                 
                 <View style={styles.cardInfo}>
                     <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
-                    <View style={[styles.priceBadge, ticketPrice > 0 ? styles.paidPriceBadge : styles.freePriceBadge]}>
-                        <Text style={[styles.priceBadgeText, ticketPrice > 0 ? styles.paidPriceText : styles.freePriceText]}>{priceLabel}</Text>
+                    <View style={[styles.priceBadge, (hasTiers || ticketPrice > 0) ? styles.paidPriceBadge : styles.freePriceBadge]}>
+                        <Text style={[styles.priceBadgeText, (hasTiers || ticketPrice > 0) ? styles.paidPriceText : styles.freePriceText]}>{priceLabel}</Text>
                     </View>
                     {item.is_pinned && (
                         <View style={styles.pinnedBadge}>

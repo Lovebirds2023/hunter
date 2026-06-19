@@ -905,12 +905,22 @@ try:
                ADD COLUMN IF NOT EXISTS ticket_price DOUBLE PRECISION DEFAULT 0;""",
             """ALTER TABLE events
                ADD COLUMN IF NOT EXISTS currency VARCHAR DEFAULT 'KES';""",
+            """ALTER TABLE events
+               ADD COLUMN IF NOT EXISTS ticket_tiers JSON;""",
+            """ALTER TABLE events
+               ADD COLUMN IF NOT EXISTS attendee_type_question VARCHAR;""",
             """ALTER TABLE registrations
                ADD COLUMN IF NOT EXISTS amount DOUBLE PRECISION DEFAULT 0;""",
             """ALTER TABLE registrations
                ADD COLUMN IF NOT EXISTS currency VARCHAR DEFAULT 'KES';""",
             """ALTER TABLE registrations
                ADD COLUMN IF NOT EXISTS payment_status VARCHAR DEFAULT 'free';""",
+            """ALTER TABLE registrations
+               ADD COLUMN IF NOT EXISTS ticket_tier_id VARCHAR;""",
+            """ALTER TABLE registrations
+               ADD COLUMN IF NOT EXISTS ticket_tier_label VARCHAR;""",
+            """ALTER TABLE registrations
+               ADD COLUMN IF NOT EXISTS attendee_type_justification VARCHAR;""",
             """ALTER TABLE registrations
                ADD COLUMN IF NOT EXISTS pesapal_tracking_id VARCHAR;""",
             """ALTER TABLE registrations
@@ -1630,6 +1640,58 @@ def is_event_paid(event: models.Event) -> bool:
     return float(getattr(event, "ticket_price", 0) or 0) > 0
 
 
+def sanitize_ticket_tiers(tiers: Optional[List[Dict[str, Any]]], default_currency: str = "KES") -> List[Dict[str, Any]]:
+    tiers = tiers or []
+    if not isinstance(tiers, list):
+        return []
+    normalized = []
+    for idx, tier in enumerate(tiers):
+        if not isinstance(tier, dict):
+            continue
+        label = str(tier.get("label") or tier.get("name") or "").strip()
+        if not label:
+            continue
+        tier_id = str(tier.get("id") or label.lower().replace(" ", "_") or f"tier_{idx + 1}").strip()
+        try:
+            price = max(float(tier.get("price", 0) or 0), 0)
+        except (TypeError, ValueError):
+            price = 0
+        normalized.append({
+            "id": tier_id,
+            "label": label,
+            "price": price,
+            "currency": str(tier.get("currency") or default_currency or "KES").strip().upper(),
+            "description": str(tier.get("description") or "").strip(),
+            "requires_justification": bool(tier.get("requires_justification", True)),
+        })
+    return normalized
+
+
+def normalize_event_ticket_tiers(event: models.Event) -> List[Dict[str, Any]]:
+    return sanitize_ticket_tiers(getattr(event, "ticket_tiers", None), getattr(event, "currency", None) or "KES")
+
+
+def resolve_event_ticket_tier(event: models.Event, ticket_tier_id: Optional[str]) -> Dict[str, Any]:
+    tiers = normalize_event_ticket_tiers(event)
+    if not tiers:
+        return {
+            "id": "standard",
+            "label": "Standard",
+            "price": max(float(getattr(event, "ticket_price", 0) or 0), 0),
+            "currency": str(getattr(event, "currency", None) or "KES").strip().upper(),
+            "description": "",
+            "requires_justification": False,
+        }
+
+    selected_id = str(ticket_tier_id or "").strip()
+    if not selected_id:
+        raise HTTPException(status_code=400, detail="Choose a registration type")
+    for tier in tiers:
+        if tier["id"] == selected_id:
+            return tier
+    raise HTTPException(status_code=400, detail="Invalid registration type")
+
+
 def is_registration_paid(registration: models.Registration) -> bool:
     return str(getattr(registration, "payment_status", "free") or "free").lower() in {"free", "paid"}
 
@@ -2338,6 +2400,8 @@ def create_event(
         capacity=event.capacity,
         ticket_price=max(float(event.ticket_price or 0), 0),
         currency=(event.currency or "KES").strip().upper(),
+        ticket_tiers=sanitize_ticket_tiers(event.ticket_tiers, event.currency or "KES"),
+        attendee_type_question=event.attendee_type_question,
         category=event.category,
         is_public=event.is_public,
         admin_created=admin_created,
@@ -2399,9 +2463,15 @@ def register_for_event(
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-        
+
+    selected_tier = resolve_event_ticket_tier(event, registration.ticket_tier_id)
+    event_has_tiers = len(normalize_event_ticket_tiers(event)) > 0
+    attendee_justification = (registration.attendee_type_justification or "").strip()
+    if event_has_tiers and selected_tier.get("requires_justification", True) and len(attendee_justification) < 3:
+        raise HTTPException(status_code=400, detail="Tell us briefly why this registration type applies")
+
     # Check capacity
-    paid_event = is_event_paid(event)
+    paid_event = float(selected_tier["price"] or 0) > 0
     status = "pending_payment" if paid_event else "registered"
     if event.capacity > 0:
         count = db.query(models.Registration).filter(
@@ -2431,9 +2501,12 @@ def register_for_event(
         role=registration.role or "attendee",
         share_phone=registration.share_phone,
         ticket_token=secrets.token_urlsafe(16) if not paid_event and status == "registered" else None,
-        amount=float(event.ticket_price or 0),
-        currency=(event.currency or "KES").strip().upper(),
-        payment_status="pending" if paid_event and status == "pending_payment" else "free",
+        amount=float(selected_tier["price"] or 0),
+        currency=(selected_tier.get("currency") or event.currency or "KES").strip().upper(),
+        payment_status="pending" if paid_event else "free",
+        ticket_tier_id=selected_tier["id"],
+        ticket_tier_label=selected_tier["label"],
+        attendee_type_justification=attendee_justification or None,
         pesapal_merchant_reference=None,
     )
     new_reg.pesapal_merchant_reference = new_reg.id
@@ -2471,7 +2544,10 @@ async def initiate_event_registration_payment(
     event = db.query(models.Event).filter(models.Event.id == registration.event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-    if not is_event_paid(event):
+    amount_due = max(float(registration.amount or 0), 0)
+    if registration.status == "waitlisted":
+        raise HTTPException(status_code=400, detail="Waitlisted registrations cannot be paid until a slot is available")
+    if amount_due <= 0:
         if registration.status not in {"registered", "checked-in"}:
             registration.status = "registered"
         registration.payment_status = "free"
@@ -2496,14 +2572,14 @@ async def initiate_event_registration_payment(
     merchant_reference = registration.pesapal_merchant_reference or registration.id
     registration.pesapal_merchant_reference = merchant_reference
     registration.payment_status = "pending"
-    registration.amount = float(event.ticket_price or registration.amount or 0)
-    registration.currency = (event.currency or registration.currency or "KES").strip().upper()
+    registration.amount = amount_due
+    registration.currency = (registration.currency or event.currency or "KES").strip().upper()
     db.commit()
 
     order_res = pesapal.submit_order(
         order_id=merchant_reference,
         amount=registration.amount,
-        description=f"Lovedogs 360 - Event ticket: {event.title}",
+        description=f"Lovedogs 360 - Event ticket: {event.title} ({registration.ticket_tier_label or 'Standard'})",
         email=email or current_user.email,
         phone=phone or current_user.phone_number or "0700000000",
         callback_url=callback_url,
@@ -2650,6 +2726,9 @@ def get_event_responses(
             "amount": reg.amount,
             "currency": reg.currency,
             "payment_status": reg.payment_status,
+            "ticket_tier_id": reg.ticket_tier_id,
+            "ticket_tier_label": reg.ticket_tier_label,
+            "attendee_type_justification": reg.attendee_type_justification,
             "pesapal_tracking_id": reg.pesapal_tracking_id,
             "paid_at": reg.paid_at,
             "created_at": reg.created_at,
@@ -3141,7 +3220,9 @@ def check_in(
     # Allow self-checkin (if event allows) or Admin/Provider checkin
     if reg.user_id != current_user.id and current_user.role not in [models.UserRole.ADMIN, models.UserRole.PROVIDER]:
         raise HTTPException(status_code=403, detail="Not authorized")
-        
+    if not is_registration_paid(reg):
+        raise HTTPException(status_code=400, detail="Payment is not confirmed for this registration")
+
     reg.status = "checked-in"
     reg.check_in_time = datetime.utcnow()
     db.commit()
@@ -3180,7 +3261,7 @@ def export_data(
             query = query.filter(models.Registration.event_id == event_id)
         
         registrations = query.all()
-        headers = ["Registration ID", "Event ID", "Event Title", "User ID", "User Name", "User Email", "Dog ID", "Dog Name", "Status", "Role", "Payment Status", "Amount", "Currency", "Pesapal Tracking ID", "Paid At", "Check-in Time", "Created At"]
+        headers = ["Registration ID", "Event ID", "Event Title", "User ID", "User Name", "User Email", "Dog ID", "Dog Name", "Status", "Role", "Registration Type", "Type Justification", "Payment Status", "Amount", "Currency", "Pesapal Tracking ID", "Paid At", "Check-in Time", "Created At"]
         ws.append(headers)
         for cell in ws[1]: cell.font = header_font
         
@@ -3192,13 +3273,14 @@ def export_data(
                 reg.id, reg.event_id, event.title if event else None,
                 reg.user_id, user.full_name if user else None, user.email if user else None,
                 reg.dog_id, dog.name if dog else None,
-                reg.status, reg.role, reg.payment_status, reg.amount, reg.currency,
+                reg.status, reg.role, reg.ticket_tier_label, reg.attendee_type_justification,
+                reg.payment_status, reg.amount, reg.currency,
                 reg.pesapal_tracking_id, str(reg.paid_at), str(reg.check_in_time), str(reg.created_at)
             ])
             
     elif type == "events":
         events = db.query(models.Event).all()
-        headers = ["Event ID", "Title", "Date", "Location", "Poster URL", "Ticket Price", "Currency", "Organizer ID", "Organizer Name", "Organizer Email", "Category", "Registrations", "Paid Registrations", "Event Revenue", "Check-ins"]
+        headers = ["Event ID", "Title", "Date", "Location", "Poster URL", "Ticket Price", "Currency", "Ticket Tiers", "Attendee Type Question", "Organizer ID", "Organizer Name", "Organizer Email", "Category", "Registrations", "Paid Registrations", "Event Revenue", "Check-ins"]
         ws.append(headers)
         for cell in ws[1]: cell.font = header_font
         for ev in events:
@@ -3215,7 +3297,8 @@ def export_data(
             checkins = db.query(models.Registration).filter(models.Registration.event_id == ev.id, models.Registration.status == "checked-in").count()
             ws.append([
                 ev.id, ev.title, str(ev.start_time), ev.location, ev.poster_url,
-                ev.ticket_price, ev.currency, ev.organizer_id,
+                ev.ticket_price, ev.currency, json.dumps(ev.ticket_tiers or []), ev.attendee_type_question,
+                ev.organizer_id,
                 organizer.full_name if organizer else None, organizer.email if organizer else None,
                 ev.category, registrations, paid_registrations, float(event_revenue or 0), checkins
             ])
@@ -4332,6 +4415,8 @@ def admin_list_events(db: Session = Depends(database.get_db), admin: models.User
             "poster_url": e.poster_url, "images": e.images or [],
             "location": e.location, "start_time": str(e.start_time), "end_time": str(e.end_time),
             "capacity": e.capacity, "ticket_price": e.ticket_price, "currency": e.currency,
+            "ticket_tiers": normalize_event_ticket_tiers(e),
+            "attendee_type_question": e.attendee_type_question,
             "category": e.category, "is_public": e.is_public,
             "admin_created": e.admin_created, "scorecard_enabled": e.scorecard_enabled,
             "follow_up_requested_at": str(e.follow_up_requested_at) if e.follow_up_requested_at else None,
@@ -4368,6 +4453,40 @@ def admin_delete_event(event_id: str, db: Session = Depends(database.get_db), ad
     db.delete(event)
     db.commit()
     return {"message": "Event deleted"}
+
+
+@app.put("/admin/events/{event_id}/ticketing", response_model=schemas.EventResponse)
+def admin_update_event_ticketing(
+    event_id: str,
+    ticketing: schemas.EventTicketingUpdate,
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin)
+):
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    currency = (ticketing.currency or event.currency or "KES").strip().upper()
+    tiers = sanitize_ticket_tiers(ticketing.ticket_tiers, currency)
+    ticket_price = max(float(ticketing.ticket_price or 0), 0)
+    if tiers:
+        ticket_price = max([ticket_price] + [float(tier.get("price") or 0) for tier in tiers])
+
+    event.currency = currency
+    event.ticket_price = ticket_price
+    event.ticket_tiers = tiers
+    event.attendee_type_question = ticketing.attendee_type_question if tiers else None
+
+    db.commit()
+    db.refresh(event)
+    event.registrant_count = db.query(models.Registration).filter(
+        models.Registration.event_id == event.id,
+        models.Registration.status.in_(["registered", "checked-in"])
+    ).count()
+    pin = get_active_pin_map(db, "event").get(event.id)
+    event.is_pinned = pin is not None
+    event.pin_priority = pin.priority if pin else None
+    return event
 
 
 @app.get("/admin/community")

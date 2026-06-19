@@ -9,16 +9,17 @@ export const FeaturedEventCard = ({ item, onPress }) => {
     const { t } = useTranslation();
     const date = new Date(item.start_time);
     const isFull = item.capacity > 0 && item.registrant_count >= item.capacity;
+    const hasTiers = Array.isArray(item.ticket_tiers) && item.ticket_tiers.length > 0;
     const ticketPrice = Number(item.ticket_price || 0);
-    const priceLabel = ticketPrice > 0 ? `${item.currency || 'KES'} ${ticketPrice.toLocaleString()}` : 'FREE';
+    const priceLabel = hasTiers ? 'FREE + PAID' : (ticketPrice > 0 ? `${item.currency || 'KES'} ${ticketPrice.toLocaleString()}` : 'FREE');
     const content = (
         <View style={styles.content}>
             <View style={styles.badgeRow}>
                 <View style={[styles.badge, isFull && { backgroundColor: '#ff4d4d' }]}>
                     <Text style={[styles.badgeText, isFull && { color: 'white' }]}>{isFull ? t('events.full') : t('home.featured')}</Text>
                 </View>
-                <View style={[styles.priceBadge, ticketPrice > 0 && styles.paidBadge]}>
-                    <Text style={[styles.priceText, ticketPrice > 0 && styles.paidText]}>{priceLabel}</Text>
+                <View style={[styles.priceBadge, (hasTiers || ticketPrice > 0) && styles.paidBadge]}>
+                    <Text style={[styles.priceText, (hasTiers || ticketPrice > 0) && styles.paidText]}>{priceLabel}</Text>
                 </View>
             </View>
 

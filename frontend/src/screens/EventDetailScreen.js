@@ -26,6 +26,8 @@ export const EventDetailScreen = ({ route, navigation }) => {
     const [isSaved, setIsSaved] = useState(false);
     const [paymentTrackingId, setPaymentTrackingId] = useState(null);
     const [paymentLoading, setPaymentLoading] = useState(false);
+    const [selectedTicketTierId, setSelectedTicketTierId] = useState(null);
+    const [attendeeTypeJustification, setAttendeeTypeJustification] = useState('');
 
     const [myRegistration, setMyRegistration] = useState(null);
 
@@ -46,6 +48,10 @@ export const EventDetailScreen = ({ route, navigation }) => {
             setEvent(eventData);
             setDogs(dogsData);
             setFormFields(fieldsData || []);
+            const tiers = Array.isArray(eventData.ticket_tiers) ? eventData.ticket_tiers : [];
+            if (tiers.length > 0) {
+                setSelectedTicketTierId(prev => prev || tiers[0].id);
+            }
 
             // Check if saved
             const savedItem = savedData?.find(s => s.event_id === eventId);
@@ -144,6 +150,19 @@ export const EventDetailScreen = ({ route, navigation }) => {
             // Optional warning
         }
 
+        const ticketTiers = Array.isArray(event?.ticket_tiers) ? event.ticket_tiers : [];
+        const selectedTier = ticketTiers.find(tier => tier.id === selectedTicketTierId);
+        if (ticketTiers.length > 0) {
+            if (!selectedTier) {
+                Alert.alert('Choose registration type', 'Select Mashinani or Corporate before continuing.');
+                return;
+            }
+            if ((attendeeTypeJustification || '').trim().length < 3) {
+                Alert.alert('Justification required', 'Briefly explain why this registration type applies to you.');
+                return;
+            }
+        }
+
         // Validate custom fields
         for (const field of formFields) {
             if (field.is_required && !formResponses[field.id]) {
@@ -163,6 +182,8 @@ export const EventDetailScreen = ({ route, navigation }) => {
                 dog_id: selectedDog ? selectedDog.id : null,
                 role: 'attendee',
                 share_phone: sharePhone,
+                ticket_tier_id: selectedTier?.id || null,
+                attendee_type_justification: ticketTiers.length > 0 ? attendeeTypeJustification.trim() : null,
                 form_responses: formattedResponses
             });
             setModalVisible(false);
@@ -180,8 +201,18 @@ export const EventDetailScreen = ({ route, navigation }) => {
 
     if (loading || !event) return <View style={styles.center}><Text>{t('common.loading')}</Text></View>;
 
+    const ticketTiers = Array.isArray(event.ticket_tiers) ? event.ticket_tiers : [];
+    const hasTicketTiers = ticketTiers.length > 0;
+    const selectedTicketTier = ticketTiers.find(tier => tier.id === selectedTicketTierId) || ticketTiers[0] || null;
     const ticketPrice = Number(event.ticket_price || 0);
-    const priceLabel = ticketPrice > 0 ? `${event.currency || 'KES'} ${ticketPrice.toLocaleString()}` : 'Free';
+    const selectedTicketPrice = Number(selectedTicketTier?.price || (hasTicketTiers ? 0 : ticketPrice) || 0);
+    const selectedTicketCurrency = selectedTicketTier?.currency || event.currency || 'KES';
+    const priceLabel = hasTicketTiers
+        ? 'Free + paid options'
+        : (ticketPrice > 0 ? `${event.currency || 'KES'} ${ticketPrice.toLocaleString()}` : 'Free');
+    const selectedPriceLabel = selectedTicketPrice > 0
+        ? `${selectedTicketCurrency} ${selectedTicketPrice.toLocaleString()}`
+        : 'Free';
     const pendingPayment = myRegistration && (
         String(myRegistration.payment_status || '').toLowerCase() === 'pending' ||
         myRegistration.status === 'pending_payment'
@@ -204,9 +235,9 @@ export const EventDetailScreen = ({ route, navigation }) => {
                 )}
                 <Text style={styles.title}>{event.title}</Text>
                 <View style={styles.metaPills}>
-                    <View style={[styles.pricePill, ticketPrice > 0 ? styles.paidPill : styles.freePill]}>
-                        <Ionicons name={ticketPrice > 0 ? 'card-outline' : 'gift-outline'} size={14} color={ticketPrice > 0 ? '#0f7a39' : COLORS.primary} />
-                        <Text style={[styles.pricePillText, { color: ticketPrice > 0 ? '#0f7a39' : COLORS.primary }]}>{priceLabel}</Text>
+                    <View style={[styles.pricePill, (hasTicketTiers || ticketPrice > 0) ? styles.paidPill : styles.freePill]}>
+                        <Ionicons name={(hasTicketTiers || ticketPrice > 0) ? 'card-outline' : 'gift-outline'} size={14} color={(hasTicketTiers || ticketPrice > 0) ? '#0f7a39' : COLORS.primary} />
+                        <Text style={[styles.pricePillText, { color: (hasTicketTiers || ticketPrice > 0) ? '#0f7a39' : COLORS.primary }]}>{priceLabel}</Text>
                     </View>
                     {event.is_pinned && (
                         <View style={styles.pinPill}>
@@ -303,7 +334,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
                         )
                     ) : (
                         <Button
-                            title={ticketPrice > 0 ? `Register and pay ${priceLabel}` : t('event_detail.register_now')}
+                            title={hasTicketTiers ? 'Choose registration type' : (ticketPrice > 0 ? `Register and pay ${priceLabel}` : t('event_detail.register_now'))}
                             onPress={() => setModalVisible(true)}
                             color={COLORS.primary}
                         />
@@ -337,11 +368,46 @@ export const EventDetailScreen = ({ route, navigation }) => {
                         <ScrollView showsVerticalScrollIndicator={false} style={{ width: '100%' }}>
                             <Text style={styles.modalTitle}>{t('event_detail.registration_title')}</Text>
                             <View style={styles.modalPriceBox}>
-                                <Text style={styles.modalPriceLabel}>Ticket</Text>
-                                <Text style={styles.modalPriceValue}>{priceLabel}</Text>
-                                {ticketPrice > 0 && <Text style={styles.modalPriceHelp}>Payment is completed securely through Pesapal after registration.</Text>}
+                                <Text style={styles.modalPriceLabel}>{hasTicketTiers ? 'Registration type' : 'Ticket'}</Text>
+                                <Text style={styles.modalPriceValue}>{hasTicketTiers ? selectedPriceLabel : priceLabel}</Text>
+                                {selectedTicketPrice > 0 && <Text style={styles.modalPriceHelp}>Payment is completed securely through Pesapal after registration.</Text>}
                             </View>
-                            
+
+                            {hasTicketTiers && (
+                                <View style={styles.profileSection}>
+                                    <Text style={styles.sectionTitle}>Choose your category</Text>
+                                    {ticketTiers.map((tier) => {
+                                        const tierPrice = Number(tier.price || 0);
+                                        const isSelected = selectedTicketTierId === tier.id;
+                                        return (
+                                            <TouchableOpacity
+                                                key={tier.id}
+                                                style={[styles.tierOption, isSelected && styles.selectedTierOption]}
+                                                onPress={() => setSelectedTicketTierId(tier.id)}
+                                            >
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={[styles.tierTitle, isSelected && styles.selectedTierText]}>{tier.label}</Text>
+                                                    {!!tier.description && <Text style={[styles.tierDescription, isSelected && styles.selectedTierText]}>{tier.description}</Text>}
+                                                </View>
+                                                <Text style={[styles.tierPrice, isSelected && styles.selectedTierText]}>
+                                                    {tierPrice > 0 ? `${tier.currency || event.currency || 'KES'} ${tierPrice.toLocaleString()}` : 'FREE'}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                    <Text style={styles.questionLabel}>
+                                        {event.attendee_type_question || 'Briefly explain why this registration type applies to you.'} <Text style={{ color: 'red' }}>*</Text>
+                                    </Text>
+                                    <TextInput
+                                        style={[styles.textInput, { height: 86, textAlignVertical: 'top' }]}
+                                        multiline
+                                        placeholder="Example: I am attending as a community participant from..."
+                                        value={attendeeTypeJustification}
+                                        onChangeText={setAttendeeTypeJustification}
+                                    />
+                                </View>
+                            )}
+
                             <View style={styles.profileSection}>
                                 <Text style={styles.sectionTitle}>{t('event_detail.profile_details')}</Text>
                                 <Text style={styles.profileText}>{t('event_detail.name')}: {user?.full_name || t('common.na')}</Text>
@@ -427,7 +493,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
 
                             <View style={styles.modalActions}>
                                 <TouchableOpacity style={styles.submitBtn} onPress={handleRegister}>
-                                    <Text style={styles.submitBtnText}>{ticketPrice > 0 ? `Continue to payment (${priceLabel})` : t('event_detail.complete_registration')}</Text>
+                                    <Text style={styles.submitBtnText}>{selectedTicketPrice > 0 ? `Continue to payment (${selectedPriceLabel})` : t('event_detail.complete_registration')}</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
                                     <Text style={styles.cancelBtnText}>{t('common.cancel')}</Text>
@@ -496,6 +562,25 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.primary,
         borderColor: COLORS.primary
     },
+    tierOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        borderWidth: 1,
+        borderColor: '#ddd',
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 10,
+        backgroundColor: '#fff'
+    },
+    selectedTierOption: {
+        backgroundColor: COLORS.primary,
+        borderColor: COLORS.primary
+    },
+    tierTitle: { fontSize: 15, fontWeight: '900', color: '#222' },
+    tierDescription: { fontSize: 12, color: '#666', marginTop: 3, lineHeight: 17 },
+    tierPrice: { fontSize: 13, fontWeight: '900', color: '#0f7a39' },
+    selectedTierText: { color: '#fff' },
     ticketContainer: {
         alignItems: 'center',
         padding: 20,

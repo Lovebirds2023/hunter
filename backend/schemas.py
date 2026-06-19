@@ -199,12 +199,20 @@ class EventBase(BaseModel):
     capacity: Optional[int] = 0
     ticket_price: Optional[float] = 0.0
     currency: Optional[str] = "KES"
+    ticket_tiers: Optional[List[Dict[str, Any]]] = None
+    attendee_type_question: Optional[str] = None
     category: Optional[str] = None
     is_public: Optional[int] = 1
     scorecard_enabled: Optional[bool] = True
 
 class EventCreate(EventBase):
     pass
+
+class EventTicketingUpdate(BaseModel):
+    ticket_price: Optional[float] = None
+    currency: Optional[str] = "KES"
+    ticket_tiers: Optional[List[Dict[str, Any]]] = None
+    attendee_type_question: Optional[str] = None
 
 class EventResponse(EventBase):
     id: str
@@ -244,6 +252,8 @@ class RegistrationCreate(BaseModel):
     role: Optional[str] = "attendee"
     join_waitlist: Optional[bool] = False
     share_phone: Optional[bool] = False
+    ticket_tier_id: Optional[str] = None
+    attendee_type_justification: Optional[str] = None
     form_responses: Optional[List[FormResponseItem]] = []
 
 class RegistrationResponse(BaseModel):
@@ -257,6 +267,9 @@ class RegistrationResponse(BaseModel):
     amount: Optional[float] = 0.0
     currency: Optional[str] = "KES"
     payment_status: Optional[str] = "free"
+    ticket_tier_id: Optional[str] = None
+    ticket_tier_label: Optional[str] = None
+    attendee_type_justification: Optional[str] = None
     pesapal_tracking_id: Optional[str] = None
     paid_at: Optional[datetime.datetime] = None
     check_in_time: Optional[datetime.datetime] = None
@@ -318,6 +331,9 @@ class RegistrationWithResponses(BaseModel):
     amount: Optional[float] = 0.0
     currency: Optional[str] = "KES"
     payment_status: Optional[str] = "free"
+    ticket_tier_id: Optional[str] = None
+    ticket_tier_label: Optional[str] = None
+    attendee_type_justification: Optional[str] = None
     pesapal_tracking_id: Optional[str] = None
     paid_at: Optional[datetime.datetime] = None
     created_at: datetime.datetime

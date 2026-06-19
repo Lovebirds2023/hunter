@@ -260,6 +260,8 @@ class Event(Base):
     capacity = Column(Integer, default=0) # 0 means unlimited
     ticket_price = Column(Float, default=0.0)
     currency = Column(String, default="KES")
+    ticket_tiers = Column(JSON, nullable=True)
+    attendee_type_question = Column(String, nullable=True)
     organizer_id = Column(String, ForeignKey("users.id"))
     category = Column(String) # e.g., "walk", "training", "outreach"
     is_public = Column(Integer, default=1) # 1 for public, 0 for private
@@ -286,6 +288,9 @@ class Registration(Base):
     amount = Column(Float, default=0.0)
     currency = Column(String, default="KES")
     payment_status = Column(String, default="free") # free, pending, paid, failed
+    ticket_tier_id = Column(String, nullable=True)
+    ticket_tier_label = Column(String, nullable=True)
+    attendee_type_justification = Column(String, nullable=True)
     pesapal_tracking_id = Column(String, nullable=True, index=True)
     pesapal_merchant_reference = Column(String, nullable=True, index=True)
     paid_at = Column(DateTime, nullable=True)

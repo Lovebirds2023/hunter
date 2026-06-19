@@ -77,6 +77,26 @@ const EventResponsesScreen = ({ route, navigation }) => {
                     </View>
                 )}
 
+                {(item.ticket_tier_label || item.attendee_type_justification) && (
+                    <View style={styles.tierBox}>
+                        {item.ticket_tier_label && (
+                            <View style={styles.tierHeader}>
+                                <Text style={styles.tierLabel}>Registration type</Text>
+                                <Text style={styles.tierValue}>{item.ticket_tier_label}</Text>
+                            </View>
+                        )}
+                        {item.attendee_type_justification && (
+                            <View style={styles.qaRow}>
+                                <Text style={styles.questionText}>Type justification</Text>
+                                <Text style={styles.answerText}>{item.attendee_type_justification}</Text>
+                            </View>
+                        )}
+                        <Text style={styles.paymentLine}>
+                            {item.payment_status || 'free'} - {item.currency || 'KES'} {Number(item.amount || 0).toLocaleString()}
+                        </Text>
+                    </View>
+                )}
+
                 <View style={styles.responsesContainer}>
                     {formFields.length > 0 ? (
                         formFields.map(field => {
@@ -142,6 +162,11 @@ const styles = StyleSheet.create({
     statusText: { fontSize: 12, color: '#0066cc', fontWeight: '500', textTransform: 'capitalize' },
     dogRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fefaf0', padding: 8, borderRadius: 8, marginBottom: 12 },
     dogName: { marginLeft: 8, fontSize: 14, color: '#D4AF37', fontWeight: '500' },
+    tierBox: { backgroundColor: '#fff8dc', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#f0d875', marginBottom: 12 },
+    tierHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+    tierLabel: { fontSize: 12, color: '#6d5b12', fontWeight: '700', textTransform: 'uppercase' },
+    tierValue: { fontSize: 13, color: '#1A1A1A', fontWeight: '900' },
+    paymentLine: { fontSize: 12, color: '#6d5b12', fontWeight: '700', marginTop: 4, textTransform: 'capitalize' },
     responsesContainer: { backgroundColor: '#fafafa', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#eee' },
     qaRow: { marginBottom: 12 },
     questionText: { fontSize: 12, color: '#666', fontWeight: '600', marginBottom: 4 },
