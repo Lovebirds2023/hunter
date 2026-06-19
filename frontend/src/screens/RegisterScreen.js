@@ -62,7 +62,6 @@ const RegisterScreen = ({ navigation }) => {
             const coords = {
                 latitude: result.coords.latitude,
                 longitude: result.coords.longitude,
-                location_accuracy_meters: result.accuracyMeters,
             };
 
             setLocation(coords);
@@ -489,8 +488,7 @@ const RegisterScreen = ({ navigation }) => {
                                             countryCode,
                                             preferredLanguage,
                                             currentLocation?.latitude,
-                                            currentLocation?.longitude,
-                                            currentLocation?.location_accuracy_meters ?? locationAccuracy
+                                            currentLocation?.longitude
                                         );
                                         if (success) {
                                             navigation.navigate('Login');
