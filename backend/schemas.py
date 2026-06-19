@@ -185,6 +185,8 @@ class OrderResponse(BaseModel):
     karma_points_redeemed: int = 0
     status: OrderStatus
     share_phone: bool
+    pesapal_tracking_id: Optional[str] = None
+    pesapal_merchant_reference: Optional[str] = None
     created_at: datetime.datetime
     responses: List[OrderFormResponseMini] = []
     class Config:

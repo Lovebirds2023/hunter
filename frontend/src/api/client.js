@@ -30,6 +30,34 @@ const getBaseUrl = () => {
 
 export const BASE_URL = getBaseUrl();
 export const API_URL = BASE_URL;
+export const AUTH_SESSION_EXPIRED_EVENT = 'lovedogs360:auth-session-expired';
+const sessionExpiredListeners = new Set();
+
+const isAuthEndpoint = (url = '') => (
+    url.includes('/token') ||
+    url.includes('/auth/google') ||
+    url.includes('/register') ||
+    url.includes('/password/')
+);
+
+const notifySessionExpired = () => {
+    sessionExpiredListeners.forEach((listener) => {
+        try {
+            listener();
+        } catch (error) {
+            if (__DEV__) console.log('Session expiry listener failed', error);
+        }
+    });
+
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new Event(AUTH_SESSION_EXPIRED_EVENT));
+    }
+};
+
+export const subscribeToSessionExpired = (listener) => {
+    sessionExpiredListeners.add(listener);
+    return () => sessionExpiredListeners.delete(listener);
+};
 
 const client = axios.create({
     baseURL: BASE_URL,
@@ -57,6 +85,18 @@ client.interceptors.request.use(
         return config;
     },
     (error) => Promise.reject(error)
+);
+
+client.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        const status = error?.response?.status;
+        const requestUrl = error?.config?.url || '';
+        if (status === 401 && !isAuthEndpoint(requestUrl)) {
+            notifySessionExpired();
+        }
+        return Promise.reject(error);
+    }
 );
 
 export { client };

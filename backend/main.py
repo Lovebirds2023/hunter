@@ -932,6 +932,10 @@ try:
                ADD COLUMN IF NOT EXISTS discount_amount DOUBLE PRECISION DEFAULT 0;""",
             """ALTER TABLE orders
                ADD COLUMN IF NOT EXISTS karma_points_redeemed INTEGER DEFAULT 0;""",
+            """ALTER TABLE orders
+               ADD COLUMN IF NOT EXISTS pesapal_tracking_id VARCHAR;""",
+            """ALTER TABLE orders
+               ADD COLUMN IF NOT EXISTS pesapal_merchant_reference VARCHAR;""",
             """ALTER TABLE transactions
                ADD COLUMN IF NOT EXISTS payout_method VARCHAR;""",
             """ALTER TABLE transactions
@@ -991,6 +995,7 @@ try:
             """CREATE INDEX IF NOT EXISTS idx_scorecard_participants_event ON scorecard_participants(event_id);""",
             """CREATE INDEX IF NOT EXISTS idx_scorecard_surveys_event_type ON scorecard_surveys(event_id, survey_type);""",
             """CREATE INDEX IF NOT EXISTS idx_registrations_payment ON registrations(payment_status, pesapal_tracking_id);""",
+            """CREATE INDEX IF NOT EXISTS idx_orders_payment ON orders(status, pesapal_tracking_id);""",
         ]
         
         for i, stmt in enumerate(migration_statements, 1):
@@ -1642,9 +1647,12 @@ def is_pesapal_payment_successful(status_res: dict) -> bool:
     )
     return str(status_code) == "1" or str(status_text).strip().lower() in {"completed", "paid", "success", "successful"}
 
-def mark_order_paid(db: Session, order: models.Order) -> bool:
+def mark_order_paid(db: Session, order: models.Order, tracking_id: Optional[str] = None) -> bool:
     current_status = order_status_value(order.status)
     if current_status in PAID_ORDER_STATES:
+        if tracking_id and not getattr(order, "pesapal_tracking_id", None):
+            order.pesapal_tracking_id = tracking_id
+            return True
         return False
 
     if current_status != models.OrderStatus.PENDING.value:
@@ -1658,6 +1666,7 @@ def mark_order_paid(db: Session, order: models.Order) -> bool:
             service.slots_available = max(service.slots_available - 1, 0)
 
     order.status = models.OrderStatus.PAID.value
+    order.pesapal_tracking_id = tracking_id or getattr(order, "pesapal_tracking_id", None)
     buyer_points = calculate_karma_reward(order.amount)
     seller_points = calculate_karma_reward(order.payout)
     item_label = "product" if service and service.item_type == "products" else "service"
@@ -1859,6 +1868,7 @@ def create_order(
         status=models.OrderStatus.PENDING.value,
         share_phone=order_data.share_phone
     )
+    new_order.pesapal_merchant_reference = new_order.id
     db.add(new_order)
     db.flush()
 
@@ -4964,6 +4974,13 @@ async def initiate_payment(
         raise HTTPException(status_code=404, detail="Order not found")
     if order.buyer_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
+    if is_order_paid(order):
+        return {
+            "message": "Payment already confirmed",
+            "payment_success": True,
+            "order_status": order.status,
+            "order_tracking_id": order.pesapal_tracking_id,
+        }
 
     ipn_url = os.getenv("PESAPAL_IPN_URL")
     callback_url = os.getenv("PESAPAL_CALLBACK_URL")
@@ -4978,9 +4995,13 @@ async def initiate_payment(
         detail = ipn_res.get("error") or ipn_res.get("message") or ipn_res
         raise HTTPException(status_code=502, detail=f"Failed to register IPN with Pesapal: {detail}")
         
+    merchant_reference = order.pesapal_merchant_reference or order.id
+    order.pesapal_merchant_reference = merchant_reference
+    db.commit()
+
     # 2. Submit Order
     order_res = pesapal.submit_order(
-        order_id=order_id,
+        order_id=merchant_reference,
         amount=order.amount,
         description=f"Lovedogs 360 - Order {order_id}",
         email=email,
@@ -4989,6 +5010,10 @@ async def initiate_payment(
         ipn_id=ipn_id,
         currency=(db.query(models.Service.currency).filter(models.Service.id == order.service_id).scalar() or "KES"),
     )
+    tracking_id = order_res.get("order_tracking_id") or order_res.get("OrderTrackingId")
+    if tracking_id:
+        order.pesapal_tracking_id = tracking_id
+        db.commit()
     if not order_res.get("redirect_url"):
         detail = order_res.get("error") or order_res.get("message") or order_res
         raise HTTPException(status_code=502, detail=f"Failed to start Pesapal checkout: {detail}")
@@ -4998,9 +5023,12 @@ async def initiate_payment(
 @app.get("/pesapal/callback")
 async def pesapal_callback(OrderTrackingId: str, OrderMerchantReference: str, db: Session = Depends(database.get_db)):
     status_res = pesapal.get_transaction_status(OrderTrackingId)
-    order = db.query(models.Order).filter(models.Order.id == OrderMerchantReference).first()
+    order = db.query(models.Order).filter(
+        (models.Order.id == OrderMerchantReference) |
+        (models.Order.pesapal_merchant_reference == OrderMerchantReference)
+    ).first()
     if order and is_pesapal_payment_successful(status_res):
-        if mark_order_paid(db, order):
+        if mark_order_paid(db, order, OrderTrackingId):
             db.commit()
         return {"status": "processed", "type": "order", "order_status": order.status, "data": status_res}
 
@@ -5034,10 +5062,11 @@ async def payment_status(
 
     status_res = None
     payment_success = is_order_paid(order)
-    if tracking_id and not payment_success:
-        status_res = pesapal.get_transaction_status(tracking_id)
+    tracking = tracking_id or getattr(order, "pesapal_tracking_id", None)
+    if tracking and not payment_success:
+        status_res = pesapal.get_transaction_status(tracking)
         pesapal_success = is_pesapal_payment_successful(status_res)
-        if pesapal_success and mark_order_paid(db, order):
+        if pesapal_success and mark_order_paid(db, order, tracking):
             db.commit()
             payment_success = True
         else:
@@ -5048,6 +5077,8 @@ async def payment_status(
         "order_status": order.status,
         "payment_success": payment_success,
         "payment_status": status_res,
+        "pesapal_tracking_id": getattr(order, "pesapal_tracking_id", None),
+        "pesapal_merchant_reference": getattr(order, "pesapal_merchant_reference", None),
         "buyer_reward_points": calculate_karma_reward(order.amount) if payment_success else 0,
         "seller_reward_points": calculate_karma_reward(order.payout) if payment_success else 0,
         "discount_amount": getattr(order, "discount_amount", 0) or 0,
@@ -5058,9 +5089,12 @@ async def payment_status(
 async def pesapal_ipn(OrderTrackingId: str, OrderMerchantReference: str, OrderNotificationType: str, db: Session = Depends(database.get_db)):
     logger.info(f"IPN Received: {OrderTrackingId} for Order {OrderMerchantReference}")
     status_res = pesapal.get_transaction_status(OrderTrackingId)
-    order = db.query(models.Order).filter(models.Order.id == OrderMerchantReference).first()
+    order = db.query(models.Order).filter(
+        (models.Order.id == OrderMerchantReference) |
+        (models.Order.pesapal_merchant_reference == OrderMerchantReference)
+    ).first()
     if order and is_pesapal_payment_successful(status_res):
-        if mark_order_paid(db, order):
+        if mark_order_paid(db, order, OrderTrackingId):
             db.commit()
         return {"status": "acknowledged", "type": "order"}
     registration = db.query(models.Registration).filter(

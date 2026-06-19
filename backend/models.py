@@ -224,6 +224,8 @@ class Order(Base):
     karma_points_redeemed = Column(Integer, default=0)
     status = Column(String, default="PENDING")
     share_phone = Column(Boolean, default=False)
+    pesapal_tracking_id = Column(String, nullable=True, index=True)
+    pesapal_merchant_reference = Column(String, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     
     buyer = relationship("User", foreign_keys=[buyer_id], back_populates="orders")

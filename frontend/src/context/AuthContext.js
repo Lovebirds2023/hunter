@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect } from 'react';
 import * as SecureStore from 'expo-secure-store';
-import client from '../api/client';
+import client, { subscribeToSessionExpired } from '../api/client';
 import { Alert, Platform } from 'react-native';
 import { setAppLanguage } from '../i18n';
 
@@ -276,6 +276,22 @@ export const AuthProvider = ({ children }) => {
 
     useEffect(() => {
         isLoggedIn();
+    }, []);
+
+    useEffect(() => {
+        let isHandlingExpiry = false;
+        const handleSessionExpired = async () => {
+            if (isHandlingExpiry) return;
+            isHandlingExpiry = true;
+            try {
+                await clearStoredSession();
+                setAuthNotice({ type: 'info', message: 'Your session has expired. Please sign in again.' });
+            } finally {
+                isHandlingExpiry = false;
+            }
+        };
+
+        return subscribeToSessionExpired(handleSessionExpired);
     }, []);
 
     return (
