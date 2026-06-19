@@ -272,6 +272,7 @@ export const adminStyles = StyleSheet.create({
     },
     actionRow: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
         marginTop: 12,
         paddingTop: 12,
         borderTopWidth: 1,

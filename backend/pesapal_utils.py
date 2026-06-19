@@ -57,14 +57,14 @@ class PesapalAPI:
         except ValueError:
             return {"error": "Pesapal returned an invalid IPN response"}
 
-    def submit_order(self, order_id, amount, description, email, phone, callback_url, ipn_id):
+    def submit_order(self, order_id, amount, description, email, phone, callback_url, ipn_id, currency="KES"):
         if not self.token:
             self.get_token()
             
         url = f"{self.base_url}/api/Transactions/SubmitOrderRequest"
         payload = {
             "id": order_id,
-            "currency": "KES",
+            "currency": currency or "KES",
             "amount": amount,
             "description": description,
             "callback_url": callback_url,

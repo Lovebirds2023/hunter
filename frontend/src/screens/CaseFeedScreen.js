@@ -178,6 +178,12 @@ const CaseFeedScreen = ({ navigation }) => {
                         <Ionicons name={config.icon} size={12} color="white" />
                         <Text style={styles.caseTypeText}>{t(`report.types.${item.case_type}`, { defaultValue: config.label })}</Text>
                     </View>
+                    {item.is_pinned && (
+                        <View style={styles.pinnedBadge}>
+                            <Ionicons name="pin" size={12} color={COLORS.primary} />
+                            <Text style={styles.pinnedBadgeText}>Pinned</Text>
+                        </View>
+                    )}
                 </View>
 
                 {/* Content */}
@@ -421,6 +427,8 @@ const styles = StyleSheet.create({
     },
     cardHeader: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: SPACING.sm,
@@ -448,6 +456,16 @@ const styles = StyleSheet.create({
         borderRadius: 12,
     },
     caseTypeText: { color: 'white', fontSize: 10, fontWeight: 'bold', marginLeft: 4 },
+    pinnedBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        backgroundColor: COLORS.accent,
+        marginLeft: 6,
+    },
+    pinnedBadgeText: { color: COLORS.primary, fontSize: 10, fontWeight: '900', marginLeft: 4 },
     cardTitle: { fontSize: 16, fontWeight: 'bold', color: COLORS.white, marginBottom: 4 },
     cardDesc: { fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 8, lineHeight: 18 },
     metaRow: {

@@ -18,6 +18,8 @@ import { AdminDogsTab } from '../components/admin/AdminDogsTab';
 import { AdminSupportTab } from '../components/admin/AdminSupportTab';
 import { AdminExportTab } from '../components/admin/AdminExportTab';
 import { AdminApprovalsTab } from '../components/admin/AdminApprovalsTab';
+import { AdminPinsTab } from '../components/admin/AdminPinsTab';
+import { AdminScorecardTab } from '../components/admin/AdminScorecardTab';
 
 // Auth / API
 import client from '../api/client';
@@ -28,6 +30,8 @@ const MANAGEMENT_GRID = [
     { id: 'orders', label: 'Order Tracking', icon: 'cart', sub: 'Revenue & Payouts', color: ADMIN_COLORS.chart2, badge: 'pending_orders' },
     { id: 'approvals', label: 'Approvals', icon: 'checkbox', sub: 'Pending Action', color: ADMIN_COLORS.warning, badge: 'total_pending' },
     { id: 'events', label: 'Events Tracker', icon: 'calendar', sub: 'Check-ins & Regs', color: ADMIN_COLORS.chart3 },
+    { id: 'scorecard', label: 'Mbwa Rafiki', icon: 'clipboard', sub: 'Scorecard & AHAC', color: ADMIN_COLORS.success, badge: 'scorecard_participants' },
+    { id: 'pins', label: 'Priority Pins', icon: 'pin', sub: 'Top-of-feed Content', color: ADMIN_COLORS.accent },
     { id: 'dogs', label: 'Dog Registry', icon: 'paw', sub: 'Breed Distribution', color: ADMIN_COLORS.accent },
     { id: 'community', label: 'Moderation', icon: 'chatbubbles', sub: 'Social Monitor', color: ADMIN_COLORS.chart1, badge: 'flagged_posts' },
     { id: 'announcements', label: 'Announcements', icon: 'megaphone', sub: 'Broadcast Updates', color: ADMIN_COLORS.chart1 },
@@ -199,7 +203,9 @@ export default function AdminDashboardScreen() {
             case 'home': return renderHome();
             case 'overview': return <AdminOverviewTab onNavigate={setActiveTab} onBack={() => setActiveTab('home')} />;
             case 'users': return <AdminUsersTab onBack={() => setActiveTab('home')} />;
-            case 'events': return <AdminEventsTab onBack={() => setActiveTab('home')} navigation={navigation} />;
+            case 'events': return <AdminEventsTab onBack={() => setActiveTab('home')} navigation={navigation} onOpenScorecard={() => setActiveTab('scorecard')} />;
+            case 'scorecard': return <AdminScorecardTab onBack={() => setActiveTab('home')} />;
+            case 'pins': return <AdminPinsTab onBack={() => setActiveTab('home')} />;
             case 'orders': return <AdminOrdersTab onBack={() => setActiveTab('home')} />;
             case 'community': return <AdminCommunityTab onBack={() => setActiveTab('home')} />;
             case 'announcements': return <AdminAnnouncementsTab onBack={() => setActiveTab('home')} />;

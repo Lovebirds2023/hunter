@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View, Text, StyleSheet, Button, ScrollView, Alert, Modal, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Button, ScrollView, Alert, Modal, TouchableOpacity, Image, Linking, Platform, ActivityIndicator } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
-import { getEvent, registerForEvent, toggleSaveEvent, getEventFormFields } from '../api/events';
+import { getEvent, registerForEvent, toggleSaveEvent, getEventFormFields, initiateEventRegistrationPayment, getEventRegistrationPaymentStatus } from '../api/events';
 import { getMyDogs } from '../api/dogs';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -24,6 +24,8 @@ export const EventDetailScreen = ({ route, navigation }) => {
     const [formResponses, setFormResponses] = useState({});
     const [sharePhone, setSharePhone] = useState(false);
     const [isSaved, setIsSaved] = useState(false);
+    const [paymentTrackingId, setPaymentTrackingId] = useState(null);
+    const [paymentLoading, setPaymentLoading] = useState(false);
 
     const [myRegistration, setMyRegistration] = useState(null);
 
@@ -52,6 +54,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
             // Find if I am registered
             const reg = myRegs.find(r => r.event_id === eventId);
             setMyRegistration(reg);
+            setPaymentTrackingId(reg?.pesapal_tracking_id || null);
 
         } catch (error) {
             console.error(error);
@@ -76,6 +79,66 @@ export const EventDetailScreen = ({ route, navigation }) => {
         }
     };
 
+    const openPaymentUrl = async (url) => {
+        if (!url) return false;
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            const opened = window.open(url, '_blank', 'noopener,noreferrer');
+            return !!opened;
+        }
+        const canOpen = await Linking.canOpenURL(url);
+        if (!canOpen) return false;
+        await Linking.openURL(url);
+        return true;
+    };
+
+    const startEventPayment = async (registration) => {
+        if (!registration?.id) return;
+        setPaymentLoading(true);
+        try {
+            const paymentRes = await initiateEventRegistrationPayment(
+                registration.id,
+                user?.email || '',
+                user?.phone_number || '0700000000'
+            );
+            const trackingId = paymentRes.order_tracking_id || paymentRes.OrderTrackingId || null;
+            setPaymentTrackingId(trackingId);
+            if (paymentRes.redirect_url) {
+                const opened = await openPaymentUrl(paymentRes.redirect_url);
+                if (opened) {
+                    Alert.alert('Payment opened', 'Complete payment in Pesapal, then return here and tap Confirm payment.');
+                } else {
+                    Alert.alert('Error', 'Could not open the Pesapal checkout page.');
+                }
+            } else if (paymentRes.payment_success) {
+                await loadData();
+            } else {
+                Alert.alert('Error', 'Pesapal did not return a checkout link.');
+            }
+        } catch (error) {
+            Alert.alert('Payment failed', error.response?.data?.detail || 'Could not start payment.');
+        } finally {
+            setPaymentLoading(false);
+        }
+    };
+
+    const verifyEventPayment = async () => {
+        if (!myRegistration?.id) return;
+        setPaymentLoading(true);
+        try {
+            const res = await getEventRegistrationPaymentStatus(myRegistration.id, paymentTrackingId);
+            if (res.payment_success) {
+                Alert.alert('Payment confirmed', 'Your event ticket is ready.');
+                await loadData();
+            } else {
+                Alert.alert('Not confirmed yet', 'If you just paid, wait a moment and try again.');
+            }
+        } catch (error) {
+            Alert.alert('Payment check failed', error.response?.data?.detail || 'Could not verify payment.');
+        } finally {
+            setPaymentLoading(false);
+        }
+    };
+
     const handleRegister = async () => {
         if (!selectedDog && dogs.length > 0) {
             // Optional warning
@@ -95,15 +158,20 @@ export const EventDetailScreen = ({ route, navigation }) => {
                 answer_value: formResponses[fieldId]
             }));
 
-            await registerForEvent(eventId, {
+            const registration = await registerForEvent(eventId, {
                 event_id: eventId,
                 dog_id: selectedDog ? selectedDog.id : null,
                 role: 'attendee',
                 share_phone: sharePhone,
                 form_responses: formattedResponses
             });
-            Alert.alert(t('common.success'), t('event_detail.register_success'));
             setModalVisible(false);
+            if (registration.payment_status === 'pending') {
+                setMyRegistration(registration);
+                await startEventPayment(registration);
+            } else {
+                Alert.alert(t('common.success'), t('event_detail.register_success'));
+            }
             loadData(); // Refresh to show Check-in button
         } catch (error) {
             Alert.alert(t('common.error'), error.response?.data?.detail || t('event_detail.registration_failed'));
@@ -111,6 +179,13 @@ export const EventDetailScreen = ({ route, navigation }) => {
     };
 
     if (loading || !event) return <View style={styles.center}><Text>{t('common.loading')}</Text></View>;
+
+    const ticketPrice = Number(event.ticket_price || 0);
+    const priceLabel = ticketPrice > 0 ? `${event.currency || 'KES'} ${ticketPrice.toLocaleString()}` : 'Free';
+    const pendingPayment = myRegistration && (
+        String(myRegistration.payment_status || '').toLowerCase() === 'pending' ||
+        myRegistration.status === 'pending_payment'
+    );
 
     return (
         <View style={{ flex: 1, backgroundColor: 'white' }}>
@@ -124,44 +199,114 @@ export const EventDetailScreen = ({ route, navigation }) => {
                 </TouchableOpacity>
             </View>
             <ScrollView style={styles.container}>
+                {event.poster_url && (
+                    <Image source={{ uri: event.poster_url }} style={styles.posterImage} resizeMode="cover" />
+                )}
                 <Text style={styles.title}>{event.title}</Text>
+                <View style={styles.metaPills}>
+                    <View style={[styles.pricePill, ticketPrice > 0 ? styles.paidPill : styles.freePill]}>
+                        <Ionicons name={ticketPrice > 0 ? 'card-outline' : 'gift-outline'} size={14} color={ticketPrice > 0 ? '#0f7a39' : COLORS.primary} />
+                        <Text style={[styles.pricePillText, { color: ticketPrice > 0 ? '#0f7a39' : COLORS.primary }]}>{priceLabel}</Text>
+                    </View>
+                    {event.is_pinned && (
+                        <View style={styles.pinPill}>
+                            <Ionicons name="pin" size={13} color={COLORS.primaryDark} />
+                            <Text style={styles.pinPillText}>Priority</Text>
+                        </View>
+                    )}
+                </View>
                 <Text style={styles.time}>{new Date(event.start_time).toLocaleString()}</Text>
                 <Text style={styles.location}>{event.location}</Text>
                 <Text style={styles.description}>{event.description}</Text>
 
+                {event.scorecard_enabled !== false && (
+                    <View style={styles.scorecardSection}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                            <Ionicons name="clipboard-outline" size={20} color={COLORS.primary} />
+                            <Text style={styles.scorecardTitle}>Mbwa Rafiki Coexistence Scorecard</Text>
+                        </View>
+                        <Text style={styles.scorecardText}>
+                            Share baseline or follow-up data for knowledge, attitudes, wellbeing, dog welfare, environment, and social cohesion reporting.
+                        </Text>
+                        <View style={styles.scorecardActions}>
+                            <TouchableOpacity
+                                style={styles.scorecardBtn}
+                                onPress={() => navigation.navigate('ScorecardSurvey', { eventId: event.id, eventTitle: event.title, surveyType: 'baseline' })}
+                            >
+                                <Text style={styles.scorecardBtnText}>Baseline Survey</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.scorecardBtn, { backgroundColor: '#4a90e2' }]}
+                                onPress={() => navigation.navigate('ScorecardSurvey', { eventId: event.id, eventTitle: event.title, surveyType: 'followup' })}
+                            >
+                                <Text style={styles.scorecardBtnText}>Follow-up Survey</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                )}
+
                 <View style={styles.footer}>
                     {myRegistration ? (
-                        <View style={styles.ticketContainer}>
-                            <Text style={styles.ticketTitle}>{t('event_detail.ticket_title')}</Text>
-                            <Text style={styles.ticketSub}>{t('event_detail.ticket_subtitle')}</Text>
-                            
-                            <View style={styles.qrCodeWrapper}>
-                                {myRegistration.ticket_token ? (
-                                    <View style={{ opacity: myRegistration.status === 'checked-in' ? 0.4 : 1 }}>
-                                        <QRCode
-                                            value={myRegistration.ticket_token}
-                                            size={200}
-                                            color="#000"
-                                            backgroundColor="#fff"
-                                        />
-                                    </View>
-                                ) : (
-                                    <Text style={{ color: '#999' }}>{t('event_detail.generating_ticket')}</Text>
-                                )}
-                                
-                                {myRegistration.status === 'checked-in' && (
-                                    <View style={styles.usedBadge}>
-                                        <Text style={styles.usedBadgeText}>{t('event_detail.scanned')}</Text>
-                                    </View>
-                                )}
+                        pendingPayment ? (
+                            <View style={styles.paymentCard}>
+                                <Ionicons name="card-outline" size={30} color={COLORS.primary} />
+                                <Text style={styles.paymentTitle}>Complete payment to receive your ticket</Text>
+                                <Text style={styles.paymentAmount}>{myRegistration.currency || event.currency || 'KES'} {Number(myRegistration.amount || ticketPrice || 0).toLocaleString()}</Text>
+                                <Text style={styles.paymentCopy}>Your registration is saved, but the QR ticket is issued after Pesapal confirms payment.</Text>
+                                <View style={styles.paymentActions}>
+                                    <TouchableOpacity
+                                        style={[styles.paymentBtn, paymentLoading && { opacity: 0.7 }]}
+                                        onPress={() => startEventPayment(myRegistration)}
+                                        disabled={paymentLoading}
+                                    >
+                                        {paymentLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.paymentBtnText}>Pay with Pesapal</Text>}
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.verifyBtn, paymentLoading && { opacity: 0.7 }]}
+                                        onPress={verifyEventPayment}
+                                        disabled={paymentLoading}
+                                    >
+                                        <Text style={styles.verifyBtnText}>Confirm payment</Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
-                            
-                            <Text style={styles.ticketStatus}>
-                                {t('event_detail.status')}: {myRegistration.status === 'checked-in' ? t('event_detail.checked_in') : t('event_detail.valid')}
-                            </Text>
-                        </View>
+                        ) : (
+                            <View style={styles.ticketContainer}>
+                                <Text style={styles.ticketTitle}>{t('event_detail.ticket_title')}</Text>
+                                <Text style={styles.ticketSub}>{t('event_detail.ticket_subtitle')}</Text>
+
+                                <View style={styles.qrCodeWrapper}>
+                                    {myRegistration.ticket_token ? (
+                                        <View style={{ opacity: myRegistration.status === 'checked-in' ? 0.4 : 1 }}>
+                                            <QRCode
+                                                value={myRegistration.ticket_token}
+                                                size={200}
+                                                color="#000"
+                                                backgroundColor="#fff"
+                                            />
+                                        </View>
+                                    ) : (
+                                        <Text style={{ color: '#999' }}>{t('event_detail.generating_ticket')}</Text>
+                                    )}
+
+                                    {myRegistration.status === 'checked-in' && (
+                                        <View style={styles.usedBadge}>
+                                            <Text style={styles.usedBadgeText}>{t('event_detail.scanned')}</Text>
+                                        </View>
+                                    )}
+                                </View>
+
+                                <Text style={styles.ticketStatus}>
+                                    {t('event_detail.status')}: {myRegistration.status === 'checked-in' ? t('event_detail.checked_in') : t('event_detail.valid')}
+                                </Text>
+                            </View>
+                        )
                     ) : (
-                        <Button title={t('event_detail.register_now')} onPress={() => setModalVisible(true)} color={COLORS.primary} />
+                        <Button
+                            title={ticketPrice > 0 ? `Register and pay ${priceLabel}` : t('event_detail.register_now')}
+                            onPress={() => setModalVisible(true)}
+                            color={COLORS.primary}
+                        />
                     )}
                 </View>
 
@@ -191,6 +336,11 @@ export const EventDetailScreen = ({ route, navigation }) => {
                     <View style={styles.modalView}>
                         <ScrollView showsVerticalScrollIndicator={false} style={{ width: '100%' }}>
                             <Text style={styles.modalTitle}>{t('event_detail.registration_title')}</Text>
+                            <View style={styles.modalPriceBox}>
+                                <Text style={styles.modalPriceLabel}>Ticket</Text>
+                                <Text style={styles.modalPriceValue}>{priceLabel}</Text>
+                                {ticketPrice > 0 && <Text style={styles.modalPriceHelp}>Payment is completed securely through Pesapal after registration.</Text>}
+                            </View>
                             
                             <View style={styles.profileSection}>
                                 <Text style={styles.sectionTitle}>{t('event_detail.profile_details')}</Text>
@@ -277,7 +427,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
 
                             <View style={styles.modalActions}>
                                 <TouchableOpacity style={styles.submitBtn} onPress={handleRegister}>
-                                    <Text style={styles.submitBtnText}>{t('event_detail.complete_registration')}</Text>
+                                    <Text style={styles.submitBtnText}>{ticketPrice > 0 ? `Continue to payment (${priceLabel})` : t('event_detail.complete_registration')}</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
                                     <Text style={styles.cancelBtnText}>{t('common.cancel')}</Text>
@@ -306,7 +456,15 @@ const styles = StyleSheet.create({
     backButton: { padding: 5 },
     headerTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.primary },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    posterImage: { width: '100%', height: 220, borderRadius: 18, marginBottom: 18, backgroundColor: '#f0f0f0' },
     title: { fontSize: 28, fontWeight: 'bold', marginBottom: 10, color: COLORS.primary, marginTop: 10 },
+    metaPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+    pricePill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16 },
+    paidPill: { backgroundColor: '#e6f6ed', borderWidth: 1, borderColor: '#bde8cc' },
+    freePill: { backgroundColor: '#fff8dc', borderWidth: 1, borderColor: '#f0d875' },
+    pricePillText: { fontWeight: '900', fontSize: 12 },
+    pinPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#D4AF37', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 16 },
+    pinPillText: { color: COLORS.primaryDark, fontWeight: '900', fontSize: 12 },
     time: { fontSize: 16, color: '#555', marginBottom: 5 },
     location: { fontSize: 16, color: '#555', marginBottom: 20 },
     description: { fontSize: 16, lineHeight: 24 },
@@ -379,6 +537,23 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: COLORS.primary
     },
+    paymentCard: {
+        padding: 20,
+        backgroundColor: '#fff8dc',
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#f0d875',
+        marginTop: 20,
+        alignItems: 'center'
+    },
+    paymentTitle: { marginTop: 10, fontSize: 19, fontWeight: '900', color: COLORS.primary, textAlign: 'center' },
+    paymentAmount: { marginTop: 6, fontSize: 24, fontWeight: '900', color: '#0f7a39' },
+    paymentCopy: { marginTop: 8, fontSize: 13, color: '#555', textAlign: 'center', lineHeight: 19 },
+    paymentActions: { width: '100%', marginTop: 18, gap: 10 },
+    paymentBtn: { backgroundColor: COLORS.primary, padding: 15, borderRadius: 12, alignItems: 'center' },
+    paymentBtnText: { color: '#fff', fontWeight: '900', fontSize: 15 },
+    verifyBtn: { backgroundColor: '#fff', padding: 14, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: COLORS.primary },
+    verifyBtnText: { color: COLORS.primary, fontWeight: '900', fontSize: 15 },
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.5)',
@@ -397,6 +572,10 @@ const styles = StyleSheet.create({
         elevation: 5
     },
     modalTitle: { fontSize: 22, fontWeight: 'bold', color: '#1A1A1A', marginBottom: 20, textAlign: 'center' },
+    modalPriceBox: { backgroundColor: '#f8f9fa', borderRadius: 14, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: '#e9ecef' },
+    modalPriceLabel: { color: '#777', fontSize: 12, fontWeight: '800', textTransform: 'uppercase' },
+    modalPriceValue: { color: COLORS.primary, fontSize: 22, fontWeight: '900', marginTop: 3 },
+    modalPriceHelp: { color: '#666', fontSize: 12, marginTop: 5, lineHeight: 17 },
     profileSection: { marginBottom: 24 },
     sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#888', marginBottom: 12, textTransform: 'uppercase' },
     profileText: { fontSize: 16, color: '#333', marginBottom: 6 },
@@ -414,5 +593,11 @@ const styles = StyleSheet.create({
     adminSection: { marginTop: 30, padding: 20, backgroundColor: '#f0f0f0', borderRadius: 12 },
     adminTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 15 },
     adminBtn: { flexDirection: 'row', backgroundColor: '#333', padding: 15, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-    adminBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginLeft: 10 }
+    adminBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginLeft: 10 },
+    scorecardSection: { marginTop: 24, padding: 16, backgroundColor: '#fff8dc', borderRadius: 12, borderWidth: 1, borderColor: '#f0d875' },
+    scorecardTitle: { marginLeft: 8, fontSize: 16, fontWeight: 'bold', color: COLORS.primary },
+    scorecardText: { color: '#555', fontSize: 13, lineHeight: 19 },
+    scorecardActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 14 },
+    scorecardBtn: { backgroundColor: COLORS.primary, paddingVertical: 11, paddingHorizontal: 14, borderRadius: 10 },
+    scorecardBtnText: { color: '#fff', fontWeight: '800', fontSize: 13 }
 });

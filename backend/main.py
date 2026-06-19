@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from sqlalchemy import text, String
+from sqlalchemy import text, String, func
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
 import uuid
@@ -15,7 +15,7 @@ import smtplib
 import hashlib
 import requests
 import models, schemas, auth, database, ai_engine, wellness_utils, gemini_utils
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import csv
 import io
 from email.message import EmailMessage
@@ -238,6 +238,470 @@ FALLBACK_EXCHANGE_RATES = {
     "GBP": 0.78,
 }
 
+ADMIN_ROLE_VALUES = {models.UserRole.ADMIN.value, models.UserRole.SUPER_ADMIN.value}
+PINNABLE_TARGET_TYPES = {"event", "service", "case", "community"}
+PIN_ROUTE_BY_TARGET = {
+    "event": "EventDetail",
+    "service": "Marketplace",
+    "case": "CaseDetail",
+    "community": "Community",
+}
+
+SCORECARD_CATEGORIES = [
+    "Human Wellbeing",
+    "Animal Welfare",
+    "Environment",
+    "Social Cohesion",
+    "Indigenous/Local Knowledge",
+]
+
+SCORECARD_BASELINE_LIKERT = [
+    ("Human Wellbeing", "I feel comfortable interacting with dogs in my community."),
+    ("Human Wellbeing", "I understand how to safely approach or interact with a dog."),
+    ("Human Wellbeing", "I know what to do if I encounter an unfamiliar dog."),
+    ("Human Wellbeing", "I understand how rabies affects both people and animals."),
+    ("Human Wellbeing", "I believe dogs contribute positively to community wellbeing."),
+    ("Animal Welfare", "Dogs deserve humane treatment and care."),
+    ("Animal Welfare", "I understand the basic welfare needs of a dog."),
+    ("Animal Welfare", "I believe regular vaccination is important."),
+    ("Animal Welfare", "I believe responsible ownership benefits both dogs and people."),
+    ("Animal Welfare", "I know where to seek help for a dog welfare concern."),
+    ("Environment", "People and dogs can safely share public spaces."),
+    ("Environment", "Responsible dog ownership contributes to cleaner communities."),
+    ("Environment", "Dog welfare is connected to environmental wellbeing."),
+    ("Environment", "Community spaces should consider both people and animals."),
+    ("Social Cohesion", "Conversations about dogs can bring communities together."),
+    ("Social Cohesion", "I am willing to learn from others about living with dogs."),
+    ("Social Cohesion", "I feel my experiences with dogs are valued."),
+    ("Social Cohesion", "Different generations can learn from one another about dog care."),
+    ("Indigenous/Local Knowledge", "Local and traditional knowledge can help improve relationships between people and dogs."),
+    ("Indigenous/Local Knowledge", "Stories and lived experiences are valuable sources of learning."),
+]
+
+SCORECARD_BASELINE_OPEN = [
+    "What is one challenge involving dogs in your community?",
+    "What is one thing you would like to learn about dogs?",
+    "Tell us about a positive or difficult experience you have had with a dog.",
+]
+
+SCORECARD_FOLLOWUP_OPEN = [
+    "What new knowledge have you gained?",
+    "Has your attitude toward dogs changed? If yes, how?",
+    "Have you changed any behavior relating to dogs?",
+    "What action have you taken since participating?",
+    "What story or lesson stayed with you most?",
+    "What additional support would help your community?",
+]
+
+DEFAULT_REPORTING_FIELDS = {
+    "community_members_engaged": 0,
+    "trainings_story_labs_conducted": 0,
+    "animals_indirectly_benefiting": 0,
+    "materials_tools_produced": "",
+    "human_wellbeing_outcome_notes": "",
+    "animal_welfare_outcome_notes": "",
+    "environmental_benefit_notes": "",
+    "social_cohesion_notes": "",
+    "evidence_links_or_uploaded_files": "",
+}
+
+
+def is_admin_user(user: models.User) -> bool:
+    return user.role in ADMIN_ROLE_VALUES
+
+
+def parse_datetime_value(value):
+    if isinstance(value, datetime):
+        return value
+    if not value:
+        return value
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+
+
+def get_scorecard_seed_questions():
+    questions = []
+    order = 0
+    for category, prompt in SCORECARD_BASELINE_LIKERT:
+        questions.append({
+            "id": f"baseline_likert_{order + 1:02d}",
+            "survey_type": "baseline",
+            "category": category,
+            "question_type": "likert",
+            "prompt": prompt,
+            "sort_order": order,
+        })
+        order += 1
+    for prompt in SCORECARD_BASELINE_OPEN:
+        questions.append({
+            "id": f"baseline_open_{order + 1:02d}",
+            "survey_type": "baseline",
+            "category": None,
+            "question_type": "open",
+            "prompt": prompt,
+            "sort_order": order,
+        })
+        order += 1
+
+    order = 0
+    # Follow-up repeats the Likert scorecard so the app can calculate change.
+    for category, prompt in SCORECARD_BASELINE_LIKERT:
+        questions.append({
+            "id": f"followup_likert_{order + 1:02d}",
+            "survey_type": "followup",
+            "category": category,
+            "question_type": "likert",
+            "prompt": prompt,
+            "sort_order": order,
+        })
+        order += 1
+    for prompt in SCORECARD_FOLLOWUP_OPEN:
+        questions.append({
+            "id": f"followup_open_{order + 1:02d}",
+            "survey_type": "followup",
+            "category": None,
+            "question_type": "open",
+            "prompt": prompt,
+            "sort_order": order,
+        })
+        order += 1
+    return questions
+
+
+def seed_scorecard_questions():
+    db = database.SessionLocal()
+    try:
+        for item in get_scorecard_seed_questions():
+            existing = db.query(models.ScorecardQuestion).filter(models.ScorecardQuestion.id == item["id"]).first()
+            if existing:
+                existing.survey_type = item["survey_type"]
+                existing.category = item["category"]
+                existing.question_type = item["question_type"]
+                existing.prompt = item["prompt"]
+                existing.sort_order = item["sort_order"]
+                existing.is_active = True
+            else:
+                db.add(models.ScorecardQuestion(**item))
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.warning("Scorecard question seed failed: %s", exc)
+    finally:
+        db.close()
+
+
+def active_pin_filter(now=None):
+    from sqlalchemy import or_
+    now = now or datetime.utcnow()
+    return (
+        models.ContentPin.is_active == True,
+        or_(models.ContentPin.expires_at.is_(None), models.ContentPin.expires_at > now),
+    )
+
+
+def get_active_pin_map(db: Session, target_type: str) -> Dict[str, models.ContentPin]:
+    pins = db.query(models.ContentPin).filter(
+        models.ContentPin.target_type == target_type,
+        *active_pin_filter(),
+    ).all()
+    return {pin.target_id: pin for pin in pins}
+
+
+def apply_pin_metadata(items, pin_map: Dict[str, models.ContentPin]):
+    for item in items:
+        item_id = str(getattr(item, "id", ""))
+        pin = pin_map.get(item_id)
+        setattr(item, "is_pinned", pin is not None)
+        setattr(item, "pin_priority", pin.priority if pin else None)
+    return items
+
+
+def sort_items_with_pins(items, pin_map: Dict[str, models.ContentPin], secondary_key=None, reverse_secondary=False):
+    def key(item):
+        item_id = str(getattr(item, "id", ""))
+        pin = pin_map.get(item_id)
+        secondary = secondary_key(item) if secondary_key else getattr(item, "created_at", datetime.min)
+        if isinstance(secondary, datetime):
+            secondary_value = secondary.timestamp()
+        else:
+            secondary_value = secondary or 0
+        if reverse_secondary:
+            secondary_value = -secondary_value
+        return (0 if pin else 1, -(pin.priority if pin else 0), secondary_value)
+    return sorted(items, key=key)
+
+
+def get_target_pin_payload(db: Session, target_type: str, target_id: str) -> Dict[str, Any]:
+    if target_type == "event":
+        item = db.query(models.Event).filter(models.Event.id == target_id).first()
+        if not item:
+            raise HTTPException(status_code=404, detail="Event not found")
+        return {"title": item.title, "description": item.description, "image_url": item.poster_url}
+    if target_type == "service":
+        item = db.query(models.Service).filter(models.Service.id == target_id).first()
+        if not item:
+            raise HTTPException(status_code=404, detail="Service not found")
+        return {"title": item.title, "description": item.description, "image_url": item.image_url}
+    if target_type == "case":
+        item = db.query(models.CaseReport).filter(models.CaseReport.id == target_id).first()
+        if not item:
+            raise HTTPException(status_code=404, detail="Case report not found")
+        return {"title": item.title, "description": item.description, "image_url": item.image_url}
+    if target_type == "community":
+        item = db.query(models.CommunityMessage).filter(models.CommunityMessage.id == target_id).first()
+        if not item:
+            raise HTTPException(status_code=404, detail="Community post not found")
+        title = (item.content or "Community post").strip()
+        return {"title": title[:80], "description": item.content, "image_url": None}
+    raise HTTPException(status_code=400, detail="Unsupported pin target type")
+
+
+def ensure_content_pin(
+    db: Session,
+    target_type: str,
+    target_id: str,
+    admin: models.User,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    image_url: Optional[str] = None,
+    priority: int = 100,
+    expires_at: Optional[datetime] = None,
+    commit: bool = True,
+):
+    if target_type not in PINNABLE_TARGET_TYPES:
+        raise HTTPException(status_code=400, detail="Unsupported pin target type")
+
+    target_payload = get_target_pin_payload(db, target_type, target_id)
+    pin = db.query(models.ContentPin).filter(
+        models.ContentPin.target_type == target_type,
+        models.ContentPin.target_id == target_id,
+        models.ContentPin.is_active == True,
+    ).first()
+    if not pin:
+        pin = models.ContentPin(
+            id=str(uuid.uuid4()),
+            target_type=target_type,
+            target_id=target_id,
+            created_by_id=admin.id if admin else None,
+        )
+        db.add(pin)
+
+    pin.title = title or target_payload["title"]
+    pin.description = description if description is not None else target_payload.get("description")
+    pin.image_url = image_url if image_url is not None else target_payload.get("image_url")
+    pin.priority = int(priority or 100)
+    pin.expires_at = expires_at
+    pin.is_active = True
+    pin.updated_at = datetime.utcnow()
+    if commit:
+        db.commit()
+        db.refresh(pin)
+    else:
+        db.flush()
+    return pin
+
+
+def deactivate_content_pin(db: Session, target_type: str, target_id: str):
+    pin = db.query(models.ContentPin).filter(
+        models.ContentPin.target_type == target_type,
+        models.ContentPin.target_id == target_id,
+        models.ContentPin.is_active == True,
+    ).first()
+    if not pin:
+        return None
+    pin.is_active = False
+    pin.updated_at = datetime.utcnow()
+    db.commit()
+    return pin
+
+
+def content_pin_to_spotlight(pin: models.ContentPin):
+    return {
+        "id": pin.id,
+        "title": pin.title,
+        "description": pin.description,
+        "image_url": pin.image_url,
+        "target_route": PIN_ROUTE_BY_TARGET.get(pin.target_type),
+        "target_id": pin.target_id,
+        "is_active": pin.is_active,
+        "updated_at": pin.updated_at,
+        "is_pinned": True,
+        "pin_priority": pin.priority,
+        "target_type": pin.target_type,
+    }
+
+
+def calculate_scorecard_scores(question_map: Dict[str, models.ScorecardQuestion], responses: List[schemas.ScorecardResponseInput]):
+    category_values: Dict[str, List[int]] = {category: [] for category in SCORECARD_CATEGORIES}
+    all_values: List[int] = []
+
+    for response in responses:
+        question = question_map.get(response.question_id)
+        if not question or question.question_type != "likert":
+            continue
+        value = response.answer_numeric
+        if value is None:
+            continue
+        if value < 1 or value > 5:
+            raise HTTPException(status_code=400, detail="Likert responses must be between 1 and 5")
+        if question.category:
+            category_values.setdefault(question.category, []).append(value)
+        all_values.append(value)
+
+    category_scores = {}
+    for category, values in category_values.items():
+        if values:
+            category_scores[category] = round((sum(values) / (len(values) * 5)) * 100, 2)
+
+    coexistence_index = round((sum(all_values) / (len(all_values) * 5)) * 100, 2) if all_values else 0.0
+    return category_scores, coexistence_index
+
+
+def find_or_create_scorecard_participant(db: Session, event_id: str, profile: schemas.ScorecardParticipantProfile):
+    if not profile.consent:
+        raise HTTPException(status_code=400, detail="Consent is required before submitting the scorecard")
+    if not ((profile.full_name or "").strip() or (profile.anonymous_code or "").strip()):
+        raise HTTPException(status_code=400, detail="Provide a full name or anonymous participant code")
+
+    query = db.query(models.ScorecardParticipant).filter(models.ScorecardParticipant.event_id == event_id)
+    participant = None
+    if profile.anonymous_code:
+        participant = query.filter(models.ScorecardParticipant.anonymous_code == profile.anonymous_code.strip()).first()
+    if not participant and profile.phone_number:
+        participant = query.filter(models.ScorecardParticipant.phone_number == profile.phone_number.strip()).first()
+    if not participant and profile.full_name:
+        participant = query.filter(
+            models.ScorecardParticipant.full_name == profile.full_name.strip(),
+            models.ScorecardParticipant.community_location == profile.community_location.strip(),
+        ).first()
+
+    if not participant:
+        participant = models.ScorecardParticipant(id=str(uuid.uuid4()), event_id=event_id)
+        db.add(participant)
+
+    participant.full_name = (profile.full_name or "").strip() or None
+    participant.anonymous_code = (profile.anonymous_code or "").strip() or None
+    participant.phone_number = (profile.phone_number or "").strip() or None
+    participant.county = profile.county.strip()
+    participant.community_location = profile.community_location.strip()
+    participant.user_type = profile.user_type
+    participant.participation_type = profile.participation_type
+    participant.consent = profile.consent
+    participant.updated_at = datetime.utcnow()
+    db.flush()
+    return participant
+
+
+def participant_score_pair(db: Session, event_id: str, participant_id: str):
+    baseline = db.query(models.ScorecardSurvey).filter(
+        models.ScorecardSurvey.event_id == event_id,
+        models.ScorecardSurvey.participant_id == participant_id,
+        models.ScorecardSurvey.survey_type == "baseline",
+    ).order_by(models.ScorecardSurvey.created_at.desc()).first()
+    followup = db.query(models.ScorecardSurvey).filter(
+        models.ScorecardSurvey.event_id == event_id,
+        models.ScorecardSurvey.participant_id == participant_id,
+        models.ScorecardSurvey.survey_type == "followup",
+    ).order_by(models.ScorecardSurvey.created_at.desc()).first()
+    baseline_score = baseline.coexistence_index if baseline else None
+    followup_score = followup.coexistence_index if followup else None
+    change = None
+    if baseline_score is not None and followup_score is not None:
+        change = round(followup_score - baseline_score, 2)
+    return baseline_score, followup_score, change
+
+
+def get_or_create_reporting_export(db: Session, event_id: str, admin: Optional[models.User] = None):
+    report = db.query(models.ScorecardReportingExport).filter(
+        models.ScorecardReportingExport.event_id == event_id
+    ).order_by(models.ScorecardReportingExport.updated_at.desc()).first()
+    if not report:
+        report = models.ScorecardReportingExport(
+            id=str(uuid.uuid4()),
+            event_id=event_id,
+            fields=DEFAULT_REPORTING_FIELDS.copy(),
+            created_by_id=admin.id if admin else None,
+        )
+        db.add(report)
+        db.flush()
+    return report
+
+
+def scorecard_dashboard_payload(db: Session, event_id: str):
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    participants = db.query(models.ScorecardParticipant).filter(models.ScorecardParticipant.event_id == event_id).all()
+    surveys = db.query(models.ScorecardSurvey).filter(models.ScorecardSurvey.event_id == event_id).all()
+    baseline_count = sum(1 for survey in surveys if survey.survey_type == "baseline")
+    followup_count = sum(1 for survey in surveys if survey.survey_type == "followup")
+    avg_index = round(sum(s.coexistence_index or 0 for s in surveys) / len(surveys), 2) if surveys else 0.0
+
+    changes = []
+    for participant in participants:
+        _, _, change = participant_score_pair(db, event_id, participant.id)
+        if change is not None:
+            changes.append(change)
+    avg_change = round(sum(changes) / len(changes), 2) if changes else 0.0
+
+    def count_by(attr):
+        result = {}
+        for participant in participants:
+            key = getattr(participant, attr) or "Unknown"
+            result[key] = result.get(key, 0) + 1
+        return result
+
+    participation_counts = count_by("participation_type")
+    latest_category_scores: Dict[str, List[float]] = {}
+    for survey in surveys:
+        for category, score in (survey.category_scores or {}).items():
+            latest_category_scores.setdefault(category, []).append(float(score or 0))
+
+    category_averages = {
+        category: round(sum(values) / len(values), 2)
+        for category, values in latest_category_scores.items()
+        if values
+    }
+
+    evidence = db.query(models.ScorecardEvidence).filter(
+        models.ScorecardEvidence.event_id == event_id
+    ).order_by(models.ScorecardEvidence.created_at.desc()).all()
+    report = db.query(models.ScorecardReportingExport).filter(
+        models.ScorecardReportingExport.event_id == event_id
+    ).order_by(models.ScorecardReportingExport.updated_at.desc()).first()
+
+    return {
+        "event": {
+            "id": event.id,
+            "title": event.title,
+            "start_time": str(event.start_time),
+            "follow_up_requested_at": str(event.follow_up_requested_at) if event.follow_up_requested_at else None,
+        },
+        "total_participants": len(participants),
+        "baseline_surveys_completed": baseline_count,
+        "followup_surveys_completed": followup_count,
+        "average_coexistence_index": avg_index,
+        "average_change_from_baseline_to_followup": avg_change,
+        "participants_by_county": count_by("county"),
+        "participants_by_user_type": count_by("user_type"),
+        "participation_type_counts": participation_counts,
+        "story_labs_attended": participation_counts.get("story lab", 0),
+        "listening_circles_attended": participation_counts.get("listening circle", 0),
+        "podcast_listeners": participation_counts.get("podcast listener", 0),
+        "category_averages": category_averages,
+        "evidence": [
+            {
+                "id": item.id,
+                "evidence_type": item.evidence_type,
+                "url": item.url,
+                "notes": item.notes,
+                "created_at": str(item.created_at),
+            }
+            for item in evidence
+        ],
+        "reporting_fields": {**DEFAULT_REPORTING_FIELDS, **((report.fields or {}) if report else {})},
+    }
+
 def get_rate_for_currency(currency: Optional[str]) -> Optional[float]:
     normalized = (currency or "KES").strip().upper()
     live_rates = exchange_rates_cache.get("rates") if "exchange_rates_cache" in globals() else {}
@@ -427,11 +891,41 @@ try:
                ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;""",
             """ALTER TABLE transactions
                ADD COLUMN IF NOT EXISTS processed_at TIMESTAMP;""",
+            """ALTER TABLE events
+               ADD COLUMN IF NOT EXISTS admin_created BOOLEAN DEFAULT FALSE;""",
+            """ALTER TABLE events
+               ADD COLUMN IF NOT EXISTS scorecard_enabled BOOLEAN DEFAULT TRUE;""",
+            """ALTER TABLE events
+               ADD COLUMN IF NOT EXISTS follow_up_requested_at TIMESTAMP;""",
+            """ALTER TABLE events
+               ADD COLUMN IF NOT EXISTS poster_url VARCHAR;""",
+            """ALTER TABLE events
+               ADD COLUMN IF NOT EXISTS images JSON;""",
+            """ALTER TABLE events
+               ADD COLUMN IF NOT EXISTS ticket_price DOUBLE PRECISION DEFAULT 0;""",
+            """ALTER TABLE events
+               ADD COLUMN IF NOT EXISTS currency VARCHAR DEFAULT 'KES';""",
+            """ALTER TABLE registrations
+               ADD COLUMN IF NOT EXISTS amount DOUBLE PRECISION DEFAULT 0;""",
+            """ALTER TABLE registrations
+               ADD COLUMN IF NOT EXISTS currency VARCHAR DEFAULT 'KES';""",
+            """ALTER TABLE registrations
+               ADD COLUMN IF NOT EXISTS payment_status VARCHAR DEFAULT 'free';""",
+            """ALTER TABLE registrations
+               ADD COLUMN IF NOT EXISTS pesapal_tracking_id VARCHAR;""",
+            """ALTER TABLE registrations
+               ADD COLUMN IF NOT EXISTS pesapal_merchant_reference VARCHAR;""",
+            """ALTER TABLE registrations
+               ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP;""",
             """CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);""",
             """CREATE INDEX IF NOT EXISTS idx_users_auth_provider ON users(auth_provider);""",
             """CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);""",
             """CREATE INDEX IF NOT EXISTS idx_services_marketplace ON services(item_type, is_published, admin_approved);""",
             """CREATE INDEX IF NOT EXISTS idx_direct_messages_users ON direct_messages(sender_id, receiver_id, created_at);""",
+            """CREATE INDEX IF NOT EXISTS idx_content_pins_target ON content_pins(target_type, target_id, is_active);""",
+            """CREATE INDEX IF NOT EXISTS idx_scorecard_participants_event ON scorecard_participants(event_id);""",
+            """CREATE INDEX IF NOT EXISTS idx_scorecard_surveys_event_type ON scorecard_surveys(event_id, survey_type);""",
+            """CREATE INDEX IF NOT EXISTS idx_registrations_payment ON registrations(payment_status, pesapal_tracking_id);""",
         ]
         
         for i, stmt in enumerate(migration_statements, 1):
@@ -451,6 +945,7 @@ try:
         logger.warning(f"⚠️  OAuth migrations warning: {str(e)[:150]}")
     finally:
         db.close()
+    seed_scorecard_questions()
         
 except Exception as e:
     logger.error(f"Error initializing database tables: {e}")
@@ -863,6 +1358,8 @@ def list_services(
         query = query.filter(models.Service.item_type == item_type)
     
     services = query.all()
+    pin_map = get_active_pin_map(db, "service")
+    apply_pin_metadata(services, pin_map)
     
     if lat is not None and lon is not None:
         # Filter and sort by distance
@@ -878,10 +1375,14 @@ def list_services(
                 filtered_services.append(s)
         
         # Sort by distance
-        filtered_services.sort(key=lambda x: getattr(x, 'distance', 999999))
+        filtered_services.sort(key=lambda x: (
+            0 if getattr(x, 'is_pinned', False) else 1,
+            -(getattr(x, 'pin_priority', 0) or 0),
+            getattr(x, 'distance', 999999),
+        ))
         return filtered_services
         
-    return services
+    return sort_items_with_pins(services, pin_map, secondary_key=lambda s: s.title or "")
 
 @app.post("/services", response_model=schemas.ServiceResponse)
 def create_service(
@@ -1122,6 +1623,62 @@ def mark_order_paid(db: Session, order: models.Order) -> bool:
             commit=False
         )
 
+    return True
+
+
+def is_event_paid(event: models.Event) -> bool:
+    return float(getattr(event, "ticket_price", 0) or 0) > 0
+
+
+def is_registration_paid(registration: models.Registration) -> bool:
+    return str(getattr(registration, "payment_status", "free") or "free").lower() in {"free", "paid"}
+
+
+def mark_event_registration_paid(db: Session, registration: models.Registration, tracking_id: Optional[str] = None) -> bool:
+    if not registration:
+        return False
+    if str(registration.payment_status or "").lower() == "paid" and registration.status == "registered":
+        return False
+
+    event = db.query(models.Event).filter(models.Event.id == registration.event_id).first()
+    if event and event.capacity and event.capacity > 0:
+        registered_count = db.query(models.Registration).filter(
+            models.Registration.event_id == event.id,
+            models.Registration.status.in_(["registered", "checked-in"]),
+        ).count()
+        if registered_count >= event.capacity and registration.status not in {"registered", "checked-in"}:
+            registration.status = "waitlisted"
+            registration.payment_status = "paid"
+            registration.pesapal_tracking_id = tracking_id or registration.pesapal_tracking_id
+            registration.paid_at = datetime.utcnow()
+            return True
+
+    registration.status = "registered"
+    registration.payment_status = "paid"
+    registration.pesapal_tracking_id = tracking_id or registration.pesapal_tracking_id
+    registration.paid_at = datetime.utcnow()
+    if not registration.ticket_token:
+        registration.ticket_token = secrets.token_urlsafe(16)
+
+    if event:
+        add_notification(
+            db,
+            registration.user_id,
+            "Event payment confirmed",
+            f"Your payment for '{event.title}' is confirmed. Your ticket is ready.",
+            "payment",
+            commit=False,
+        )
+        reward = calculate_karma_reward(registration.amount or 0)
+        if reward:
+            award_karma(
+                db,
+                registration.user_id,
+                reward,
+                "event_registration",
+                f"Registered for paid event: {event.title}",
+                commit=False,
+            )
     return True
 
 @app.post("/orders", response_model=schemas.OrderResponse)
@@ -1764,35 +2321,58 @@ def create_event(
     current_user: models.User = Depends(get_current_user)
 ):
     # Optional: Check if user is admin or allowed to create events
-    if current_user.role not in [models.UserRole.ADMIN, models.UserRole.PROVIDER]:
+    if current_user.role not in [models.UserRole.ADMIN, models.UserRole.PROVIDER, models.UserRole.ADMIN.value, models.UserRole.PROVIDER.value, models.UserRole.SUPER_ADMIN.value]:
         raise HTTPException(status_code=403, detail="Not authorized to create events")
-        
+    admin_created = is_admin_user(current_user)
+
     new_event = models.Event(
         id=str(uuid.uuid4()),
         organizer_id=current_user.id,
         title=event.title,
         description=event.description,
         location=event.location,
-        start_time=datetime.fromisoformat(event.start_time.replace('Z', '+00:00')),
-        end_time=datetime.fromisoformat(event.end_time.replace('Z', '+00:00')),
+        poster_url=event.poster_url,
+        images=event.images,
+        start_time=parse_datetime_value(event.start_time),
+        end_time=parse_datetime_value(event.end_time),
         capacity=event.capacity,
+        ticket_price=max(float(event.ticket_price or 0), 0),
+        currency=(event.currency or "KES").strip().upper(),
         category=event.category,
-        is_public=event.is_public
+        is_public=event.is_public,
+        admin_created=admin_created,
+        scorecard_enabled=event.scorecard_enabled if event.scorecard_enabled is not None else True,
     )
     db.add(new_event)
+    db.flush()
+    if admin_created:
+        ensure_content_pin(
+            db,
+            "event",
+            new_event.id,
+            current_user,
+            title=new_event.title,
+            description=new_event.description,
+            image_url=new_event.poster_url,
+            priority=150,
+            commit=False,
+        )
     db.commit()
     db.refresh(new_event)
     return new_event
 
 @app.get("/events", response_model=List[schemas.EventResponse])
 def list_events(skip: int = 0, limit: int = 100, db: Session = Depends(database.get_db)):
-    events = db.query(models.Event).offset(skip).limit(limit).all()
+    pin_map = get_active_pin_map(db, "event")
+    events = db.query(models.Event).filter(models.Event.is_public == 1).all()
     for event in events:
         event.registrant_count = db.query(models.Registration).filter(
             models.Registration.event_id == event.id,
-            models.Registration.status == "registered"
+            models.Registration.status.in_(["registered", "checked-in"])
         ).count()
-    return events 
+    apply_pin_metadata(events, pin_map)
+    events = sort_items_with_pins(events, pin_map, secondary_key=lambda e: e.start_time or datetime.max)
+    return events[skip:skip + limit]
 
 @app.get("/events/{event_id}", response_model=schemas.EventResponse)
 def get_event(event_id: str, db: Session = Depends(database.get_db)):
@@ -1802,8 +2382,11 @@ def get_event(event_id: str, db: Session = Depends(database.get_db)):
     
     event.registrant_count = db.query(models.Registration).filter(
         models.Registration.event_id == event.id,
-        models.Registration.status == "registered"
+        models.Registration.status.in_(["registered", "checked-in"])
     ).count()
+    pin = get_active_pin_map(db, "event").get(event.id)
+    event.is_pinned = pin is not None
+    event.pin_priority = pin.priority if pin else None
     return event
 
 @app.post("/events/{event_id}/register", response_model=schemas.RegistrationResponse)
@@ -1818,9 +2401,13 @@ def register_for_event(
         raise HTTPException(status_code=404, detail="Event not found")
         
     # Check capacity
-    status = "registered"
+    paid_event = is_event_paid(event)
+    status = "pending_payment" if paid_event else "registered"
     if event.capacity > 0:
-        count = db.query(models.Registration).filter(models.Registration.event_id == event_id, models.Registration.status == "registered").count()
+        count = db.query(models.Registration).filter(
+            models.Registration.event_id == event_id,
+            models.Registration.status.in_(["registered", "checked-in"]),
+        ).count()
         if count >= event.capacity:
             if registration.join_waitlist:
                 status = "waitlisted"
@@ -1843,8 +2430,13 @@ def register_for_event(
         status=status,
         role=registration.role or "attendee",
         share_phone=registration.share_phone,
-        ticket_token=secrets.token_urlsafe(16)
+        ticket_token=secrets.token_urlsafe(16) if not paid_event and status == "registered" else None,
+        amount=float(event.ticket_price or 0),
+        currency=(event.currency or "KES").strip().upper(),
+        payment_status="pending" if paid_event and status == "pending_payment" else "free",
+        pesapal_merchant_reference=None,
     )
+    new_reg.pesapal_merchant_reference = new_reg.id
     db.add(new_reg)
     db.flush()
     
@@ -1861,6 +2453,106 @@ def register_for_event(
     db.commit()
     db.refresh(new_reg)
     return new_reg
+
+
+@app.post("/event-registrations/{registration_id}/payment/initiate")
+async def initiate_event_registration_payment(
+    registration_id: str,
+    email: str = "",
+    phone: str = "0700000000",
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    registration = db.query(models.Registration).filter(models.Registration.id == registration_id).first()
+    if not registration:
+        raise HTTPException(status_code=404, detail="Registration not found")
+    if registration.user_id != current_user.id and not is_admin_user(current_user):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    event = db.query(models.Event).filter(models.Event.id == registration.event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    if not is_event_paid(event):
+        if registration.status not in {"registered", "checked-in"}:
+            registration.status = "registered"
+        registration.payment_status = "free"
+        if not registration.ticket_token:
+            registration.ticket_token = secrets.token_urlsafe(16)
+        db.commit()
+        return {"message": "This event is free", "payment_success": True, "registration_status": registration.status}
+    if str(registration.payment_status or "").lower() == "paid":
+        return {"message": "Payment already confirmed", "payment_success": True, "registration_status": registration.status}
+
+    ipn_url = os.getenv("PESAPAL_IPN_URL")
+    callback_url = os.getenv("PESAPAL_CALLBACK_URL")
+    if not ipn_url or not callback_url:
+        raise HTTPException(status_code=500, detail="Pesapal checkout is not configured. Please set PESAPAL_IPN_URL and PESAPAL_CALLBACK_URL.")
+
+    ipn_res = pesapal.register_ipn(ipn_url)
+    ipn_id = ipn_res.get("ipn_id")
+    if not ipn_id:
+        detail = ipn_res.get("error") or ipn_res.get("message") or ipn_res
+        raise HTTPException(status_code=502, detail=f"Failed to register IPN with Pesapal: {detail}")
+
+    merchant_reference = registration.pesapal_merchant_reference or registration.id
+    registration.pesapal_merchant_reference = merchant_reference
+    registration.payment_status = "pending"
+    registration.amount = float(event.ticket_price or registration.amount or 0)
+    registration.currency = (event.currency or registration.currency or "KES").strip().upper()
+    db.commit()
+
+    order_res = pesapal.submit_order(
+        order_id=merchant_reference,
+        amount=registration.amount,
+        description=f"Lovedogs 360 - Event ticket: {event.title}",
+        email=email or current_user.email,
+        phone=phone or current_user.phone_number or "0700000000",
+        callback_url=callback_url,
+        ipn_id=ipn_id,
+        currency=registration.currency,
+    )
+    tracking_id = order_res.get("order_tracking_id") or order_res.get("OrderTrackingId")
+    if tracking_id:
+        registration.pesapal_tracking_id = tracking_id
+        db.commit()
+    if not order_res.get("redirect_url"):
+        detail = order_res.get("error") or order_res.get("message") or order_res
+        raise HTTPException(status_code=502, detail=f"Failed to start Pesapal checkout: {detail}")
+    return order_res
+
+
+@app.get("/event-registrations/{registration_id}/payment/status")
+async def event_registration_payment_status(
+    registration_id: str,
+    tracking_id: Optional[str] = None,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    registration = db.query(models.Registration).filter(models.Registration.id == registration_id).first()
+    if not registration:
+        raise HTTPException(status_code=404, detail="Registration not found")
+    if registration.user_id != current_user.id and not is_admin_user(current_user):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    status_res = None
+    payment_success = is_registration_paid(registration)
+    tracking = tracking_id or registration.pesapal_tracking_id
+    if tracking and not payment_success:
+        status_res = pesapal.get_transaction_status(tracking)
+        if is_pesapal_payment_successful(status_res):
+            if mark_event_registration_paid(db, registration, tracking):
+                db.commit()
+            payment_success = True
+        else:
+            payment_success = is_registration_paid(registration)
+
+    return {
+        "registration_id": registration.id,
+        "registration_status": registration.status,
+        "payment_status": registration.payment_status,
+        "payment_success": payment_success,
+        "ticket_token": registration.ticket_token,
+        "payment_response": status_res,
+    }
 
 
 @app.post("/events/{event_id}/save")
@@ -1955,6 +2647,11 @@ def get_event_responses(
             "status": reg.status,
             "role": reg.role,
             "share_phone": reg.share_phone,
+            "amount": reg.amount,
+            "currency": reg.currency,
+            "payment_status": reg.payment_status,
+            "pesapal_tracking_id": reg.pesapal_tracking_id,
+            "paid_at": reg.paid_at,
             "created_at": reg.created_at,
             "responses": reg.responses
         }
@@ -1971,8 +2668,243 @@ def get_event_responses(
             reg_dict["dog_name"] = dog.name
             
         result.append(reg_dict)
-        
+
     return result
+
+
+# --- Mbwa Rafiki Coexistence Scorecard API ---
+
+@app.get("/scorecard/questions", response_model=List[schemas.ScorecardQuestionResponse])
+def get_scorecard_questions(survey_type: Optional[str] = None, db: Session = Depends(database.get_db)):
+    query = db.query(models.ScorecardQuestion).filter(models.ScorecardQuestion.is_active == True)
+    if survey_type:
+        normalized = survey_type.strip().lower()
+        if normalized not in {"baseline", "followup"}:
+            raise HTTPException(status_code=400, detail="survey_type must be baseline or followup")
+        query = query.filter(models.ScorecardQuestion.survey_type == normalized)
+    return query.order_by(models.ScorecardQuestion.survey_type, models.ScorecardQuestion.sort_order).all()
+
+
+@app.post("/events/{event_id}/scorecard/surveys", response_model=schemas.ScorecardSurveyResult)
+def submit_scorecard_survey(
+    event_id: str,
+    payload: schemas.ScorecardSurveyCreate,
+    db: Session = Depends(database.get_db),
+):
+    survey_type = payload.survey_type.strip().lower()
+    if survey_type not in {"baseline", "followup"}:
+        raise HTTPException(status_code=400, detail="survey_type must be baseline or followup")
+
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    if event.scorecard_enabled is False:
+        raise HTTPException(status_code=400, detail="Scorecard is not enabled for this event")
+
+    questions = db.query(models.ScorecardQuestion).filter(
+        models.ScorecardQuestion.survey_type == survey_type,
+        models.ScorecardQuestion.is_active == True,
+    ).order_by(models.ScorecardQuestion.sort_order).all()
+    question_map = {q.id: q for q in questions}
+    provided = {r.question_id: r for r in payload.responses}
+
+    for question in questions:
+        response = provided.get(question.id)
+        if not response:
+            raise HTTPException(status_code=400, detail=f"Missing response for: {question.prompt}")
+        if question.question_type == "likert" and response.answer_numeric is None:
+            raise HTTPException(status_code=400, detail=f"Select a 1-5 score for: {question.prompt}")
+        if question.question_type == "open" and not (response.answer_text or "").strip():
+            raise HTTPException(status_code=400, detail=f"Answer required for: {question.prompt}")
+
+    category_scores, coexistence_index = calculate_scorecard_scores(question_map, payload.responses)
+    participant = find_or_create_scorecard_participant(db, event_id, payload.participant)
+
+    survey = models.ScorecardSurvey(
+        id=str(uuid.uuid4()),
+        event_id=event_id,
+        participant_id=participant.id,
+        survey_type=survey_type,
+        category_scores=category_scores,
+        coexistence_index=coexistence_index,
+    )
+    db.add(survey)
+    db.flush()
+
+    for response in payload.responses:
+        question = question_map.get(response.question_id)
+        if not question:
+            continue
+        db.add(models.ScorecardResponse(
+            id=str(uuid.uuid4()),
+            survey_id=survey.id,
+            question_id=response.question_id,
+            answer_numeric=response.answer_numeric if question.question_type == "likert" else None,
+            answer_text=(response.answer_text or "").strip() if question.question_type == "open" else None,
+        ))
+
+    db.commit()
+    db.refresh(survey)
+    baseline_score, followup_score, change = participant_score_pair(db, event_id, participant.id)
+    return {
+        "id": survey.id,
+        "event_id": survey.event_id,
+        "participant_id": survey.participant_id,
+        "survey_type": survey.survey_type,
+        "category_scores": survey.category_scores or {},
+        "coexistence_index": survey.coexistence_index or 0.0,
+        "baseline_score": baseline_score,
+        "followup_score": followup_score,
+        "percentage_change": change,
+        "created_at": survey.created_at,
+    }
+
+
+@app.get("/admin/scorecard/events")
+def admin_scorecard_events(db: Session = Depends(database.get_db), admin: models.User = Depends(require_admin)):
+    events = db.query(models.Event).order_by(models.Event.start_time.desc()).all()
+    result = []
+    for event in events:
+        dashboard = scorecard_dashboard_payload(db, event.id)
+        result.append({
+            "id": event.id,
+            "title": event.title,
+            "start_time": str(event.start_time),
+            "location": event.location,
+            "scorecard_enabled": event.scorecard_enabled,
+            "admin_created": event.admin_created,
+            "total_participants": dashboard["total_participants"],
+            "baseline_surveys_completed": dashboard["baseline_surveys_completed"],
+            "followup_surveys_completed": dashboard["followup_surveys_completed"],
+        })
+    return result
+
+
+@app.get("/admin/scorecard/{event_id}/dashboard")
+def admin_scorecard_dashboard(event_id: str, db: Session = Depends(database.get_db), admin: models.User = Depends(require_admin)):
+    return scorecard_dashboard_payload(db, event_id)
+
+
+@app.get("/admin/scorecard/{event_id}/surveys")
+def admin_scorecard_raw_surveys(event_id: str, db: Session = Depends(database.get_db), admin: models.User = Depends(require_admin)):
+    participants = db.query(models.ScorecardParticipant).filter(models.ScorecardParticipant.event_id == event_id).all()
+    result = []
+    for participant in participants:
+        for survey in sorted(participant.surveys, key=lambda s: s.created_at, reverse=True):
+            result.append({
+                "participant": {
+                    "id": participant.id,
+                    "full_name": participant.full_name,
+                    "anonymous_code": participant.anonymous_code,
+                    "phone_number": participant.phone_number,
+                    "county": participant.county,
+                    "community_location": participant.community_location,
+                    "user_type": participant.user_type,
+                    "participation_type": participant.participation_type,
+                    "consent": participant.consent,
+                },
+                "survey": {
+                    "id": survey.id,
+                    "survey_type": survey.survey_type,
+                    "category_scores": survey.category_scores or {},
+                    "coexistence_index": survey.coexistence_index,
+                    "created_at": str(survey.created_at),
+                },
+                "responses": [
+                    {
+                        "question": response.question.prompt if response.question else None,
+                        "category": response.question.category if response.question else None,
+                        "question_type": response.question.question_type if response.question else None,
+                        "answer_numeric": response.answer_numeric,
+                        "answer_text": response.answer_text,
+                    }
+                    for response in survey.responses
+                ],
+            })
+    return result
+
+
+@app.post("/admin/scorecard/{event_id}/prompt-followup")
+def admin_prompt_scorecard_followup(event_id: str, db: Session = Depends(database.get_db), admin: models.User = Depends(require_admin)):
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    event.follow_up_requested_at = datetime.utcnow()
+
+    registrations = db.query(models.Registration).filter(models.Registration.event_id == event_id).all()
+    notified = 0
+    for registration in registrations:
+        if registration.user_id:
+            add_notification(
+                db,
+                registration.user_id,
+                "Mbwa Rafiki follow-up",
+                f"Please complete the follow-up Coexistence Scorecard for {event.title}.",
+                "info",
+                commit=False,
+            )
+            notified += 1
+
+    participants_with_phone = db.query(models.ScorecardParticipant).filter(
+        models.ScorecardParticipant.event_id == event_id,
+        models.ScorecardParticipant.phone_number.isnot(None),
+    ).count()
+    db.commit()
+    return {
+        "message": "Follow-up prompt recorded",
+        "notified_registrants": notified,
+        "participants_with_phone": participants_with_phone,
+        "follow_up_requested_at": str(event.follow_up_requested_at),
+    }
+
+
+@app.post("/admin/scorecard/{event_id}/evidence")
+def admin_add_scorecard_evidence(
+    event_id: str,
+    evidence_in: schemas.ScorecardEvidenceCreate,
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin),
+):
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    evidence = models.ScorecardEvidence(
+        id=str(uuid.uuid4()),
+        event_id=event_id,
+        evidence_type=evidence_in.evidence_type,
+        url=evidence_in.url,
+        notes=evidence_in.notes,
+        created_by_id=admin.id,
+    )
+    db.add(evidence)
+    db.commit()
+    db.refresh(evidence)
+    return {
+        "id": evidence.id,
+        "evidence_type": evidence.evidence_type,
+        "url": evidence.url,
+        "notes": evidence.notes,
+        "created_at": str(evidence.created_at),
+    }
+
+
+@app.post("/admin/scorecard/{event_id}/reporting")
+def admin_save_scorecard_reporting(
+    event_id: str,
+    fields: schemas.ScorecardReportingFields,
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin),
+):
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    report = get_or_create_reporting_export(db, event_id, admin)
+    field_values = fields.model_dump() if hasattr(fields, "model_dump") else fields.dict()
+    report.fields = {**DEFAULT_REPORTING_FIELDS, **field_values}
+    report.created_by_id = report.created_by_id or admin.id
+    report.updated_at = datetime.utcnow()
+    db.commit()
+    return {"message": "Reporting fields saved", "reporting_fields": report.fields}
 
 # --- Health & Wellness Hub API ---
 
@@ -2228,9 +3160,11 @@ def export_data(
     # Expanded Access: Allow Admins AND Partners/Providers (if authorized)
     if current_user.role not in [models.UserRole.ADMIN.value, models.UserRole.SUPER_ADMIN.value, models.UserRole.PROVIDER.value]:
         raise HTTPException(status_code=403, detail="Not authorized")
-    valid_export_types = {"registrations", "events", "users", "orders", "dogs", "cases", "community", "support"}
+    valid_export_types = {"registrations", "events", "users", "orders", "dogs", "cases", "community", "support", "scorecard"}
     if type not in valid_export_types:
         raise HTTPException(status_code=400, detail=f"Unsupported export type: {type}")
+    if type == "scorecard" and not is_admin_user(current_user):
+        raise HTTPException(status_code=403, detail="Only admins can export raw scorecard data")
         
     # Create Workbook
     wb = openpyxl.Workbook()
@@ -2246,7 +3180,7 @@ def export_data(
             query = query.filter(models.Registration.event_id == event_id)
         
         registrations = query.all()
-        headers = ["Registration ID", "Event ID", "Event Title", "User ID", "User Name", "User Email", "Dog ID", "Dog Name", "Status", "Role", "Check-in Time", "Created At"]
+        headers = ["Registration ID", "Event ID", "Event Title", "User ID", "User Name", "User Email", "Dog ID", "Dog Name", "Status", "Role", "Payment Status", "Amount", "Currency", "Pesapal Tracking ID", "Paid At", "Check-in Time", "Created At"]
         ws.append(headers)
         for cell in ws[1]: cell.font = header_font
         
@@ -2258,22 +3192,32 @@ def export_data(
                 reg.id, reg.event_id, event.title if event else None,
                 reg.user_id, user.full_name if user else None, user.email if user else None,
                 reg.dog_id, dog.name if dog else None,
-                reg.status, reg.role, str(reg.check_in_time), str(reg.created_at)
+                reg.status, reg.role, reg.payment_status, reg.amount, reg.currency,
+                reg.pesapal_tracking_id, str(reg.paid_at), str(reg.check_in_time), str(reg.created_at)
             ])
             
     elif type == "events":
         events = db.query(models.Event).all()
-        headers = ["Event ID", "Title", "Date", "Location", "Organizer ID", "Organizer Name", "Organizer Email", "Category", "Registrations", "Check-ins"]
+        headers = ["Event ID", "Title", "Date", "Location", "Poster URL", "Ticket Price", "Currency", "Organizer ID", "Organizer Name", "Organizer Email", "Category", "Registrations", "Paid Registrations", "Event Revenue", "Check-ins"]
         ws.append(headers)
         for cell in ws[1]: cell.font = header_font
         for ev in events:
             organizer = db.query(models.User).filter(models.User.id == ev.organizer_id).first()
             registrations = db.query(models.Registration).filter(models.Registration.event_id == ev.id).count()
+            paid_registrations = db.query(models.Registration).filter(
+                models.Registration.event_id == ev.id,
+                models.Registration.payment_status == "paid",
+            ).count()
+            event_revenue = db.query(func.coalesce(func.sum(models.Registration.amount), 0)).filter(
+                models.Registration.event_id == ev.id,
+                models.Registration.payment_status == "paid",
+            ).scalar()
             checkins = db.query(models.Registration).filter(models.Registration.event_id == ev.id, models.Registration.status == "checked-in").count()
             ws.append([
-                ev.id, ev.title, str(ev.start_time), ev.location, ev.organizer_id,
+                ev.id, ev.title, str(ev.start_time), ev.location, ev.poster_url,
+                ev.ticket_price, ev.currency, ev.organizer_id,
                 organizer.full_name if organizer else None, organizer.email if organizer else None,
-                ev.category, registrations, checkins
+                ev.category, registrations, paid_registrations, float(event_revenue or 0), checkins
             ])
 
     elif type == "users":
@@ -2370,6 +3314,78 @@ def export_data(
             ws.append([
                 t.id, t.user_id, user.full_name if user else None, user.email if user else None,
                 t.subject, support_status_label(t.status), t.admin_reply, str(t.created_at), str(t.updated_at)
+            ])
+
+    elif type == "scorecard":
+        survey_query = db.query(models.ScorecardSurvey)
+        if event_id:
+            survey_query = survey_query.filter(models.ScorecardSurvey.event_id == event_id)
+        surveys = survey_query.order_by(models.ScorecardSurvey.created_at.desc()).all()
+        headers = [
+            "Event ID", "Event Title", "Survey ID", "Survey Type", "Participant ID",
+            "Full Name", "Anonymous Code", "Phone Number", "County", "Community/Location",
+            "User Type", "Participation Type", "Consent", "Coexistence Index",
+            "Baseline Score", "Follow-up Score", "Percentage Point Change",
+            "Category Scores", "Responses JSON",
+            "Community members engaged", "Trainings/story labs conducted",
+            "Animals indirectly benefiting", "Materials/tools produced",
+            "Human wellbeing outcome notes", "Animal welfare outcome notes",
+            "Environmental benefit notes", "Social cohesion notes",
+            "Evidence links or uploaded files",
+        ]
+        ws.append(headers)
+        for cell in ws[1]: cell.font = header_font
+
+        for survey in surveys:
+            event = db.query(models.Event).filter(models.Event.id == survey.event_id).first()
+            participant = db.query(models.ScorecardParticipant).filter(models.ScorecardParticipant.id == survey.participant_id).first()
+            baseline_score, followup_score, change = participant_score_pair(db, survey.event_id, survey.participant_id)
+            report = db.query(models.ScorecardReportingExport).filter(
+                models.ScorecardReportingExport.event_id == survey.event_id
+            ).order_by(models.ScorecardReportingExport.updated_at.desc()).first()
+            reporting_fields = {**DEFAULT_REPORTING_FIELDS, **((report.fields or {}) if report else {})}
+            evidence_links = "; ".join([
+                e.url for e in db.query(models.ScorecardEvidence).filter(models.ScorecardEvidence.event_id == survey.event_id).all()
+            ])
+            response_payload = [
+                {
+                    "question": response.question.prompt if response.question else None,
+                    "category": response.question.category if response.question else None,
+                    "type": response.question.question_type if response.question else None,
+                    "answer_numeric": response.answer_numeric,
+                    "answer_text": response.answer_text,
+                }
+                for response in survey.responses
+            ]
+            ws.append([
+                survey.event_id,
+                event.title if event else None,
+                survey.id,
+                survey.survey_type,
+                participant.id if participant else None,
+                participant.full_name if participant else None,
+                participant.anonymous_code if participant else None,
+                participant.phone_number if participant else None,
+                participant.county if participant else None,
+                participant.community_location if participant else None,
+                participant.user_type if participant else None,
+                participant.participation_type if participant else None,
+                "Yes" if participant and participant.consent else "No",
+                survey.coexistence_index,
+                baseline_score,
+                followup_score,
+                change,
+                json.dumps(survey.category_scores or {}),
+                json.dumps(response_payload),
+                reporting_fields.get("community_members_engaged"),
+                reporting_fields.get("trainings_story_labs_conducted"),
+                reporting_fields.get("animals_indirectly_benefiting"),
+                reporting_fields.get("materials_tools_produced"),
+                reporting_fields.get("human_wellbeing_outcome_notes"),
+                reporting_fields.get("animal_welfare_outcome_notes"),
+                reporting_fields.get("environmental_benefit_notes"),
+                reporting_fields.get("social_cohesion_notes"),
+                reporting_fields.get("evidence_links_or_uploaded_files") or evidence_links,
             ])
 
             
@@ -2945,9 +3961,13 @@ def admin_approve_item(
 
 @app.get("/spotlight", response_model=List[schemas.SpotlightResponse])
 def get_spotlight(db: Session = Depends(database.get_db)):
-    # Return all active spotlights as an array
+    # Return active content pins first, followed by legacy spotlight items.
+    pins = db.query(models.ContentPin).filter(*active_pin_filter()).order_by(
+        models.ContentPin.priority.desc(),
+        models.ContentPin.updated_at.desc(),
+    ).all()
     spotlights = db.query(models.Spotlight).filter(models.Spotlight.is_active == True).order_by(models.Spotlight.updated_at.desc()).all()
-    return spotlights
+    return [content_pin_to_spotlight(pin) for pin in pins] + spotlights
 
 @app.get("/admin/spotlight", response_model=List[schemas.SpotlightResponse])
 def get_admin_spotlight(db: Session = Depends(database.get_db), admin: models.User = Depends(require_admin)):
@@ -2985,6 +4005,113 @@ def delete_admin_spotlight(
     db.delete(spotlight)
     db.commit()
     return {"message": "Spotlight removed"}
+
+
+@app.get("/admin/pins", response_model=List[schemas.ContentPinResponse])
+def admin_list_pins(db: Session = Depends(database.get_db), admin: models.User = Depends(require_admin)):
+    return db.query(models.ContentPin).order_by(
+        models.ContentPin.is_active.desc(),
+        models.ContentPin.priority.desc(),
+        models.ContentPin.updated_at.desc(),
+    ).all()
+
+
+@app.post("/admin/pins", response_model=schemas.ContentPinResponse)
+def admin_pin_content(
+    pin_in: schemas.ContentPinCreate,
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin),
+):
+    return ensure_content_pin(
+        db,
+        pin_in.target_type,
+        pin_in.target_id,
+        admin,
+        title=pin_in.title,
+        description=pin_in.description,
+        image_url=pin_in.image_url,
+        priority=pin_in.priority or 100,
+        expires_at=pin_in.expires_at,
+    )
+
+
+@app.delete("/admin/pins/{target_type}/{target_id}")
+def admin_unpin_content(
+    target_type: str,
+    target_id: str,
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin),
+):
+    pin = deactivate_content_pin(db, target_type, target_id)
+    if not pin:
+        return {"message": "Content was not pinned", "is_pinned": False}
+    return {"message": "Content unpinned", "is_pinned": False}
+
+
+@app.get("/admin/pinnable-content")
+def admin_pinnable_content(db: Session = Depends(database.get_db), admin: models.User = Depends(require_admin)):
+    def pin_meta(target_type, item_id):
+        pin = get_active_pin_map(db, target_type).get(str(item_id))
+        return {"is_pinned": pin is not None, "pin_priority": pin.priority if pin else None}
+
+    events = db.query(models.Event).order_by(models.Event.start_time.desc()).limit(50).all()
+    services = db.query(models.Service).filter(
+        models.Service.is_published == True,
+        models.Service.admin_approved == True,
+    ).order_by(models.Service.title.asc()).limit(50).all()
+    cases = db.query(models.CaseReport).filter(
+        models.CaseReport.is_approved == True,
+    ).order_by(models.CaseReport.created_at.desc()).limit(50).all()
+    community = db.query(models.CommunityMessage).filter(
+        models.CommunityMessage.is_hidden == False,
+    ).order_by(models.CommunityMessage.created_at.desc()).limit(50).all()
+
+    return {
+        "events": [
+            {
+                "id": item.id,
+                "title": item.title,
+                "description": item.description,
+                "meta": item.location,
+                "created_at": str(item.created_at),
+                **pin_meta("event", item.id),
+            }
+            for item in events
+        ],
+        "services": [
+            {
+                "id": item.id,
+                "title": item.title,
+                "description": item.description,
+                "meta": f"{item.item_type} | {item.category}",
+                "created_at": str(item.provider_id),
+                **pin_meta("service", item.id),
+            }
+            for item in services
+        ],
+        "cases": [
+            {
+                "id": item.id,
+                "title": item.title,
+                "description": item.description,
+                "meta": item.case_type,
+                "created_at": str(item.created_at),
+                **pin_meta("case", item.id),
+            }
+            for item in cases
+        ],
+        "community": [
+            {
+                "id": item.id,
+                "title": (item.content or "Community post")[:80],
+                "description": item.content,
+                "meta": "community post",
+                "created_at": str(item.created_at),
+                **pin_meta("community", item.id),
+            }
+            for item in community
+        ],
+    }
 
 # =====================================================
 # Admin Analytics & Enhanced Management Endpoints
@@ -3127,6 +4254,9 @@ def admin_analytics(db: Session = Depends(database.get_db), admin: models.User =
     total_events = db.query(models.Event).count()
     upcoming_events = db.query(models.Event).filter(models.Event.start_time > now).count()
     total_registrations = db.query(models.Registration).count()
+    scorecard_participants = db.query(models.ScorecardParticipant).count()
+    scorecard_baselines = db.query(models.ScorecardSurvey).filter(models.ScorecardSurvey.survey_type == "baseline").count()
+    scorecard_followups = db.query(models.ScorecardSurvey).filter(models.ScorecardSurvey.survey_type == "followup").count()
 
     return {
         "total_users": db.query(models.User).count(),
@@ -3162,26 +4292,56 @@ def admin_analytics(db: Session = Depends(database.get_db), admin: models.User =
         "pending_reports": pending_reports,
         "monthly_revenue": monthly_revenue,
         "upcoming_events": upcoming_events,
-        "total_registrations": total_registrations
+        "total_registrations": total_registrations,
+        "scorecard_participants": scorecard_participants,
+        "scorecard_baselines": scorecard_baselines,
+        "scorecard_followups": scorecard_followups,
     }
 
 
 @app.get("/admin/events")
 def admin_list_events(db: Session = Depends(database.get_db), admin: models.User = Depends(require_admin)):
     events = db.query(models.Event).order_by(models.Event.start_time.desc()).all()
+    pin_map = get_active_pin_map(db, "event")
     result = []
     for e in events:
         organizer = db.query(models.User).filter(models.User.id == e.organizer_id).first()
-        reg_count = db.query(models.Registration).filter(models.Registration.event_id == e.id).count()
+        all_reg_count = db.query(models.Registration).filter(models.Registration.event_id == e.id).count()
+        reg_count = db.query(models.Registration).filter(
+            models.Registration.event_id == e.id,
+            models.Registration.status.in_(["registered", "checked-in"]),
+        ).count()
+        paid_count = db.query(models.Registration).filter(
+            models.Registration.event_id == e.id,
+            models.Registration.payment_status == "paid",
+        ).count()
+        pending_payment_count = db.query(models.Registration).filter(
+            models.Registration.event_id == e.id,
+            models.Registration.payment_status == "pending",
+        ).count()
+        event_revenue = db.query(func.coalesce(func.sum(models.Registration.amount), 0)).filter(
+            models.Registration.event_id == e.id,
+            models.Registration.payment_status == "paid",
+        ).scalar()
         checkin_count = db.query(models.Registration).filter(
             models.Registration.event_id == e.id, models.Registration.status == "checked-in"
         ).count()
+        pin = pin_map.get(e.id)
         result.append({
             "id": e.id, "title": e.title, "description": e.description,
+            "poster_url": e.poster_url, "images": e.images or [],
             "location": e.location, "start_time": str(e.start_time), "end_time": str(e.end_time),
-            "capacity": e.capacity, "category": e.category, "is_public": e.is_public,
+            "capacity": e.capacity, "ticket_price": e.ticket_price, "currency": e.currency,
+            "category": e.category, "is_public": e.is_public,
+            "admin_created": e.admin_created, "scorecard_enabled": e.scorecard_enabled,
+            "follow_up_requested_at": str(e.follow_up_requested_at) if e.follow_up_requested_at else None,
+            "is_pinned": pin is not None, "pin_priority": pin.priority if pin else None,
             "organizer_name": organizer.full_name if organizer else "Unknown",
-            "registration_count": reg_count, "checkin_count": checkin_count,
+            "registration_count": reg_count, "all_registration_count": all_reg_count,
+            "paid_registration_count": paid_count,
+            "pending_payment_count": pending_payment_count,
+            "event_revenue": round(float(event_revenue or 0), 2),
+            "checkin_count": checkin_count,
             "created_at": str(e.created_at)
         })
     return result
@@ -3193,6 +4353,16 @@ def admin_delete_event(event_id: str, db: Session = Depends(database.get_db), ad
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
     # Delete related registrations first
+    db.query(models.ContentPin).filter(models.ContentPin.target_type == "event", models.ContentPin.target_id == event_id).delete()
+    db.query(models.ScorecardEvidence).filter(models.ScorecardEvidence.event_id == event_id).delete()
+    db.query(models.ScorecardReportingExport).filter(models.ScorecardReportingExport.event_id == event_id).delete()
+    participant_ids = [row[0] for row in db.query(models.ScorecardParticipant.id).filter(models.ScorecardParticipant.event_id == event_id).all()]
+    if participant_ids:
+        survey_ids = [row[0] for row in db.query(models.ScorecardSurvey.id).filter(models.ScorecardSurvey.participant_id.in_(participant_ids)).all()]
+        if survey_ids:
+            db.query(models.ScorecardResponse).filter(models.ScorecardResponse.survey_id.in_(survey_ids)).delete(synchronize_session=False)
+        db.query(models.ScorecardSurvey).filter(models.ScorecardSurvey.participant_id.in_(participant_ids)).delete(synchronize_session=False)
+        db.query(models.ScorecardParticipant).filter(models.ScorecardParticipant.id.in_(participant_ids)).delete(synchronize_session=False)
     db.query(models.Registration).filter(models.Registration.event_id == event_id).delete()
     db.query(models.EventFormField).filter(models.EventFormField.event_id == event_id).delete()
     db.delete(event)
@@ -3203,13 +4373,16 @@ def admin_delete_event(event_id: str, db: Session = Depends(database.get_db), ad
 @app.get("/admin/community")
 def admin_list_community(db: Session = Depends(database.get_db), admin: models.User = Depends(require_admin)):
     posts = db.query(models.CommunityMessage).order_by(models.CommunityMessage.created_at.desc()).limit(50).all()
+    pin_map = get_active_pin_map(db, "community")
     result = []
     for p in posts:
         author = db.query(models.User).filter(models.User.id == p.author_id).first()
         reaction_count = db.query(models.ChatReaction).filter(models.ChatReaction.message_id == p.id).count()
+        pin = pin_map.get(p.id)
         result.append({
             "id": p.id, "content": p.content, "is_poll": p.is_poll,
             "flag_count": p.flag_count, "is_hidden": p.is_hidden,
+            "is_pinned": pin is not None, "pin_priority": pin.priority if pin else None,
             "hashtags": p.hashtags or [], "reaction_count": reaction_count,
             "author_name": author.full_name if author else "Unknown",
             "author_id": p.author_id,
@@ -3233,6 +4406,7 @@ def admin_delete_post(post_id: str, db: Session = Depends(database.get_db), admi
     post = db.query(models.CommunityMessage).filter(models.CommunityMessage.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
+    db.query(models.ContentPin).filter(models.ContentPin.target_type == "community", models.ContentPin.target_id == post_id).delete()
     db.query(models.ChatReaction).filter(models.ChatReaction.message_id == post_id).delete()
     db.query(models.CommunityPollVote).filter(models.CommunityPollVote.message_id == post_id).delete()
     db.delete(post)
@@ -3364,7 +4538,15 @@ def list_case_reports(
         )
     )
     
-    reports = query.order_by(models.CaseReport.created_at.desc()).offset(skip).limit(limit).all()
+    reports = query.order_by(models.CaseReport.created_at.desc()).all()
+    pin_map = get_active_pin_map(db, "case")
+    apply_pin_metadata(reports, pin_map)
+    reports = sort_items_with_pins(
+        reports,
+        pin_map,
+        secondary_key=lambda r: r.created_at or datetime.min,
+        reverse_secondary=True,
+    )[skip:skip + limit]
 
     results = []
     for r in reports:
@@ -3383,6 +4565,8 @@ def list_case_reports(
             "like_count": like_count,
             "comment_count": comment_count,
             "is_liked": is_liked,
+            "is_pinned": getattr(r, "is_pinned", False),
+            "pin_priority": getattr(r, "pin_priority", None),
         })
 
     return results
@@ -3409,6 +4593,7 @@ def get_case_report(
         models.CaseLike.user_id == current_user.id
     ).first() is not None
     author = db.query(models.User).filter(models.User.id == r.author_id).first()
+    pin = get_active_pin_map(db, "case").get(r.id)
 
     return {
         **{c.name: getattr(r, c.name) for c in r.__table__.columns},
@@ -3416,6 +4601,8 @@ def get_case_report(
         "like_count": like_count,
         "comment_count": comment_count,
         "is_liked": is_liked,
+        "is_pinned": pin is not None,
+        "pin_priority": pin.priority if pin else None,
     }
 
 
@@ -3564,7 +4751,8 @@ async def initiate_payment(
         email=email,
         phone=phone,
         callback_url=callback_url,
-        ipn_id=ipn_id
+        ipn_id=ipn_id,
+        currency=(db.query(models.Service.currency).filter(models.Service.id == order.service_id).scalar() or "KES"),
     )
     if not order_res.get("redirect_url"):
         detail = order_res.get("error") or order_res.get("message") or order_res
@@ -3579,7 +4767,22 @@ async def pesapal_callback(OrderTrackingId: str, OrderMerchantReference: str, db
     if order and is_pesapal_payment_successful(status_res):
         if mark_order_paid(db, order):
             db.commit()
-    return {"status": "processed", "order_status": order.status if order else None, "data": status_res}
+        return {"status": "processed", "type": "order", "order_status": order.status, "data": status_res}
+
+    registration = db.query(models.Registration).filter(
+        (models.Registration.id == OrderMerchantReference) |
+        (models.Registration.pesapal_merchant_reference == OrderMerchantReference)
+    ).first()
+    if registration and is_pesapal_payment_successful(status_res):
+        if mark_event_registration_paid(db, registration, OrderTrackingId):
+            db.commit()
+    return {
+        "status": "processed",
+        "type": "event_registration" if registration else None,
+        "registration_status": registration.status if registration else None,
+        "order_status": order.status if order else None,
+        "data": status_res,
+    }
 
 @app.get("/payments/status/{order_id}")
 async def payment_status(
@@ -3624,6 +4827,15 @@ async def pesapal_ipn(OrderTrackingId: str, OrderMerchantReference: str, OrderNo
     if order and is_pesapal_payment_successful(status_res):
         if mark_order_paid(db, order):
             db.commit()
+        return {"status": "acknowledged", "type": "order"}
+    registration = db.query(models.Registration).filter(
+        (models.Registration.id == OrderMerchantReference) |
+        (models.Registration.pesapal_merchant_reference == OrderMerchantReference)
+    ).first()
+    if registration and is_pesapal_payment_successful(status_res):
+        if mark_event_registration_paid(db, registration, OrderTrackingId):
+            db.commit()
+        return {"status": "acknowledged", "type": "event_registration"}
     return {"status": "acknowledged"}
 # =====================================================
 # Community Hub & Social Endpoints
@@ -3642,7 +4854,15 @@ def get_global_chat(tag: Optional[str] = None, db: Session = Depends(database.ge
     if tag:
         query = query.filter(models.CommunityMessage.hashtags.cast(String).ilike(f'%"{tag}"%'))
         
-    messages = query.order_by(models.CommunityMessage.created_at.desc()).limit(50).all()
+    pin_map = get_active_pin_map(db, "community")
+    messages = query.order_by(models.CommunityMessage.created_at.desc()).limit(100).all()
+    apply_pin_metadata(messages, pin_map)
+    messages = sort_items_with_pins(
+        messages,
+        pin_map,
+        secondary_key=lambda m: m.created_at or datetime.min,
+        reverse_secondary=True,
+    )[:50]
     for msg in messages:
         if msg.is_poll and msg.poll_options:
             votes = db.query(models.CommunityPollVote).filter(models.CommunityPollVote.message_id == msg.id).all()
@@ -3664,14 +4884,24 @@ def get_nearby_chat(radius: float = 20.0, db: Session = Depends(database.get_db)
         return []
 
     # Get all messages with lat/lng and filter manually (or use PostGIS if available, but Haversine is fallback)
-    messages = db.query(models.CommunityMessage).filter(models.CommunityMessage.latitude != None).all()
+    pin_map = get_active_pin_map(db, "community")
+    messages = db.query(models.CommunityMessage).filter(
+        models.CommunityMessage.latitude != None,
+        models.CommunityMessage.is_hidden == False,
+    ).all()
+    apply_pin_metadata(messages, pin_map)
     nearby = []
     for msg in messages:
         dist = calculate_distance(u_lat, u_lon, msg.latitude, msg.longitude)
         if dist <= radius:
             nearby.append(msg)
     
-    return sorted(nearby, key=lambda x: x.created_at, reverse=True)[:50]
+    return sort_items_with_pins(
+        nearby,
+        pin_map,
+        secondary_key=lambda x: x.created_at or datetime.min,
+        reverse_secondary=True,
+    )[:50]
 
 @app.post("/chat/message", response_model=schemas.CommunityMessageResponse)
 def post_community_message(msg: schemas.CommunityMessageCreate, db: Session = Depends(database.get_db), current_user: models.User = Depends(get_current_user)):

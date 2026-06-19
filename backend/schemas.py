@@ -141,6 +141,8 @@ class ServiceResponse(ServiceBase):
     id: str
     provider_id: str
     provider: Optional[ProviderMini] = None
+    is_pinned: Optional[bool] = False
+    pin_priority: Optional[int] = None
     class Config:
         from_attributes = True
 
@@ -190,11 +192,16 @@ class EventBase(BaseModel):
     title: str
     description: Optional[str] = None
     location: Optional[str] = None
+    poster_url: Optional[str] = None
+    images: Optional[List[str]] = None
     start_time: datetime.datetime # ISO format expected
     end_time: datetime.datetime
     capacity: Optional[int] = 0
+    ticket_price: Optional[float] = 0.0
+    currency: Optional[str] = "KES"
     category: Optional[str] = None
     is_public: Optional[int] = 1
+    scorecard_enabled: Optional[bool] = True
 
 class EventCreate(EventBase):
     pass
@@ -202,6 +209,10 @@ class EventCreate(EventBase):
 class EventResponse(EventBase):
     id: str
     registrant_count: Optional[int] = 0
+    admin_created: Optional[bool] = False
+    follow_up_requested_at: Optional[datetime.datetime] = None
+    is_pinned: Optional[bool] = False
+    pin_priority: Optional[int] = None
     class Config:
         from_attributes = True
 
@@ -243,6 +254,11 @@ class RegistrationResponse(BaseModel):
     status: str
     role: str
     share_phone: Optional[bool] = False
+    amount: Optional[float] = 0.0
+    currency: Optional[str] = "KES"
+    payment_status: Optional[str] = "free"
+    pesapal_tracking_id: Optional[str] = None
+    paid_at: Optional[datetime.datetime] = None
     check_in_time: Optional[datetime.datetime] = None
     ticket_token: Optional[str] = None
     created_at: datetime.datetime
@@ -299,6 +315,11 @@ class RegistrationWithResponses(BaseModel):
     status: str
     role: str
     share_phone: Optional[bool] = False
+    amount: Optional[float] = 0.0
+    currency: Optional[str] = "KES"
+    payment_status: Optional[str] = "free"
+    pesapal_tracking_id: Optional[str] = None
+    paid_at: Optional[datetime.datetime] = None
     created_at: datetime.datetime
     responses: List[RegistrationFormResponseItem] = []
     class Config:
@@ -443,6 +464,8 @@ class CaseReportResponse(BaseModel):
     like_count: Optional[int] = 0
     comment_count: Optional[int] = 0
     is_liked: Optional[bool] = False
+    is_pinned: Optional[bool] = False
+    pin_priority: Optional[int] = None
     class Config:
         from_attributes = True
 
@@ -530,7 +553,30 @@ class SpotlightBase(BaseModel):
     is_active: Optional[bool] = True
 
 class SpotlightResponse(SpotlightBase):
-    id: int
+    id: Any
+    updated_at: datetime.datetime
+    is_pinned: Optional[bool] = False
+    pin_priority: Optional[int] = None
+    target_type: Optional[str] = None
+    class Config:
+        from_attributes = True
+
+class ContentPinCreate(BaseModel):
+    target_type: str
+    target_id: str
+    title: Optional[str] = None
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    priority: Optional[int] = 100
+    is_active: Optional[bool] = True
+    expires_at: Optional[datetime.datetime] = None
+
+class ContentPinResponse(ContentPinCreate):
+    id: str
+    title: str
+    is_active: bool
+    created_by_id: Optional[str] = None
+    created_at: datetime.datetime
     updated_at: datetime.datetime
     class Config:
         from_attributes = True
@@ -569,9 +615,75 @@ class CommunityMessageResponse(CommunityMessageBase):
     is_hidden: bool = False
     poll_results: Optional[Dict[str, int]] = None
     has_voted: Optional[int] = None # The option_id they voted for, if any
+    is_pinned: Optional[bool] = False
+    pin_priority: Optional[int] = None
     
     class Config:
         from_attributes = True
+
+# =====================================================
+# Mbwa Rafiki Coexistence Scorecard Schemas
+# =====================================================
+
+class ScorecardParticipantProfile(BaseModel):
+    full_name: Optional[str] = None
+    anonymous_code: Optional[str] = None
+    phone_number: Optional[str] = None
+    county: str
+    community_location: str
+    user_type: str
+    participation_type: str
+    consent: bool
+
+class ScorecardQuestionResponse(BaseModel):
+    id: str
+    survey_type: str
+    category: Optional[str] = None
+    question_type: str
+    prompt: str
+    sort_order: int
+    class Config:
+        from_attributes = True
+
+class ScorecardResponseInput(BaseModel):
+    question_id: str
+    answer_numeric: Optional[int] = None
+    answer_text: Optional[str] = None
+
+class ScorecardSurveyCreate(BaseModel):
+    survey_type: str
+    participant: ScorecardParticipantProfile
+    responses: List[ScorecardResponseInput]
+
+class ScorecardSurveyResult(BaseModel):
+    id: str
+    event_id: str
+    participant_id: str
+    survey_type: str
+    category_scores: Dict[str, float] = {}
+    coexistence_index: float = 0.0
+    baseline_score: Optional[float] = None
+    followup_score: Optional[float] = None
+    percentage_change: Optional[float] = None
+    created_at: datetime.datetime
+    class Config:
+        from_attributes = True
+
+class ScorecardEvidenceCreate(BaseModel):
+    evidence_type: str
+    url: str
+    notes: Optional[str] = None
+
+class ScorecardReportingFields(BaseModel):
+    community_members_engaged: Optional[int] = 0
+    trainings_story_labs_conducted: Optional[int] = 0
+    animals_indirectly_benefiting: Optional[int] = 0
+    materials_tools_produced: Optional[str] = None
+    human_wellbeing_outcome_notes: Optional[str] = None
+    animal_welfare_outcome_notes: Optional[str] = None
+    environmental_benefit_notes: Optional[str] = None
+    social_cohesion_notes: Optional[str] = None
+    evidence_links_or_uploaded_files: Optional[str] = None
 
 class PollVoteCreate(BaseModel):
     option_id: int

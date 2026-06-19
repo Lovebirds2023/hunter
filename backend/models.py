@@ -88,6 +88,25 @@ class Spotlight(Base):
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
 
+class ContentPin(Base):
+    __tablename__ = "content_pins"
+
+    id = Column(String, primary_key=True, index=True)
+    target_type = Column(String, nullable=False, index=True)  # event, service, case, community
+    target_id = Column(String, nullable=False, index=True)
+    title = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    image_url = Column(String, nullable=True)
+    priority = Column(Integer, default=100)
+    is_active = Column(Boolean, default=True, index=True)
+    expires_at = Column(DateTime, nullable=True)
+    created_by_id = Column(String, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    created_by = relationship("User")
+
+
 class Dog(Base):
     __tablename__ = "dogs"
 
@@ -234,12 +253,19 @@ class Event(Base):
     title = Column(String, nullable=False)
     description = Column(String)
     location = Column(String)
+    poster_url = Column(String, nullable=True)
+    images = Column(JSON, nullable=True)
     start_time = Column(DateTime, nullable=False)
     end_time = Column(DateTime, nullable=False)
     capacity = Column(Integer, default=0) # 0 means unlimited
+    ticket_price = Column(Float, default=0.0)
+    currency = Column(String, default="KES")
     organizer_id = Column(String, ForeignKey("users.id"))
     category = Column(String) # e.g., "walk", "training", "outreach"
     is_public = Column(Integer, default=1) # 1 for public, 0 for private
+    admin_created = Column(Boolean, default=False)
+    scorecard_enabled = Column(Boolean, default=True)
+    follow_up_requested_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     
     organizer = relationship("User", back_populates="events")
@@ -257,6 +283,12 @@ class Registration(Base):
     check_in_time = Column(DateTime, nullable=True)
     ticket_token = Column(String, unique=True, index=True, nullable=True) # For QR code validation
     share_phone = Column(Boolean, default=False)
+    amount = Column(Float, default=0.0)
+    currency = Column(String, default="KES")
+    payment_status = Column(String, default="free") # free, pending, paid, failed
+    pesapal_tracking_id = Column(String, nullable=True, index=True)
+    pesapal_merchant_reference = Column(String, nullable=True, index=True)
+    paid_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     
     event = relationship("Event", back_populates="registrations")
@@ -524,6 +556,92 @@ class LiveObservation(Base):
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
     is_offline_sync = Column(Boolean, default=False)
     synced_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class ScorecardQuestion(Base):
+    __tablename__ = "scorecard_questions"
+
+    id = Column(String, primary_key=True, index=True)
+    survey_type = Column(String, nullable=False, index=True)  # baseline, followup
+    category = Column(String, nullable=True)
+    question_type = Column(String, default="likert")  # likert, open
+    prompt = Column(String, nullable=False)
+    sort_order = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class ScorecardParticipant(Base):
+    __tablename__ = "scorecard_participants"
+
+    id = Column(String, primary_key=True, index=True)
+    event_id = Column(String, ForeignKey("events.id"), nullable=False, index=True)
+    full_name = Column(String, nullable=True)
+    anonymous_code = Column(String, nullable=True, index=True)
+    phone_number = Column(String, nullable=True)
+    county = Column(String, nullable=False)
+    community_location = Column(String, nullable=False)
+    user_type = Column(String, nullable=False)
+    participation_type = Column(String, nullable=False)
+    consent = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    event = relationship("Event")
+    surveys = relationship("ScorecardSurvey", back_populates="participant", cascade="all, delete-orphan")
+
+class ScorecardSurvey(Base):
+    __tablename__ = "scorecard_surveys"
+
+    id = Column(String, primary_key=True, index=True)
+    event_id = Column(String, ForeignKey("events.id"), nullable=False, index=True)
+    participant_id = Column(String, ForeignKey("scorecard_participants.id"), nullable=False, index=True)
+    survey_type = Column(String, nullable=False, index=True)  # baseline, followup
+    category_scores = Column(JSON, nullable=True)
+    coexistence_index = Column(Float, default=0.0)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    event = relationship("Event")
+    participant = relationship("ScorecardParticipant", back_populates="surveys")
+    responses = relationship("ScorecardResponse", back_populates="survey", cascade="all, delete-orphan")
+
+class ScorecardResponse(Base):
+    __tablename__ = "scorecard_responses"
+
+    id = Column(String, primary_key=True, index=True)
+    survey_id = Column(String, ForeignKey("scorecard_surveys.id", ondelete="CASCADE"), nullable=False, index=True)
+    question_id = Column(String, ForeignKey("scorecard_questions.id"), nullable=False, index=True)
+    answer_numeric = Column(Integer, nullable=True)
+    answer_text = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    survey = relationship("ScorecardSurvey", back_populates="responses")
+    question = relationship("ScorecardQuestion")
+
+class ScorecardEvidence(Base):
+    __tablename__ = "scorecard_evidence"
+
+    id = Column(String, primary_key=True, index=True)
+    event_id = Column(String, ForeignKey("events.id"), nullable=False, index=True)
+    evidence_type = Column(String, nullable=False)  # photo, attendance_sheet, screenshot, audio_link, podcast_analytics, testimonial
+    url = Column(String, nullable=False)
+    notes = Column(String, nullable=True)
+    created_by_id = Column(String, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    event = relationship("Event")
+    created_by = relationship("User")
+
+class ScorecardReportingExport(Base):
+    __tablename__ = "scorecard_reporting_exports"
+
+    id = Column(String, primary_key=True, index=True)
+    event_id = Column(String, ForeignKey("events.id"), nullable=False, index=True)
+    fields = Column(JSON, nullable=True)
+    created_by_id = Column(String, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    event = relationship("Event")
+    created_by = relationship("User")
 
 # =====================================================
 # Community Hub & Social Models

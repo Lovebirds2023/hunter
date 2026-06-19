@@ -53,6 +53,7 @@ import ServiceFormBuilderScreen from './src/screens/ServiceFormBuilderScreen';
 import ServiceResponsesScreen from './src/screens/ServiceResponsesScreen';
 import EventFormBuilderScreen from './src/screens/EventFormBuilderScreen';
 import EventResponsesScreen from './src/screens/EventResponsesScreen';
+import ScorecardSurveyScreen from './src/screens/ScorecardSurveyScreen';
 import { COLORS } from './src/constants/theme';
 import { PlatformDisclaimerModal } from './src/components/PlatformDisclaimerModal';
 
@@ -80,6 +81,7 @@ const linking = {
                         screens: {
                             EventsList: 'events',
                             EventDetail: 'events/:eventId',
+                            ScorecardSurvey: 'events/:eventId/scorecard/:surveyType',
                             MyRegistrations: 'my-registrations',
                         },
                     },
@@ -129,6 +131,7 @@ function EventsStackScreen() {
             <EventStack.Screen name="MyRegistrations" component={MyRegistrationsScreen} />
             <EventStack.Screen name="EventFormBuilder" component={EventFormBuilderScreen} />
             <EventStack.Screen name="EventResponses" component={EventResponsesScreen} />
+            <EventStack.Screen name="ScorecardSurvey" component={ScorecardSurveyScreen} />
         </EventStack.Navigator>
     );
 }
@@ -178,6 +181,7 @@ function AdminNavigator() {
             <AdminStack.Screen name="AdminProgramReports" component={AdminProgramReportsScreen} />
             <AdminStack.Screen name="EventFormBuilder" component={EventFormBuilderScreen} />
             <AdminStack.Screen name="EventResponses" component={EventResponsesScreen} />
+            <AdminStack.Screen name="ScorecardSurvey" component={ScorecardSurveyScreen} />
             <AdminStack.Screen name="FacilitatorDashboard" component={FacilitatorDashboardScreen} />
         </AdminStack.Navigator>
     );

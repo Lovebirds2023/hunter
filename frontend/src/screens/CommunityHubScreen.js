@@ -150,6 +150,12 @@ export const CommunityHubScreen = ({ navigation }) => {
                         <Text style={styles.karmaText}>{item.author.karma_points}</Text>
                     </View>
                     )}
+                    {item.is_pinned && (
+                        <View style={styles.pinnedBadge}>
+                            <Ionicons name="pin" size={10} color={COLORS.primary} />
+                            <Text style={styles.pinnedBadgeText}>Pinned</Text>
+                        </View>
+                    )}
                 </View>
             </View>
             <Text style={styles.messageContent}>
@@ -382,6 +388,8 @@ const styles = StyleSheet.create({
     karmaBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF9C4', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10 },
     karmaText: { fontSize: 10, fontWeight: 'bold', color: '#FBC02D', marginLeft: 3 },
     headerRight: { flexDirection: 'row', alignItems: 'center' },
+    pinnedBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF3B0', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10, marginLeft: 6 },
+    pinnedBadgeText: { color: COLORS.primary, fontSize: 10, fontWeight: '800', marginLeft: 3 },
     
     messageContent: { fontSize: 15, color: '#334155', lineHeight: 22 },
     mentionText: { color: COLORS.primary, fontWeight: 'bold' },

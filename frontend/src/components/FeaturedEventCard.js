@@ -9,52 +9,68 @@ export const FeaturedEventCard = ({ item, onPress }) => {
     const { t } = useTranslation();
     const date = new Date(item.start_time);
     const isFull = item.capacity > 0 && item.registrant_count >= item.capacity;
-    
+    const ticketPrice = Number(item.ticket_price || 0);
+    const priceLabel = ticketPrice > 0 ? `${item.currency || 'KES'} ${ticketPrice.toLocaleString()}` : 'FREE';
+    const content = (
+        <View style={styles.content}>
+            <View style={styles.badgeRow}>
+                <View style={[styles.badge, isFull && { backgroundColor: '#ff4d4d' }]}>
+                    <Text style={[styles.badgeText, isFull && { color: 'white' }]}>{isFull ? t('events.full') : t('home.featured')}</Text>
+                </View>
+                <View style={[styles.priceBadge, ticketPrice > 0 && styles.paidBadge]}>
+                    <Text style={[styles.priceText, ticketPrice > 0 && styles.paidText]}>{priceLabel}</Text>
+                </View>
+            </View>
+
+            <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
+
+            <View style={styles.infoRow}>
+                <View style={styles.infoItem}>
+                    <Ionicons name="calendar" size={14} color={COLORS.accent} />
+                    <Text style={styles.infoText}>
+                        {date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                    </Text>
+                </View>
+                <View style={styles.infoItem}>
+                    <Ionicons name="location" size={14} color={COLORS.accent} />
+                    <Text style={styles.infoText} numberOfLines={1}>{item.location}</Text>
+                </View>
+            </View>
+
+            <View style={styles.footer}>
+                <Text style={styles.actionText}>{t('events.learn_more')}</Text>
+                <Ionicons name="arrow-forward-circle" size={24} color={COLORS.accent} />
+            </View>
+        </View>
+    );
+
     return (
-        <TouchableOpacity 
-            style={[styles.container, isFull && { opacity: 0.5 }]} 
+        <TouchableOpacity
+            style={[styles.container, isFull && { opacity: 0.5 }]}
             onPress={onPress}
         >
-            <LinearGradient
-                colors={[COLORS.primary, COLORS.primaryDark]}
-                style={styles.gradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-            >
-                <View style={styles.content}>
-                    <View style={[styles.badge, isFull && { backgroundColor: '#ff4d4d' }]}>
-                        <Text style={[styles.badgeText, isFull && { color: 'white' }]}>{isFull ? t('events.full') : t('home.featured')}</Text>
-                    </View>
-                    
-                    <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
-                    
-                    <View style={styles.infoRow}>
-                        <View style={styles.infoItem}>
-                            <Ionicons name="calendar" size={14} color={COLORS.accent} />
-                            <Text style={styles.infoText}>
-                                {date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                            </Text>
-                        </View>
-                        <View style={styles.infoItem}>
-                            <Ionicons name="location" size={14} color={COLORS.accent} />
-                            <Text style={styles.infoText} numberOfLines={1}>{item.location}</Text>
-                        </View>
-                    </View>
-                    
-                    <View style={styles.footer}>
-                        <Text style={styles.actionText}>{t('events.learn_more')}</Text>
-                        <Ionicons name="arrow-forward-circle" size={24} color={COLORS.accent} />
-                    </View>
-                </View>
-                
-                {/* Decorative element */}
-                <Ionicons 
-                    name="paw" 
-                    size={120} 
-                    color="rgba(255,255,255,0.05)" 
-                    style={styles.pawIcon}
-                />
-            </LinearGradient>
+            {item.poster_url ? (
+                <ImageBackground source={{ uri: item.poster_url }} style={styles.imageBackground} imageStyle={styles.image}>
+                    <LinearGradient colors={['rgba(0,0,0,0.18)', 'rgba(0,0,0,0.78)']} style={styles.gradient}>
+                        {content}
+                    </LinearGradient>
+                </ImageBackground>
+            ) : (
+                <LinearGradient
+                    colors={[COLORS.primary, COLORS.primaryDark]}
+                    style={styles.gradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                >
+                    {content}
+                    <Ionicons
+                        name="paw"
+                        size={120}
+                        color="rgba(255,255,255,0.05)"
+                        style={styles.pawIcon}
+                    />
+                </LinearGradient>
+            )}
         </TouchableOpacity>
     );
 };
@@ -72,10 +88,23 @@ const styles = StyleSheet.create({
         flex: 1,
         padding: 20,
     },
+    imageBackground: {
+        flex: 1,
+    },
+    image: {
+        borderRadius: 24,
+    },
     content: {
         flex: 1,
         justifyContent: 'space-between',
         zIndex: 1,
+    },
+    badgeRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 8,
     },
     badge: {
         alignSelf: 'flex-start',
@@ -83,12 +112,28 @@ const styles = StyleSheet.create({
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 8,
-        marginBottom: 8,
     },
     badgeText: {
         fontSize: 10,
         fontWeight: '900',
         color: COLORS.primaryDark,
+    },
+    priceBadge: {
+        backgroundColor: 'rgba(255,255,255,0.18)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    paidBadge: {
+        backgroundColor: 'rgba(232,247,237,0.95)',
+    },
+    priceText: {
+        color: COLORS.white,
+        fontSize: 10,
+        fontWeight: '900',
+    },
+    paidText: {
+        color: '#0f7a39',
     },
     title: {
         fontSize: 20,

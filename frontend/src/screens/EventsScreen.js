@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Image, ScrollView, Animated } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Image, ScrollView } from 'react-native';
 import { COLORS, SPACING, SIZES, SHADOWS } from '../constants/theme';
 import { useTranslation } from 'react-i18next';
 import { getEvents } from '../api/events';
@@ -43,12 +43,21 @@ export const EventsScreen = ({ navigation }) => {
         return matchesSearch && matchesCategory;
     });
 
-    const featuredEvents = events.filter(e => e.title === "Lovedogs 360 Program" || e.is_featured === true);
-    const sortedEvents = [...filteredEvents].sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+    const featuredEvents = events.filter(e => e.is_pinned || e.title === "Lovedogs 360 Program" || e.is_featured === true);
+    const sortedEvents = [...filteredEvents].sort((a, b) => {
+        if (!!a.is_pinned !== !!b.is_pinned) return a.is_pinned ? -1 : 1;
+        if (a.is_pinned && b.is_pinned) return (b.pin_priority || 0) - (a.pin_priority || 0);
+        return new Date(a.start_time) - new Date(b.start_time);
+    });
 
     const renderEventCard = ({ item }) => {
         const date = new Date(item.start_time);
         const isFull = item.capacity > 0 && item.registrant_count >= item.capacity;
+        const ticketPrice = Number(item.ticket_price || 0);
+        const priceLabel = ticketPrice > 0 ? `${item.currency || 'KES'} ${ticketPrice.toLocaleString()}` : 'FREE';
+        const slotsText = item.capacity > 0
+            ? `${Math.max(0, item.capacity - (item.registrant_count || 0))} ${t('events.slots_left') || 'left'}`
+            : 'OPEN';
 
         return (
             <TouchableOpacity
@@ -59,9 +68,21 @@ export const EventsScreen = ({ navigation }) => {
                     <Text style={styles.dateDay}>{date.getDate()}</Text>
                     <Text style={styles.dateMonth}>{date.toLocaleDateString('en-GB', { month: 'short' }).toUpperCase()}</Text>
                 </View>
+                {item.poster_url && (
+                    <Image source={{ uri: item.poster_url }} style={styles.cardPoster} resizeMode="cover" />
+                )}
                 
                 <View style={styles.cardInfo}>
                     <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+                    <View style={[styles.priceBadge, ticketPrice > 0 ? styles.paidPriceBadge : styles.freePriceBadge]}>
+                        <Text style={[styles.priceBadgeText, ticketPrice > 0 ? styles.paidPriceText : styles.freePriceText]}>{priceLabel}</Text>
+                    </View>
+                    {item.is_pinned && (
+                        <View style={styles.pinnedBadge}>
+                            <Ionicons name="pin" size={10} color={COLORS.primaryDark} />
+                            <Text style={styles.pinnedBadgeText}>Pinned</Text>
+                        </View>
+                    )}
                     <View style={styles.cardMeta}>
                         <Ionicons name="location-outline" size={14} color="rgba(255,255,255,0.6)" />
                         <Text style={styles.cardMetaText} numberOfLines={1}>{item.location}</Text>
@@ -75,7 +96,7 @@ export const EventsScreen = ({ navigation }) => {
                 <View style={styles.cardAction}>
                     <View style={[styles.slotBadge, isFull && { backgroundColor: 'rgba(211, 47, 47, 0.2)' }]}>
                         <Text style={[styles.slotText, isFull && { color: '#ff4d4d' }]}>
-                            {isFull ? t('events.full') || 'FULL' : `${item.capacity - (item.registrant_count || 0)} ${t('events.slots_left') || 'left'}`}
+                            {isFull ? t('events.full') || 'FULL' : slotsText}
                         </Text>
                     </View>
                     <Ionicons name="chevron-forward" size={20} color={COLORS.accent} />
@@ -306,6 +327,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginRight: 15,
     },
+    cardPoster: {
+        width: 58,
+        height: 58,
+        borderRadius: 14,
+        marginRight: 12,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+    },
     dateDay: {
         fontSize: 22,
         fontWeight: '800',
@@ -325,6 +353,29 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: COLORS.white,
         marginBottom: 6,
+    },
+    priceBadge: {
+        alignSelf: 'flex-start',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 10,
+        marginBottom: 6,
+    },
+    paidPriceBadge: {
+        backgroundColor: 'rgba(232,247,237,0.95)',
+    },
+    freePriceBadge: {
+        backgroundColor: 'rgba(255,255,255,0.12)',
+    },
+    priceBadgeText: {
+        fontSize: 10,
+        fontWeight: '900',
+    },
+    paidPriceText: {
+        color: '#0f7a39',
+    },
+    freePriceText: {
+        color: COLORS.accent,
     },
     cardMeta: {
         flexDirection: 'row',
@@ -353,6 +404,18 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         color: COLORS.accent,
     },
+    pinnedBadge: {
+        alignSelf: 'flex-start',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: COLORS.accent,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 10,
+        marginBottom: 6,
+    },
+    pinnedBadgeText: { fontSize: 10, fontWeight: '900', color: COLORS.primaryDark },
     emptyContainer: {
         padding: 60,
         alignItems: 'center',

@@ -18,6 +18,7 @@ const EXPORT_TYPES = [
     { id: 'cases', label: 'Case Reports', icon: 'alert-circle', description: 'Community support and incident reports' },
     { id: 'community', label: 'Community Posts', icon: 'chatbubbles', description: 'All social feed content and engagement metrics' },
     { id: 'support', label: 'Support Tickets', icon: 'headset', description: 'Platform support history and status logs' },
+    { id: 'scorecard', label: 'Mbwa Rafiki Scorecard', icon: 'clipboard', description: 'Baseline, follow-up, evidence, scores, and AHAC reporting fields' },
 ];
 
 export const AdminExportTab = ({ onBack }) => {

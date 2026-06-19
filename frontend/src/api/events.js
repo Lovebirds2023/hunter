@@ -15,6 +15,20 @@ export const registerForEvent = async (eventId, data) => {
     return response.data;
 };
 
+export const initiateEventRegistrationPayment = async (registrationId, email, phone) => {
+    const response = await client.post(`/event-registrations/${registrationId}/payment/initiate`, null, {
+        params: { email, phone },
+    });
+    return response.data;
+};
+
+export const getEventRegistrationPaymentStatus = async (registrationId, trackingId) => {
+    const response = await client.get(`/event-registrations/${registrationId}/payment/status`, {
+        params: trackingId ? { tracking_id: trackingId } : {},
+    });
+    return response.data;
+};
+
 export const getMyRegistrations = async () => {
     const response = await client.get('/my-registrations');
     return response.data;

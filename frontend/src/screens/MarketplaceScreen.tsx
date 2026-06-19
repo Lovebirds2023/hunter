@@ -186,6 +186,12 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                         <View style={styles.categoryBadge}>
                             <Text style={styles.categoryBadgeText}>{item.category || t('marketplace.general')}</Text>
                         </View>
+                        {item.is_pinned && (
+                            <View style={styles.pinnedBadge}>
+                                <Ionicons name="pin" size={10} color={COLORS.primaryDark} />
+                                <Text style={styles.pinnedBadgeText}>Pinned</Text>
+                            </View>
+                        )}
                         {isClosest && (
                             <View style={styles.recommendedBadge}>
                                 <Ionicons name="flash" size={10} color="white" />
@@ -615,6 +621,8 @@ const styles = StyleSheet.create({
         left: 8,
         right: 8,
         flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 4,
         justifyContent: 'space-between',
         alignItems: 'center',
     },
@@ -771,6 +779,21 @@ const styles = StyleSheet.create({
     },
     recommendedBadgeText: {
         color: COLORS.white,
+        fontSize: 8,
+        fontWeight: 'bold',
+        marginLeft: 2,
+    },
+    pinnedBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.accent,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        marginLeft: 5,
+    },
+    pinnedBadgeText: {
+        color: COLORS.primaryDark,
         fontSize: 8,
         fontWeight: 'bold',
         marginLeft: 2,

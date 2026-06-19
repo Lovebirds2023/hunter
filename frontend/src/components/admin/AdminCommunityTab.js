@@ -11,6 +11,7 @@ export const AdminCommunityTab = ({ onBack }) => {
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [pinningId, setPinningId] = useState(null);
 
     const fetchPosts = useCallback(async (silent = false) => {
         if (!silent) setLoading(true);
@@ -50,6 +51,28 @@ export const AdminCommunityTab = ({ onBack }) => {
                 }
             }
         ]);
+    };
+
+    const handleTogglePin = async (item) => {
+        setPinningId(item.id);
+        try {
+            if (item.is_pinned) {
+                await client.delete(`/admin/pins/community/${item.id}`);
+            } else {
+                await client.post('/admin/pins', {
+                    target_type: 'community',
+                    target_id: item.id,
+                    title: item.content?.slice(0, 80) || 'Community post',
+                    description: item.content,
+                    priority: 100,
+                });
+            }
+            await fetchPosts(true);
+        } catch (e) {
+            Alert.alert('Error', 'Failed to update pin status');
+        } finally {
+            setPinningId(null);
+        }
     };
 
     const flaggedCount = posts.filter(p => p.flag_count > 0).length;
@@ -99,6 +122,11 @@ export const AdminCommunityTab = ({ onBack }) => {
                                         <Text style={s.badgeText}>HIDDEN</Text>
                                     </View>
                                 )}
+                                {item.is_pinned && (
+                                    <View style={[s.badge, { backgroundColor: ADMIN_COLORS.accent, marginLeft: 6 }]}>
+                                        <Text style={[s.badgeText, { color: ADMIN_COLORS.bg }]}>PINNED</Text>
+                                    </View>
+                                )}
                             </View>
                             
                             <Text style={{ color: ADMIN_COLORS.textPrimary, marginTop: 10, fontSize: 14, lineHeight: 20 }}>
@@ -106,6 +134,20 @@ export const AdminCommunityTab = ({ onBack }) => {
                             </Text>
 
                             <View style={s.actionRow}>
+                                <TouchableOpacity
+                                    style={[s.actionBtn, { backgroundColor: item.is_pinned ? ADMIN_COLORS.dangerBg : ADMIN_COLORS.successBg }]}
+                                    onPress={() => handleTogglePin(item)}
+                                    disabled={pinningId === item.id}
+                                >
+                                    {pinningId === item.id ? (
+                                        <ActivityIndicator size="small" color={item.is_pinned ? ADMIN_COLORS.danger : ADMIN_COLORS.success} />
+                                    ) : (
+                                        <Ionicons name={item.is_pinned ? "remove-circle-outline" : "pin-outline"} size={14} color={item.is_pinned ? ADMIN_COLORS.danger : ADMIN_COLORS.success} />
+                                    )}
+                                    <Text style={[s.actionBtnText, { color: item.is_pinned ? ADMIN_COLORS.danger : ADMIN_COLORS.success }]}>
+                                        {item.is_pinned ? 'Unpin' : 'Pin'}
+                                    </Text>
+                                </TouchableOpacity>
                                 <TouchableOpacity 
                                     style={s.actionBtn}
                                     onPress={() => handleToggleHide(item.id, item.is_hidden)}
