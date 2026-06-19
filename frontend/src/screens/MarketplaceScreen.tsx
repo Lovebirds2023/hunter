@@ -45,6 +45,11 @@ const PRODUCT_CATEGORIES = [
     { title: 'Gear', value: 'therapy gear', icon: 'bandage' },
 ];
 
+const hasValidCoordinatePair = (item: any) => (
+    Number.isFinite(Number(item?.latitude)) &&
+    Number.isFinite(Number(item?.longitude))
+);
+
 export const MarketplaceScreen = ({ navigation }: any) => {
     const { t } = useTranslation();
     const { userInfo } = useAuth();
@@ -383,10 +388,10 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                             showsUserLocation={true}
                         >
                             {filteredItems.map((item) => (
-                                item.latitude && item.longitude && (
+                                hasValidCoordinatePair(item) && (
                                     <Marker
                                         key={item.id}
-                                        coordinate={{ latitude: item.latitude, longitude: item.longitude }}
+                                        coordinate={{ latitude: Number(item.latitude), longitude: Number(item.longitude) }}
                                         title={item.title}
                                         description={t('marketplace.map_description', { price: item.price, distance: item.distance || '' })}
                                     >

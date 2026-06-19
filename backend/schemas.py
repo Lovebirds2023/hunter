@@ -9,6 +9,7 @@ class UserBase(BaseModel):
     role: UserRole
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    location_accuracy_meters: Optional[float] = None
     address: Optional[str] = None
     country: Optional[str] = None
     language: Optional[str] = "en"
@@ -115,6 +116,7 @@ class ServiceBase(BaseModel):
     image_url: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    location_accuracy_meters: Optional[float] = None
     address: Optional[str] = None
     location_landmark: Optional[str] = None
     is_published: Optional[bool] = True
@@ -445,6 +447,7 @@ class CaseReportCreate(BaseModel):
     location: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    location_accuracy_meters: Optional[float] = None
     images: Optional[List[str]] = None
 
 class AuthorMini(BaseModel):
@@ -477,6 +480,7 @@ class CaseReportResponse(BaseModel):
     location: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    location_accuracy_meters: Optional[float] = None
     images: Optional[List[str]] = None
     status: str
     is_approved: Optional[bool] = False

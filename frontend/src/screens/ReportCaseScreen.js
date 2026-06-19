@@ -6,7 +6,6 @@ import {
     KeyboardAvoidingView, Platform
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, SIZES } from '../constants/theme';
 import { ThemeBackground } from '../components/ThemeBackground';
@@ -14,6 +13,12 @@ import { Button } from '../components/Button';
 import client from '../api/client';
 import { AuthContext } from '../context/AuthContext';
 import { BREEDS, COLORS_DESC } from '../constants/data';
+import {
+    formatCoordinatePair,
+    formatLocationAccuracy,
+    getReliableCurrentLocation,
+    reverseGeocodeToAddress,
+} from '../utils/locationAccuracy';
 
 const CASE_TYPES = [
     { value: 'lost_dog', icon: 'search', color: '#4488FF' },
@@ -36,6 +41,7 @@ const ReportCaseScreen = ({ navigation, route }) => {
     const [location, setLocation] = useState('');
     const [latitude, setLatitude] = useState(null);
     const [longitude, setLongitude] = useState(null);
+    const [locationAccuracy, setLocationAccuracy] = useState(null);
     const [breed, setBreed] = useState('');
     const [customBreed, setCustomBreed] = useState('');
     const [color, setColor] = useState('');
@@ -47,27 +53,42 @@ const ReportCaseScreen = ({ navigation, route }) => {
     const getCurrentLocation = async () => {
         setFetchingLocation(true);
         try {
-            let { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert(t('common.permission_denied'), t('common.location_req'));
-                return;
+            const result = await getReliableCurrentLocation();
+            setLatitude(result.coords.latitude);
+            setLongitude(result.coords.longitude);
+            setLocationAccuracy(result.accuracyMeters);
+
+            const address = await reverseGeocodeToAddress(result.coords).catch(() => '');
+            if (address) {
+                setLocation(address);
             }
 
-            let loc = await Location.getCurrentPositionAsync({});
-            setLatitude(loc.coords.latitude);
-            setLongitude(loc.coords.longitude);
-
-            let reverse = await Location.reverseGeocodeAsync(loc.coords);
-            if (reverse && reverse.length > 0) {
-                const addr = reverse[0];
-                const addrStr = `${addr.street || ''} ${addr.city || ''} ${addr.region || ''}`.trim();
-                setLocation(addrStr);
+            if (result.isLowAccuracy) {
+                Alert.alert(
+                    'Location captured',
+                    `${formatLocationAccuracy(result.accuracyMeters)}. Move outdoors or enable precise location, then tap the locate button again if you need a more exact point.`
+                );
             }
         } catch (error) {
             console.error(error);
-            Alert.alert(t('common.error'), t('common.location_fail'));
+            if (error.code === 'permission_denied') {
+                Alert.alert(t('common.permission_denied'), t('common.location_req'));
+            } else if (error.code === 'services_disabled') {
+                Alert.alert(t('common.error'), 'Please turn on GPS/location services and try again.');
+            } else {
+                Alert.alert(t('common.error'), t('common.location_fail'));
+            }
         } finally {
             setFetchingLocation(false);
+        }
+    };
+
+    const handleLocationTextChange = (value) => {
+        setLocation(value);
+        if (latitude !== null || longitude !== null) {
+            setLatitude(null);
+            setLongitude(null);
+            setLocationAccuracy(null);
         }
     };
 
@@ -136,6 +157,7 @@ const ReportCaseScreen = ({ navigation, route }) => {
                 location: location.trim(),
                 latitude: latitude,
                 longitude: longitude,
+                location_accuracy_meters: locationAccuracy,
             });
             Alert.alert(t('report.form.title'), t('report.form.alerts.success'), [
                 { text: 'OK', onPress: () => navigation.goBack() }
@@ -276,7 +298,7 @@ const ReportCaseScreen = ({ navigation, route }) => {
                                 placeholder={t('report.form.placeholders.location')}
                                 placeholderTextColor="rgba(255,255,255,0.4)"
                                 value={location}
-                                onChangeText={setLocation}
+                                onChangeText={handleLocationTextChange}
                             />
                             <TouchableOpacity
                                 style={[styles.autoLocationBtn, fetchingLocation && { opacity: 0.6 }]}
@@ -286,9 +308,9 @@ const ReportCaseScreen = ({ navigation, route }) => {
                                 <Ionicons name="navigate" size={20} color={COLORS.accent} />
                             </TouchableOpacity>
                         </View>
-                        {latitude && (
+                        {Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude)) && (
                             <Text style={styles.coordinateText}>
-                                GPS: {latitude.toFixed(4)}, {longitude.toFixed(4)}
+                                GPS: {formatCoordinatePair({ latitude, longitude })} | {formatLocationAccuracy(locationAccuracy)}
                             </Text>
                         )}
 

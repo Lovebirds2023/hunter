@@ -220,6 +220,39 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     c = 2 * math.asin(math.sqrt(a))
     return R * c
 
+
+def normalize_coordinate_pair(latitude: Optional[float], longitude: Optional[float]):
+    if latitude is None and longitude is None:
+        return None, None
+    if latitude is None or longitude is None:
+        raise HTTPException(status_code=400, detail="Both latitude and longitude are required for a location point")
+
+    try:
+        lat = float(latitude)
+        lon = float(longitude)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Latitude and longitude must be valid numbers")
+
+    if not math.isfinite(lat) or not math.isfinite(lon):
+        raise HTTPException(status_code=400, detail="Latitude and longitude must be finite numbers")
+    if lat < -90 or lat > 90:
+        raise HTTPException(status_code=400, detail="Latitude must be between -90 and 90")
+    if lon < -180 or lon > 180:
+        raise HTTPException(status_code=400, detail="Longitude must be between -180 and 180")
+    return lat, lon
+
+
+def normalize_location_accuracy(accuracy: Optional[float]):
+    if accuracy is None:
+        return None
+    try:
+        value = float(accuracy)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Location accuracy must be a valid number")
+    if not math.isfinite(value) or value < 0:
+        raise HTTPException(status_code=400, detail="Location accuracy must be a non-negative finite number")
+    return value
+
 KARMA_REDEMPTION_TARGET = 100
 KARMA_POINT_VALUE = 1.0
 KARMA_MAX_ORDER_DISCOUNT_RATE = 0.20
@@ -858,6 +891,8 @@ try:
             """ALTER TABLE users
                ADD COLUMN IF NOT EXISTS payment_method VARCHAR;""",
             """ALTER TABLE users
+               ADD COLUMN IF NOT EXISTS location_accuracy_meters DOUBLE PRECISION;""",
+            """ALTER TABLE users
                ALTER COLUMN hashed_password DROP NOT NULL;""",
             """ALTER TABLE users
                ALTER COLUMN full_name DROP NOT NULL;""",
@@ -869,6 +904,8 @@ try:
                ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;""",
             """ALTER TABLE services
                ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;""",
+            """ALTER TABLE services
+               ADD COLUMN IF NOT EXISTS location_accuracy_meters DOUBLE PRECISION;""",
             """ALTER TABLE services
                ADD COLUMN IF NOT EXISTS address VARCHAR;""",
             """ALTER TABLE services
@@ -943,6 +980,8 @@ try:
                ADD COLUMN IF NOT EXISTS pesapal_merchant_reference VARCHAR;""",
             """ALTER TABLE registrations
                ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP;""",
+            """ALTER TABLE case_reports
+               ADD COLUMN IF NOT EXISTS location_accuracy_meters DOUBLE PRECISION;""",
             """CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);""",
             """CREATE INDEX IF NOT EXISTS idx_users_auth_provider ON users(auth_provider);""",
             """CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);""",
@@ -1022,6 +1061,10 @@ def register(user: schemas.UserCreate, db: Session = Depends(database.get_db)):
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     
+    latitude, longitude = normalize_coordinate_pair(user.latitude, user.longitude)
+    location_accuracy = normalize_location_accuracy(user.location_accuracy_meters)
+    if latitude is None:
+        location_accuracy = None
     hashed_password = auth.get_password_hash(user.password)
     new_user = models.User(
         id=str(uuid.uuid4()),
@@ -1032,8 +1075,9 @@ def register(user: schemas.UserCreate, db: Session = Depends(database.get_db)):
         phone_number=user.phone_number,
         country=user.country,
         language=user.language,
-        latitude=user.latitude,
-        longitude=user.longitude,
+        latitude=latitude,
+        longitude=longitude,
+        location_accuracy_meters=location_accuracy,
         address=user.address,
         bio=user.bio
     )
@@ -1419,6 +1463,10 @@ def create_service(
 ):
     # Apply 23.5% platform fee markup to the provider's price
     final_price = validate_marketplace_base_price(service.price, service.currency)
+    latitude, longitude = normalize_coordinate_pair(service.latitude, service.longitude)
+    location_accuracy = normalize_location_accuracy(service.location_accuracy_meters)
+    if latitude is None:
+        location_accuracy = None
 
     new_service = models.Service(
         id=str(uuid.uuid4()),
@@ -1429,8 +1477,9 @@ def create_service(
         category=service.category,
         item_type=service.item_type,
         image_url=service.image_url,
-        latitude=service.latitude,
-        longitude=service.longitude,
+        latitude=latitude,
+        longitude=longitude,
+        location_accuracy_meters=location_accuracy,
         address=service.address,
         location_landmark=service.location_landmark,
         is_published=service.is_published,
@@ -3198,6 +3247,17 @@ def update_service(
             update_data["price"],
             update_data.get("currency", service.currency),
         )
+    if "latitude" in update_data or "longitude" in update_data:
+        latitude, longitude = normalize_coordinate_pair(
+            update_data.get("latitude", service.latitude),
+            update_data.get("longitude", service.longitude),
+        )
+        update_data["latitude"] = latitude
+        update_data["longitude"] = longitude
+        if "location_accuracy_meters" not in update_data:
+            update_data["location_accuracy_meters"] = None
+    if "location_accuracy_meters" in update_data:
+        update_data["location_accuracy_meters"] = normalize_location_accuracy(update_data["location_accuracy_meters"])
 
     for key, value in update_data.items():
         setattr(service, key, value)
@@ -4644,6 +4704,10 @@ def create_case_report(
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    latitude, longitude = normalize_coordinate_pair(report.latitude, report.longitude)
+    location_accuracy = normalize_location_accuracy(report.location_accuracy_meters)
+    if latitude is None:
+        location_accuracy = None
     new_report = models.CaseReport(
         id=str(uuid.uuid4()),
         author_id=current_user.id,
@@ -4654,8 +4718,9 @@ def create_case_report(
         breed=report.breed,
         color=report.color,
         location=report.location,
-        latitude=report.latitude,
-        longitude=report.longitude,
+        latitude=latitude,
+        longitude=longitude,
+        location_accuracy_meters=location_accuracy,
         images=report.images,
     )
     db.add(new_report)

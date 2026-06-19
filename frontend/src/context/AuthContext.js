@@ -120,7 +120,7 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    const register = async (fullName, email, password, role, phoneNumber, bio, countryCode, preferredLanguage, latitude, longitude) => {
+    const register = async (fullName, email, password, role, phoneNumber, bio, countryCode, preferredLanguage, latitude, longitude, locationAccuracyMeters) => {
         setIsLoading(true);
         clearAuthNotice();
         try {
@@ -134,6 +134,7 @@ export const AuthProvider = ({ children }) => {
                 language: preferredLanguage,
                 latitude,
                 longitude,
+                location_accuracy_meters: locationAccuracyMeters,
                 bio
             });
             await setAppLanguage(preferredLanguage || 'en');

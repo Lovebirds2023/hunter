@@ -22,6 +22,11 @@ const CASE_TYPE_CONFIG = {
     other: { label: 'Other', icon: 'ellipsis-horizontal', color: '#888888' },
 };
 
+const hasValidCoordinates = (item) => (
+    Number.isFinite(Number(item?.latitude)) &&
+    Number.isFinite(Number(item?.longitude))
+);
+
 const CaseFeedScreen = ({ navigation }) => {
     const { t } = useTranslation();
     const [reports, setReports] = useState([]);
@@ -65,6 +70,10 @@ const CaseFeedScreen = ({ navigation }) => {
     const filteredReports = useMemo(() => {
         return reports;
     }, [reports]);
+
+    const mappedReports = useMemo(() => {
+        return filteredReports.filter(hasValidCoordinates);
+    }, [filteredReports]);
 
     useEffect(() => {
         fetchReports();
@@ -338,51 +347,58 @@ const CaseFeedScreen = ({ navigation }) => {
                                 <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 14, textAlign: 'center', marginTop: 10 }}>{t('case_actions.switch_to_list')}</Text>
                             </View>
                         ) : (
-                            <MapView
-                                style={styles.map}
-                                showsUserLocation={true}
-                                showsMyLocationButton={true}
-                                region={userLocation || {
-                                    latitude: -1.286389, // Default to Nairobi
-                                    longitude: 36.817223,
-                                    latitudeDelta: 0.0922,
-                                    longitudeDelta: 0.0421,
-                                }}
-                            >
-                                {filteredReports.map((report) => {
-                                const config = CASE_TYPE_CONFIG[report.case_type] || CASE_TYPE_CONFIG.other;
-                                // Mocking lat/lng based on ID if not present in report
-                                const lat = report.latitude || (-1.286389 + (Math.random() - 0.5) * 0.05);
-                                const lng = report.longitude || (36.817223 + (Math.random() - 0.5) * 0.05);
-                                const isSevere = report.case_type === 'rabies_bite' || report.case_type === 'abuse';
+                            <>
+                                <MapView
+                                    style={styles.map}
+                                    showsUserLocation={true}
+                                    showsMyLocationButton={true}
+                                    region={userLocation || {
+                                        latitude: -1.286389,
+                                        longitude: 36.817223,
+                                        latitudeDelta: 0.0922,
+                                        longitudeDelta: 0.0421,
+                                    }}
+                                >
+                                    {mappedReports.map((report) => {
+                                    const config = CASE_TYPE_CONFIG[report.case_type] || CASE_TYPE_CONFIG.other;
+                                    const lat = Number(report.latitude);
+                                    const lng = Number(report.longitude);
+                                    const isSevere = report.case_type === 'rabies_bite' || report.case_type === 'abuse';
 
-                                return (
-                                    <React.Fragment key={report.id}>
-                                        <Marker
-                                            coordinate={{ latitude: lat, longitude: lng }}
-                                            pinColor={config.color}
-                                        >
-                                            <Callout onPress={() => navigation.navigate('CaseDetail', { reportId: report.id })}>
-                                                <View style={styles.callout}>
-                                                    <Text style={styles.calloutTitle}>{report.title}</Text>
-                                                    <Text style={styles.calloutDesc}>{t(`report.types.${report.case_type}`, { defaultValue: config.label })}</Text>
-                                                    <Text style={styles.calloutAction}>{t('report.map.help')}</Text>
-                                                </View>
-                                            </Callout>
-                                        </Marker>
-                                        {isSevere && report.is_approved && Circle && (
-                                            <Circle
-                                                center={{ latitude: lat, longitude: lng }}
-                                                radius={500}
-                                                fillColor="rgba(255, 68, 68, 0.3)"
-                                                strokeColor="rgba(255, 68, 68, 0.6)"
-                                                strokeWidth={2}
-                                            />
-                                        )}
-                                    </React.Fragment>
-                                );
-                            })}
-                            </MapView>
+                                    return (
+                                        <React.Fragment key={report.id}>
+                                            <Marker
+                                                coordinate={{ latitude: lat, longitude: lng }}
+                                                pinColor={config.color}
+                                            >
+                                                <Callout onPress={() => navigation.navigate('CaseDetail', { reportId: report.id })}>
+                                                    <View style={styles.callout}>
+                                                        <Text style={styles.calloutTitle}>{report.title}</Text>
+                                                        <Text style={styles.calloutDesc}>{t(`report.types.${report.case_type}`, { defaultValue: config.label })}</Text>
+                                                        <Text style={styles.calloutAction}>{t('report.map.help')}</Text>
+                                                    </View>
+                                                </Callout>
+                                            </Marker>
+                                            {isSevere && report.is_approved && Circle && (
+                                                <Circle
+                                                    center={{ latitude: lat, longitude: lng }}
+                                                    radius={500}
+                                                    fillColor="rgba(255, 68, 68, 0.3)"
+                                                    strokeColor="rgba(255, 68, 68, 0.6)"
+                                                    strokeWidth={2}
+                                                />
+                                            )}
+                                        </React.Fragment>
+                                    );
+                                })}
+                                </MapView>
+                                {mappedReports.length === 0 && (
+                                    <View style={styles.mapNotice}>
+                                        <Ionicons name="location-outline" size={22} color={COLORS.accent} />
+                                        <Text style={styles.mapNoticeText}>Only reports with confirmed GPS coordinates appear on the map.</Text>
+                                    </View>
+                                )}
+                            </>
                         )}
                     </View>
                 )}
@@ -599,6 +615,24 @@ const styles = StyleSheet.create({
     map: {
         width: '100%',
         height: '100%',
+    },
+    mapNotice: {
+        position: 'absolute',
+        left: 20,
+        right: 20,
+        top: 24,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.72)',
+        borderRadius: 12,
+        padding: 12,
+    },
+    mapNoticeText: {
+        flex: 1,
+        color: COLORS.white,
+        fontSize: 13,
+        marginLeft: 8,
+        lineHeight: 18,
     },
     callout: {
         width: 150,

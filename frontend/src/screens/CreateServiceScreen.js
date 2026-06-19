@@ -7,8 +7,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING } from '../constants/theme';
 import client from '../api/client';
 import { Button } from '../components/Button';
-import * as Location from 'expo-location';
 import { useCurrency } from '../context/CurrencyContext';
+import {
+    formatCoordinatePair,
+    formatLocationAccuracy,
+    getReliableCurrentLocation,
+    reverseGeocodeToAddress,
+} from '../utils/locationAccuracy';
 
 const MARKETPLACE_MARKUP_RATE = 0.235;
 const MARKETPLACE_PRICE_MULTIPLIER = 1 + MARKETPLACE_MARKUP_RATE;
@@ -69,6 +74,7 @@ const CreateServiceScreen = ({ route, navigation }) => {
     const [isPublished, setIsPublished] = useState(service?.is_published ?? true);
     const [latitude, setLatitude] = useState(service?.latitude || null);
     const [longitude, setLongitude] = useState(service?.longitude || null);
+    const [locationAccuracy, setLocationAccuracy] = useState(service?.location_accuracy_meters || null);
     const [address, setAddress] = useState(service?.address || '');
     const [loading, setLoading] = useState(false);
     const [fetchingLocation, setFetchingLocation] = useState(false);
@@ -90,26 +96,31 @@ const CreateServiceScreen = ({ route, navigation }) => {
     const getCurrentLocation = async () => {
         setFetchingLocation(true);
         try {
-            let { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert(t('common.error'), t('common.location_req'));
-                return;
+            const result = await getReliableCurrentLocation();
+            setLatitude(result.coords.latitude);
+            setLongitude(result.coords.longitude);
+            setLocationAccuracy(result.accuracyMeters);
+
+            const addressLabel = await reverseGeocodeToAddress(result.coords).catch(() => '');
+            if (addressLabel) {
+                setAddress(addressLabel);
             }
 
-            let location = await Location.getCurrentPositionAsync({});
-            setLatitude(location.coords.latitude);
-            setLongitude(location.coords.longitude);
-
-            // Reverse geocode to get address string
-            let reverse = await Location.reverseGeocodeAsync(location.coords);
-            if (reverse && reverse.length > 0) {
-                const addr = reverse[0];
-                const addrStr = `${addr.street || ''} ${addr.city || ''} ${addr.region || ''}`.trim();
-                setAddress(addrStr);
+            if (result.isLowAccuracy) {
+                Alert.alert(
+                    'Location captured',
+                    `${formatLocationAccuracy(result.accuracyMeters)}. Move outdoors or enable precise location, then update the location again for a more exact listing point.`
+                );
             }
         } catch (error) {
             console.error(error);
-            Alert.alert(t('common.error'), t('common.location_fail'));
+            if (error.code === 'permission_denied') {
+                Alert.alert(t('common.error'), t('common.location_req'));
+            } else if (error.code === 'services_disabled') {
+                Alert.alert(t('common.error'), 'Please turn on GPS/location services and try again.');
+            } else {
+                Alert.alert(t('common.error'), t('common.location_fail'));
+            }
         } finally {
             setFetchingLocation(false);
         }
@@ -179,6 +190,7 @@ const CreateServiceScreen = ({ route, navigation }) => {
                 is_busy: isBusy,
                 latitude,
                 longitude,
+                location_accuracy_meters: locationAccuracy,
                 address,
                 location_landmark: locationLandmark,
                 is_published: isPublished,
@@ -399,12 +411,17 @@ const CreateServiceScreen = ({ route, navigation }) => {
                             </Text>
                         </TouchableOpacity>
 
-                        {latitude && (
+                        {Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude)) && (
                             <View style={styles.locationInfo}>
                                 <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
-                                <Text style={styles.locationInfoText} numberOfLines={2}>
-                                    {address || t('marketplace.create.coords', { latitude: latitude.toFixed(4), longitude: longitude.toFixed(4) })}
-                                </Text>
+                                <View style={{ flex: 1, marginLeft: 6 }}>
+                                    <Text style={styles.locationInfoText} numberOfLines={2}>
+                                        {address || t('marketplace.create.coords', { latitude: latitude.toFixed(6), longitude: longitude.toFixed(6) })}
+                                    </Text>
+                                    <Text style={styles.locationAccuracyText}>
+                                        {formatLocationAccuracy(locationAccuracy)} | {formatCoordinatePair({ latitude, longitude })}
+                                    </Text>
+                                </View>
                             </View>
                         )}
                     </View>
@@ -585,8 +602,12 @@ const styles = StyleSheet.create({
     locationInfoText: {
         fontSize: 13,
         color: COLORS.textSecondary,
-        marginLeft: 6,
         flex: 1
+    },
+    locationAccuracyText: {
+        fontSize: 11,
+        color: COLORS.textSecondary,
+        marginTop: 3,
     },
     registrationBox: {
         backgroundColor: '#f0f4ff',

@@ -34,6 +34,7 @@ class User(Base):
     bio = Column(String, nullable=True)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
+    location_accuracy_meters = Column(Float, nullable=True)
     address = Column(String, nullable=True)
     expo_push_token = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
@@ -167,6 +168,7 @@ class Service(Base):
     image_url = Column(String, nullable=True)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
+    location_accuracy_meters = Column(Float, nullable=True)
     address = Column(String, nullable=True)
     location_landmark = Column(String, nullable=True)
     is_published = Column(Boolean, default=True)
@@ -474,6 +476,7 @@ class CaseReport(Base):
     location = Column(String, nullable=True)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
+    location_accuracy_meters = Column(Float, nullable=True)
     images = Column(JSON, nullable=True)  # List of additional photo URLs
     status = Column(String, default=CaseStatus.OPEN)
     is_approved = Column(Boolean, default=False)

@@ -6,7 +6,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, SIZES } from '../constants/theme';
 import { AuthContext } from '../context/AuthContext';
 import { ThemeBackground } from '../components/ThemeBackground';
-import * as Location from 'expo-location';
 import { Picker } from '@react-native-picker/picker';
 import { Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -24,6 +23,11 @@ import {
     formatCountryCode,
     isValidCountryCode,
 } from '../constants/countryCodes';
+import {
+    formatCoordinatePair,
+    formatLocationAccuracy,
+    getReliableCurrentLocation,
+} from '../utils/locationAccuracy';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -40,6 +44,7 @@ const RegisterScreen = ({ navigation }) => {
     const [customCountryCode, setCustomCountryCode] = useState("");
     const [preferredLanguage, setPreferredLanguage] = useState("en");
     const [location, setLocation] = useState(null);
+    const [locationAccuracy, setLocationAccuracy] = useState(null);
     const [locationAllowed, setLocationAllowed] = useState(false);
     const [currentStep, setCurrentStep] = useState(1);
     const [showPassword, setShowPassword] = useState(false);
@@ -53,24 +58,35 @@ const RegisterScreen = ({ navigation }) => {
 
     const requestLocation = async () => {
         try {
-            let { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert(t('common.permission_denied'), `${t('register.location_denied_error')} ${t('register.location_settings_suffix')}`);
-                setLocationAllowed(false);
-                return null;
-            }
-            
-            let loc = await Location.getLastKnownPositionAsync({});
-            if (!loc) {
-                loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-            }
-            
-            setLocation(loc.coords);
+            const result = await getReliableCurrentLocation();
+            const coords = {
+                latitude: result.coords.latitude,
+                longitude: result.coords.longitude,
+                location_accuracy_meters: result.accuracyMeters,
+            };
+
+            setLocation(coords);
+            setLocationAccuracy(result.accuracyMeters);
             setLocationAllowed(true);
-            return loc.coords;
+
+            if (result.isLowAccuracy) {
+                Alert.alert(
+                    'Location captured',
+                    `${formatLocationAccuracy(result.accuracyMeters)}. For a more truthful location, move outdoors or turn on precise location, then tap Allow Location again.`
+                );
+            }
+
+            return coords;
         } catch (error) {
             if (__DEV__) console.log("Location Error:", error);
-            Alert.alert(t('register.location_error_title'), t('register.location_error_msg'));
+            setLocationAllowed(false);
+            if (error.code === 'permission_denied') {
+                Alert.alert(t('common.permission_denied'), `${t('register.location_denied_error')} ${t('register.location_settings_suffix')}`);
+            } else if (error.code === 'services_disabled') {
+                Alert.alert(t('register.location_error_title'), 'Please turn on GPS/location services and try again.');
+            } else {
+                Alert.alert(t('register.location_error_title'), t('register.location_error_msg'));
+            }
             return null;
         }
     };
@@ -436,17 +452,22 @@ const RegisterScreen = ({ navigation }) => {
                                         ? t('register.location_success')
                                         : t('register.location_benefit')}
                                 </Text>
-                                {!locationAllowed && (
-                                    <TouchableOpacity onPress={requestLocation} style={styles.premiumAllowBtn}>
-                                        <LinearGradient
-                                            colors={[COLORS.accent, COLORS.accentDark]}
-                                            style={styles.premiumAllowGradient}
-                                        >
-                                            <Text style={styles.premiumAllowText}>{t('register.allow_location')}</Text>
-                                            <Ionicons name="chevron-forward" size={16} color={COLORS.primary} />
-                                        </LinearGradient>
-                                    </TouchableOpacity>
+                                {locationAllowed && Number.isFinite(Number(location?.latitude)) && Number.isFinite(Number(location?.longitude)) && (
+                                    <Text style={styles.locationAccuracyText}>
+                                        {formatLocationAccuracy(locationAccuracy)} | {formatCoordinatePair(location)}
+                                    </Text>
                                 )}
+                                <TouchableOpacity onPress={requestLocation} style={styles.premiumAllowBtn}>
+                                    <LinearGradient
+                                        colors={[COLORS.accent, COLORS.accentDark]}
+                                        style={styles.premiumAllowGradient}
+                                    >
+                                        <Text style={styles.premiumAllowText}>
+                                            {locationAllowed ? 'Improve accuracy' : t('register.allow_location')}
+                                        </Text>
+                                        <Ionicons name="chevron-forward" size={16} color={COLORS.primary} />
+                                    </LinearGradient>
+                                </TouchableOpacity>
                             </View>
 
                             <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
@@ -457,6 +478,7 @@ const RegisterScreen = ({ navigation }) => {
                                     <Button title={t('register.register')} onPress={async () => {
                                         clearAuthNotice();
                                         const currentLocation = locationAllowed ? location : await requestLocation();
+                                        if (!currentLocation) return;
                                         const success = await register(
                                             fullName,
                                             email.trim().toLowerCase(),
@@ -467,7 +489,8 @@ const RegisterScreen = ({ navigation }) => {
                                             countryCode,
                                             preferredLanguage,
                                             currentLocation?.latitude,
-                                            currentLocation?.longitude
+                                            currentLocation?.longitude,
+                                            currentLocation?.location_accuracy_meters ?? locationAccuracy
                                         );
                                         if (success) {
                                             navigation.navigate('Login');
@@ -610,6 +633,13 @@ const styles = StyleSheet.create({
         fontSize: 14,
         lineHeight: 20,
         marginBottom: 15,
+    },
+    locationAccuracyText: {
+        color: 'rgba(255,255,255,0.7)',
+        fontSize: 11,
+        lineHeight: 16,
+        marginTop: -6,
+        marginBottom: 12,
     },
     premiumAllowBtn: {
         borderRadius: 25,

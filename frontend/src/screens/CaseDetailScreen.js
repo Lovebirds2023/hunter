@@ -11,6 +11,12 @@ import { COLORS, SPACING, SIZES } from '../constants/theme';
 import { ThemeBackground } from '../components/ThemeBackground';
 import client from '../api/client';
 import { AuthContext } from '../context/AuthContext';
+import { formatLocationAccuracy } from '../utils/locationAccuracy';
+
+const hasValidCoordinates = (item) => (
+    Number.isFinite(Number(item?.latitude)) &&
+    Number.isFinite(Number(item?.longitude))
+);
 
 const CASE_TYPE_CONFIG = {
     rabies_bite: { label: 'Rabies Bite', icon: 'warning', color: '#FF4444' },
@@ -268,13 +274,13 @@ const CaseDetailScreen = ({ route, navigation }) => {
                                 ) : null}
 
                                 {/* Mini Map */}
-                                {report.latitude && (
+                                {hasValidCoordinates(report) && (
                                     <View style={styles.miniMapContainer}>
                                         <MapView
                                             style={styles.miniMap}
                                             initialRegion={{
-                                                latitude: report.latitude,
-                                                longitude: report.longitude,
+                                                latitude: Number(report.latitude),
+                                                longitude: Number(report.longitude),
                                                 latitudeDelta: 0.01,
                                                 longitudeDelta: 0.01,
                                             }}
@@ -282,10 +288,15 @@ const CaseDetailScreen = ({ route, navigation }) => {
                                             zoomEnabled={false}
                                         >
                                             <Marker
-                                                coordinate={{ latitude: report.latitude, longitude: report.longitude }}
+                                                coordinate={{ latitude: Number(report.latitude), longitude: Number(report.longitude) }}
                                                 pinColor={config.color}
                                             />
                                         </MapView>
+                                        {report.location_accuracy_meters !== null && report.location_accuracy_meters !== undefined && (
+                                            <Text style={styles.mapAccuracyText}>
+                                                {formatLocationAccuracy(report.location_accuracy_meters)}
+                                            </Text>
+                                        )}
                                         <View style={styles.mapOverlay}>
                                             <TouchableOpacity
                                                 style={styles.fullMapBtn}
@@ -597,6 +608,18 @@ const styles = StyleSheet.create({
         position: 'absolute',
         bottom: 10,
         right: 10,
+    },
+    mapAccuracyText: {
+        position: 'absolute',
+        left: 10,
+        bottom: 12,
+        color: 'white',
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        fontSize: 10,
+        fontWeight: '700',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 14,
     },
     fullMapBtn: {
         backgroundColor: 'rgba(0,0,0,0.6)',
