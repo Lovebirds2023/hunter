@@ -40,8 +40,15 @@ export const AuthProvider = ({ children }) => {
         }
         const detail = error?.response?.data?.detail;
         if (typeof detail === 'string') {
+            const normalizedDetail = detail.toLowerCase();
             if (detail.toLowerCase().includes('incorrect username or password')) {
                 return 'Incorrect email or password. Please check your details and try again.';
+            }
+            if (normalizedDetail.includes('invalid google token')) {
+                return 'Google sign-in could not be verified. Check that Railway has the same Google OAuth client IDs as the frontend, and that the exact site URL is allowed in Google Cloud Console.';
+            }
+            if (normalizedDetail.includes('google login is temporarily unavailable')) {
+                return 'Google verification is temporarily unavailable. Please try again shortly, or use email/password for now.';
             }
             return detail;
         }

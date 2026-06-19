@@ -37,6 +37,15 @@ const numberFields = new Set([
     'animals_indirectly_benefiting',
 ]);
 
+const safeExportSlug = (value) => {
+    const slug = String(value || 'scorecard')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 60);
+    return slug || 'scorecard';
+};
+
 const MetricCard = ({ label, value, color = ADMIN_COLORS.info }) => (
     <View style={[s.card, { flex: 1, alignItems: 'center', paddingVertical: 12, marginBottom: 4 }]}>
         <Text style={{ fontSize: 22, fontWeight: '800', color }}>{value}</Text>
@@ -160,7 +169,7 @@ export const AdminScorecardTab = ({ onBack }) => {
             }, {});
             await client.post(`/admin/scorecard/${selectedEventId}/reporting`, payload);
             await fetchDashboard(selectedEventId);
-            Alert.alert('Saved', 'AHAC reporting fields updated.');
+            Alert.alert('Saved', 'Reporting fields updated.');
         } catch (error) {
             Alert.alert('Error', 'Could not save reporting fields.');
         } finally {
@@ -176,7 +185,8 @@ export const AdminScorecardTab = ({ onBack }) => {
                 params: { type: 'scorecard', event_id: selectedEventId },
                 responseType: 'arraybuffer',
             });
-            const fileName = `mbwa_rafiki_scorecard_${new Date().toISOString().split('T')[0]}.xlsx`;
+            const exportName = safeExportSlug(selectedEvent?.scorecard_title || selectedEvent?.title || 'scorecard');
+            const fileName = `${exportName}_scorecard_${new Date().toISOString().split('T')[0]}.xlsx`;
 
             if (Platform.OS === 'web' && typeof window !== 'undefined') {
                 const blob = new Blob([response.data], {
@@ -218,8 +228,8 @@ export const AdminScorecardTab = ({ onBack }) => {
                         <Ionicons name="arrow-back" size={24} color={ADMIN_COLORS.textPrimary} />
                     </TouchableOpacity>
                     <View style={{ flex: 1 }}>
-                        <Text style={s.sectionTitle}>Mbwa Rafiki Scorecard</Text>
-                        <Text style={{ fontSize: 12, color: ADMIN_COLORS.textMuted }}>Baseline, follow-up, evidence, and AHAC reporting</Text>
+                        <Text style={s.sectionTitle}>Impact Scorecards</Text>
+                        <Text style={{ fontSize: 12, color: ADMIN_COLORS.textMuted }}>Baseline, follow-up, evidence, and reporting</Text>
                     </View>
                 </View>
             </View>
@@ -253,8 +263,17 @@ export const AdminScorecardTab = ({ onBack }) => {
                     ) : (
                         <>
                             <View style={[s.card, { marginTop: 4 }]}>
-                                <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800', fontSize: 16 }}>{selectedEvent.title}</Text>
-                                <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 12, marginTop: 4 }}>{selectedEvent.location || 'Location TBD'}</Text>
+                                <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800', fontSize: 16 }}>
+                                    {selectedEvent.scorecard_title || 'Impact Scorecard'}
+                                </Text>
+                                <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 12, marginTop: 4 }}>
+                                    {selectedEvent.title} | {selectedEvent.location || 'Location TBD'}
+                                </Text>
+                                {!!selectedEvent.scorecard_description && (
+                                    <Text style={{ color: ADMIN_COLORS.textSecondary, fontSize: 12, lineHeight: 18, marginTop: 8 }}>
+                                        {selectedEvent.scorecard_description}
+                                    </Text>
+                                )}
                                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
                                     <TouchableOpacity style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg }]} onPress={promptFollowup} disabled={saving}>
                                         <Ionicons name="notifications-outline" size={14} color={ADMIN_COLORS.info} />
@@ -321,7 +340,7 @@ export const AdminScorecardTab = ({ onBack }) => {
                             </View>
 
                             <View style={[s.card, { marginTop: 12 }]}>
-                                <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800', marginBottom: 4 }}>AHAC reporting alignment</Text>
+                                <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800', marginBottom: 4 }}>Reporting alignment</Text>
                                 {Object.entries(REPORTING_LABELS).map(([key, label]) => (
                                     <View key={key}>
                                         <Text style={s.inputLabel}>{label}</Text>

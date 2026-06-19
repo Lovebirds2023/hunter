@@ -63,6 +63,7 @@ In Google Cloud Console, open **APIs & Services > Credentials > OAuth 2.0 Client
 ```text
 https://hunter-k9lr.vercel.app/auth/google
 https://lovedogs360.com/auth/google
+https://www.lovedogs360.com/auth/google
 http://localhost:19006/auth/google
 http://localhost:8081/auth/google
 http://localhost:8082/auth/google
@@ -73,6 +74,7 @@ Also add these under **Authorized JavaScript origins**:
 ```text
 https://hunter-k9lr.vercel.app
 https://lovedogs360.com
+https://www.lovedogs360.com
 http://localhost:19006
 http://localhost:8081
 http://localhost:8082
@@ -271,6 +273,7 @@ curl -X GET http://localhost:8000/users/me \
 
 - [ ] Set `GOOGLE_CLIENT_ID` in Railway/production environment
 - [ ] Set `GOOGLE_IOS_CLIENT_ID` in Railway/production environment
+- [ ] Set `GOOGLE_ANDROID_CLIENT_ID` in Railway and `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` in frontend builds before enabling Google on Android
 - [ ] Set `JWT_SECRET` to a strong, random value (min 64 chars)
 - [ ] Run database migration in production
 - [ ] Test Google login in production URL

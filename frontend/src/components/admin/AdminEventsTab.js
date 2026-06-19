@@ -37,14 +37,26 @@ const newEventForm = () => {
         ticket_price: '0',
         currency: 'KES',
         tiered_ticketing: false,
-        corporate_ticket_price: '0',
-        attendee_type_question: 'Briefly explain why you are registering as Mashinani/community or Corporate/institutional.',
+        free_tier_label: 'Community Access',
+        free_tier_description: 'Free registration for participants the program is designed to support.',
+        paid_tier_label: 'Paid Access',
+        paid_tier_description: 'Paid registration for organizations, teams, companies, or sponsored participants.',
+        paid_ticket_price: '0',
+        attendee_type_question: 'Briefly explain why this registration category applies to you.',
+        scorecard_title: 'Impact Scorecard',
+        scorecard_description: 'Collect baseline and follow-up data for learning, reporting, and program improvement.',
         is_public: true,
         scorecard_enabled: true,
     };
 };
 
-const defaultTierQuestion = 'Briefly explain why you are registering as Mashinani/community or Corporate/institutional.';
+const defaultTierQuestion = 'Briefly explain why this registration category applies to you.';
+const defaultFreeTierLabel = 'Community Access';
+const defaultFreeTierDescription = 'Free registration for participants the program is designed to support.';
+const defaultPaidTierLabel = 'Paid Access';
+const defaultPaidTierDescription = 'Paid registration for organizations, teams, companies, or sponsored participants.';
+const defaultScorecardTitle = 'Impact Scorecard';
+const defaultScorecardDescription = 'Collect baseline and follow-up data for learning, reporting, and program improvement.';
 
 export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
     const [events, setEvents] = useState([]);
@@ -58,10 +70,21 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
     const [savingTicketing, setSavingTicketing] = useState(false);
     const [ticketingForm, setTicketingForm] = useState({
         enabled: false,
-        corporate_ticket_price: '0',
+        free_tier_label: defaultFreeTierLabel,
+        free_tier_description: defaultFreeTierDescription,
+        paid_tier_label: defaultPaidTierLabel,
+        paid_tier_description: defaultPaidTierDescription,
+        paid_ticket_price: '0',
         standard_ticket_price: '0',
         currency: 'KES',
         attendee_type_question: defaultTierQuestion,
+    });
+    const [scorecardEvent, setScorecardEvent] = useState(null);
+    const [savingScorecard, setSavingScorecard] = useState(false);
+    const [scorecardForm, setScorecardForm] = useState({
+        enabled: true,
+        title: defaultScorecardTitle,
+        description: defaultScorecardDescription,
     });
 
     const uploadPosterIfNeeded = async (uri) => {
@@ -132,12 +155,16 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
             return;
         }
         if (form.tiered_ticketing) {
-            if (Number(form.corporate_ticket_price || 0) <= 0) {
-                Alert.alert('Corporate price required', 'Set a corporate ticket price greater than zero.');
+            if (!form.free_tier_label.trim() || !form.paid_tier_label.trim()) {
+                Alert.alert('Category names required', 'Name both the free and paid registration categories.');
+                return;
+            }
+            if (Number(form.paid_ticket_price || 0) <= 0) {
+                Alert.alert('Paid price required', 'Set a paid ticket price greater than zero.');
                 return;
             }
             if (!form.attendee_type_question.trim()) {
-                Alert.alert('Question required', 'Add the justification question for Mashinani/Corporate registration.');
+                Alert.alert('Question required', 'Add the justification question for the registration categories.');
                 return;
             }
         }
@@ -147,23 +174,23 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
             const posterUrl = await uploadPosterIfNeeded(form.poster_url);
             const ticketTiers = form.tiered_ticketing ? [
                 {
-                    id: 'mashinani',
-                    label: 'Mbwa Rafiki Mashinani',
+                    id: 'free',
+                    label: form.free_tier_label.trim(),
                     price: 0,
                     currency: form.currency || 'KES',
-                    description: 'For rural/community participants. Free registration.',
+                    description: form.free_tier_description.trim(),
                     requires_justification: true,
                 },
                 {
-                    id: 'corporate',
-                    label: 'Mbwa Rafiki Corporate',
-                    price: Number(form.corporate_ticket_price || 0),
+                    id: 'paid',
+                    label: form.paid_tier_label.trim(),
+                    price: Number(form.paid_ticket_price || 0),
                     currency: form.currency || 'KES',
-                    description: 'For companies, institutions, teams, and corporate participants.',
+                    description: form.paid_tier_description.trim(),
                     requires_justification: true,
                 },
             ] : null;
-            const baseTicketPrice = form.tiered_ticketing ? Number(form.corporate_ticket_price || 0) : Number(form.ticket_price || 0);
+            const baseTicketPrice = form.tiered_ticketing ? Number(form.paid_ticket_price || 0) : Number(form.ticket_price || 0);
             await client.post('/events', {
                 title: form.title.trim(),
                 description: form.description.trim(),
@@ -180,6 +207,8 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                 category: form.category.trim() || 'outreach',
                 is_public: form.is_public ? 1 : 0,
                 scorecard_enabled: form.scorecard_enabled,
+                scorecard_title: form.scorecard_enabled ? (form.scorecard_title.trim() || defaultScorecardTitle) : null,
+                scorecard_description: form.scorecard_enabled ? (form.scorecard_description.trim() || defaultScorecardDescription) : null,
             });
             setForm(newEventForm());
             setShowCreate(false);
@@ -195,11 +224,16 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
 
     const openTicketingEditor = (item) => {
         const tiers = Array.isArray(item.ticket_tiers) ? item.ticket_tiers : [];
-        const corporateTier = tiers.find(t => t.id === 'corporate') || tiers.find(t => Number(t.price || 0) > 0);
+        const freeTier = tiers.find(t => t.id === 'free') || tiers.find(t => Number(t.price || 0) === 0);
+        const paidTier = tiers.find(t => t.id === 'paid') || tiers.find(t => Number(t.price || 0) > 0);
         setTicketingEvent(item);
         setTicketingForm({
             enabled: tiers.length > 0,
-            corporate_ticket_price: String(corporateTier?.price ?? item.ticket_price ?? 0),
+            free_tier_label: freeTier?.label || defaultFreeTierLabel,
+            free_tier_description: freeTier?.description || defaultFreeTierDescription,
+            paid_tier_label: paidTier?.label || defaultPaidTierLabel,
+            paid_tier_description: paidTier?.description || defaultPaidTierDescription,
+            paid_ticket_price: String(paidTier?.price ?? item.ticket_price ?? 0),
             standard_ticket_price: String(item.ticket_price || 0),
             currency: item.currency || 'KES',
             attendee_type_question: item.attendee_type_question || defaultTierQuestion,
@@ -210,12 +244,16 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
     const handleSaveTicketing = async () => {
         if (!ticketingEvent) return;
         if (ticketingForm.enabled) {
-            if (Number(ticketingForm.corporate_ticket_price || 0) <= 0) {
-                Alert.alert('Corporate price required', 'Set a corporate ticket price greater than zero.');
+            if (!ticketingForm.free_tier_label.trim() || !ticketingForm.paid_tier_label.trim()) {
+                Alert.alert('Category names required', 'Name both the free and paid registration categories.');
+                return;
+            }
+            if (Number(ticketingForm.paid_ticket_price || 0) <= 0) {
+                Alert.alert('Paid price required', 'Set a paid ticket price greater than zero.');
                 return;
             }
             if (!ticketingForm.attendee_type_question.trim()) {
-                Alert.alert('Question required', 'Add the justification question for Mashinani/Corporate registration.');
+                Alert.alert('Question required', 'Add the justification question for the registration categories.');
                 return;
             }
         }
@@ -224,24 +262,24 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
         try {
             const ticketTiers = ticketingForm.enabled ? [
                 {
-                    id: 'mashinani',
-                    label: 'Mbwa Rafiki Mashinani',
+                    id: 'free',
+                    label: ticketingForm.free_tier_label.trim(),
                     price: 0,
                     currency: ticketingForm.currency || 'KES',
-                    description: 'For rural/community participants. Free registration.',
+                    description: ticketingForm.free_tier_description.trim(),
                     requires_justification: true,
                 },
                 {
-                    id: 'corporate',
-                    label: 'Mbwa Rafiki Corporate',
-                    price: Number(ticketingForm.corporate_ticket_price || 0),
+                    id: 'paid',
+                    label: ticketingForm.paid_tier_label.trim(),
+                    price: Number(ticketingForm.paid_ticket_price || 0),
                     currency: ticketingForm.currency || 'KES',
-                    description: 'For companies, institutions, teams, and corporate participants.',
+                    description: ticketingForm.paid_tier_description.trim(),
                     requires_justification: true,
                 },
             ] : [];
             await client.put(`/admin/events/${ticketingEvent.id}/ticketing`, {
-                ticket_price: ticketingForm.enabled ? Number(ticketingForm.corporate_ticket_price || 0) : Number(ticketingForm.standard_ticket_price || 0),
+                ticket_price: ticketingForm.enabled ? Number(ticketingForm.paid_ticket_price || 0) : Number(ticketingForm.standard_ticket_price || 0),
                 currency: ticketingForm.currency || 'KES',
                 ticket_tiers: ticketTiers,
                 attendee_type_question: ticketingForm.enabled ? ticketingForm.attendee_type_question : null,
@@ -253,6 +291,41 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
             Alert.alert('Error', e.response?.data?.detail || 'Failed to update ticketing.');
         } finally {
             setSavingTicketing(false);
+        }
+    };
+
+    const openScorecardEditor = (item) => {
+        setScorecardEvent(item);
+        setScorecardForm({
+            enabled: item.scorecard_enabled !== false,
+            title: item.scorecard_title || defaultScorecardTitle,
+            description: item.scorecard_description || defaultScorecardDescription,
+        });
+        setShowCreate(false);
+        setTicketingEvent(null);
+    };
+
+    const handleSaveScorecardSettings = async () => {
+        if (!scorecardEvent) return;
+        if (scorecardForm.enabled && !scorecardForm.title.trim()) {
+            Alert.alert('Scorecard name required', 'Name this scorecard/template.');
+            return;
+        }
+
+        setSavingScorecard(true);
+        try {
+            await client.put(`/admin/events/${scorecardEvent.id}/scorecard-settings`, {
+                scorecard_enabled: scorecardForm.enabled,
+                scorecard_title: scorecardForm.enabled ? (scorecardForm.title.trim() || defaultScorecardTitle) : null,
+                scorecard_description: scorecardForm.enabled ? (scorecardForm.description.trim() || defaultScorecardDescription) : null,
+            });
+            setScorecardEvent(null);
+            await fetchEvents(true);
+            Alert.alert('Saved', 'Scorecard settings updated.');
+        } catch (e) {
+            Alert.alert('Error', e.response?.data?.detail || 'Failed to update scorecard settings.');
+        } finally {
+            setSavingScorecard(false);
         }
     };
 
@@ -389,9 +462,9 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                     <View style={{ backgroundColor: ADMIN_COLORS.surface, borderRadius: 12, padding: 12, marginTop: 12 }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                             <View style={{ flex: 1, paddingRight: 10 }}>
-                                <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800' }}>Mashinani / Corporate pricing</Text>
+                                <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800' }}>Free / paid registration categories</Text>
                                 <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 11, marginTop: 3 }}>
-                                    Let community participants register free while corporate participants pay.
+                                    Name the free and paid categories for this event, then set the paid price.
                                 </Text>
                             </View>
                             <Switch value={form.tiered_ticketing} onValueChange={(value) => setForm(prev => ({ ...prev, tiered_ticketing: value }))} />
@@ -400,18 +473,44 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                             <View style={{ marginTop: 12 }}>
                                 <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
                                     <View style={[s.badge, { backgroundColor: ADMIN_COLORS.surfaceBorder }]}>
-                                        <Text style={[s.badgeText, { color: ADMIN_COLORS.textSecondary }]}>Mashinani: FREE</Text>
+                                        <Text style={[s.badgeText, { color: ADMIN_COLORS.textSecondary }]}>{(form.free_tier_label || 'Free').toUpperCase()}: FREE</Text>
                                     </View>
                                     <View style={[s.badge, { backgroundColor: ADMIN_COLORS.successBg }]}>
-                                        <Text style={[s.badgeText, { color: ADMIN_COLORS.success }]}>Corporate: PAID</Text>
+                                        <Text style={[s.badgeText, { color: ADMIN_COLORS.success }]}>{(form.paid_tier_label || 'Paid').toUpperCase()}: PAID</Text>
                                     </View>
                                 </View>
-                                <Text style={s.inputLabel}>Corporate ticket price</Text>
+                                <Text style={s.inputLabel}>Free category name</Text>
+                                <TextInput
+                                    style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
+                                    value={form.free_tier_label}
+                                    onChangeText={(value) => setForm(prev => ({ ...prev, free_tier_label: value }))}
+                                />
+                                <Text style={s.inputLabel}>Free category description</Text>
+                                <TextInput
+                                    style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12, minHeight: 62, textAlignVertical: 'top' }]}
+                                    multiline
+                                    value={form.free_tier_description}
+                                    onChangeText={(value) => setForm(prev => ({ ...prev, free_tier_description: value }))}
+                                />
+                                <Text style={s.inputLabel}>Paid category name</Text>
+                                <TextInput
+                                    style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
+                                    value={form.paid_tier_label}
+                                    onChangeText={(value) => setForm(prev => ({ ...prev, paid_tier_label: value }))}
+                                />
+                                <Text style={s.inputLabel}>Paid category description</Text>
+                                <TextInput
+                                    style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12, minHeight: 62, textAlignVertical: 'top' }]}
+                                    multiline
+                                    value={form.paid_tier_description}
+                                    onChangeText={(value) => setForm(prev => ({ ...prev, paid_tier_description: value }))}
+                                />
+                                <Text style={s.inputLabel}>Paid category ticket price</Text>
                                 <TextInput
                                     style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
                                     keyboardType="numeric"
-                                    value={form.corporate_ticket_price}
-                                    onChangeText={(value) => setForm(prev => ({ ...prev, corporate_ticket_price: value }))}
+                                    value={form.paid_ticket_price}
+                                    onChangeText={(value) => setForm(prev => ({ ...prev, paid_ticket_price: value }))}
                                 />
                                 <Text style={s.inputLabel}>Justification question</Text>
                                 <TextInput
@@ -435,10 +534,27 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
                             <View>
                                 <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800' }}>Enable Scorecard</Text>
-                                <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 11 }}>Collect Mbwa Rafiki baseline and follow-up data</Text>
+                                <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 11 }}>Collect baseline and follow-up data for this program</Text>
                             </View>
                             <Switch value={form.scorecard_enabled} onValueChange={(value) => setForm(prev => ({ ...prev, scorecard_enabled: value }))} />
                         </View>
+                        {form.scorecard_enabled && (
+                            <View style={{ marginTop: 12 }}>
+                                <Text style={s.inputLabel}>Scorecard/template name</Text>
+                                <TextInput
+                                    style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
+                                    value={form.scorecard_title}
+                                    onChangeText={(value) => setForm(prev => ({ ...prev, scorecard_title: value }))}
+                                />
+                                <Text style={s.inputLabel}>Scorecard purpose/description</Text>
+                                <TextInput
+                                    style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12, minHeight: 72, textAlignVertical: 'top' }]}
+                                    multiline
+                                    value={form.scorecard_description}
+                                    onChangeText={(value) => setForm(prev => ({ ...prev, scorecard_description: value }))}
+                                />
+                            </View>
+                        )}
                     </View>
 
                     <TouchableOpacity style={s.primaryButton} onPress={handleCreate} disabled={creating}>
@@ -454,7 +570,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                         <View style={{ flex: 1 }}>
                             <Text style={{ fontSize: 16, fontWeight: '800', color: ADMIN_COLORS.textPrimary }}>Ticketing: {ticketingEvent.title}</Text>
                             <Text style={{ fontSize: 12, color: ADMIN_COLORS.textMuted, marginTop: 4 }}>
-                                Configure Mashinani free access and Corporate paid registration.
+                                Configure custom free and paid registration categories.
                             </Text>
                         </View>
                         <TouchableOpacity onPress={() => setTicketingEvent(null)} style={{ padding: 8 }}>
@@ -465,7 +581,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                     <View style={{ backgroundColor: ADMIN_COLORS.surface, borderRadius: 12, padding: 12, marginTop: 12 }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                             <View style={{ flex: 1, paddingRight: 10 }}>
-                                <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800' }}>Use Mashinani / Corporate split</Text>
+                                <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800' }}>Use free / paid category split</Text>
                                 <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 11, marginTop: 3 }}>
                                     Off keeps the event as one standard ticket price.
                                 </Text>
@@ -475,12 +591,38 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
 
                         {ticketingForm.enabled ? (
                             <View style={{ marginTop: 12 }}>
-                                <Text style={s.inputLabel}>Corporate ticket price</Text>
+                                <Text style={s.inputLabel}>Free category name</Text>
+                                <TextInput
+                                    style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
+                                    value={ticketingForm.free_tier_label}
+                                    onChangeText={(value) => setTicketingForm(prev => ({ ...prev, free_tier_label: value }))}
+                                />
+                                <Text style={s.inputLabel}>Free category description</Text>
+                                <TextInput
+                                    style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12, minHeight: 62, textAlignVertical: 'top' }]}
+                                    multiline
+                                    value={ticketingForm.free_tier_description}
+                                    onChangeText={(value) => setTicketingForm(prev => ({ ...prev, free_tier_description: value }))}
+                                />
+                                <Text style={s.inputLabel}>Paid category name</Text>
+                                <TextInput
+                                    style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
+                                    value={ticketingForm.paid_tier_label}
+                                    onChangeText={(value) => setTicketingForm(prev => ({ ...prev, paid_tier_label: value }))}
+                                />
+                                <Text style={s.inputLabel}>Paid category description</Text>
+                                <TextInput
+                                    style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12, minHeight: 62, textAlignVertical: 'top' }]}
+                                    multiline
+                                    value={ticketingForm.paid_tier_description}
+                                    onChangeText={(value) => setTicketingForm(prev => ({ ...prev, paid_tier_description: value }))}
+                                />
+                                <Text style={s.inputLabel}>Paid category ticket price</Text>
                                 <TextInput
                                     style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
                                     keyboardType="numeric"
-                                    value={ticketingForm.corporate_ticket_price}
-                                    onChangeText={(value) => setTicketingForm(prev => ({ ...prev, corporate_ticket_price: value }))}
+                                    value={ticketingForm.paid_ticket_price}
+                                    onChangeText={(value) => setTicketingForm(prev => ({ ...prev, paid_ticket_price: value }))}
                                 />
                                 <Text style={s.inputLabel}>Currency</Text>
                                 <TextInput
@@ -513,6 +655,57 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                     <TouchableOpacity style={s.primaryButton} onPress={handleSaveTicketing} disabled={savingTicketing}>
                         {savingTicketing ? <ActivityIndicator color={ADMIN_COLORS.bg} /> : <Ionicons name="save-outline" size={18} color={ADMIN_COLORS.bg} />}
                         <Text style={s.primaryButtonText}>{savingTicketing ? 'Saving...' : 'Save ticketing settings'}</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
+            {scorecardEvent && (
+                <View style={[s.card, { marginTop: 10, marginBottom: 12, backgroundColor: ADMIN_COLORS.surfaceLight }]}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 16, fontWeight: '800', color: ADMIN_COLORS.textPrimary }}>Scorecard: {scorecardEvent.title}</Text>
+                            <Text style={{ fontSize: 12, color: ADMIN_COLORS.textMuted, marginTop: 4 }}>
+                                Name the scorecard template shown to participants for this event.
+                            </Text>
+                        </View>
+                        <TouchableOpacity onPress={() => setScorecardEvent(null)} style={{ padding: 8 }}>
+                            <Ionicons name="close" size={22} color={ADMIN_COLORS.textMuted} />
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={{ backgroundColor: ADMIN_COLORS.surface, borderRadius: 12, padding: 12, marginTop: 12 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <View style={{ flex: 1, paddingRight: 10 }}>
+                                <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800' }}>Enable scorecard tracking</Text>
+                                <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 11, marginTop: 3 }}>
+                                    Participants can submit baseline and follow-up surveys when this is on.
+                                </Text>
+                            </View>
+                            <Switch value={scorecardForm.enabled} onValueChange={(value) => setScorecardForm(prev => ({ ...prev, enabled: value }))} />
+                        </View>
+
+                        {scorecardForm.enabled && (
+                            <View style={{ marginTop: 12 }}>
+                                <Text style={s.inputLabel}>Scorecard/template name</Text>
+                                <TextInput
+                                    style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
+                                    value={scorecardForm.title}
+                                    onChangeText={(value) => setScorecardForm(prev => ({ ...prev, title: value }))}
+                                />
+                                <Text style={s.inputLabel}>Purpose/description</Text>
+                                <TextInput
+                                    style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12, minHeight: 76, textAlignVertical: 'top' }]}
+                                    multiline
+                                    value={scorecardForm.description}
+                                    onChangeText={(value) => setScorecardForm(prev => ({ ...prev, description: value }))}
+                                />
+                            </View>
+                        )}
+                    </View>
+
+                    <TouchableOpacity style={s.primaryButton} onPress={handleSaveScorecardSettings} disabled={savingScorecard}>
+                        {savingScorecard ? <ActivityIndicator color={ADMIN_COLORS.bg} /> : <Ionicons name="save-outline" size={18} color={ADMIN_COLORS.bg} />}
+                        <Text style={s.primaryButtonText}>{savingScorecard ? 'Saving...' : 'Save scorecard settings'}</Text>
                     </TouchableOpacity>
                 </View>
             )}
@@ -706,10 +899,18 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
 
                                     <TouchableOpacity
                                         style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg, marginRight: 10 }]}
-                                        onPress={onOpenScorecard}
+                                        onPress={() => openScorecardEditor(item)}
                                     >
                                         <Ionicons name="clipboard-outline" size={14} color={ADMIN_COLORS.info} />
-                                        <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>Scorecard</Text>
+                                        <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>Measure</Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg, marginRight: 10 }]}
+                                        onPress={onOpenScorecard}
+                                    >
+                                        <Ionicons name="analytics-outline" size={14} color={ADMIN_COLORS.info} />
+                                        <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>Data</Text>
                                     </TouchableOpacity>
 
                                     <TouchableOpacity

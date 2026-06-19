@@ -530,6 +530,18 @@ def content_pin_to_spotlight(pin: models.ContentPin):
     }
 
 
+def get_event_scorecard_title(event: Optional[models.Event]) -> str:
+    if event and getattr(event, "scorecard_title", None):
+        return event.scorecard_title.strip()
+    return "Impact Scorecard"
+
+
+def get_event_scorecard_description(event: Optional[models.Event]) -> str:
+    if event and getattr(event, "scorecard_description", None):
+        return event.scorecard_description.strip()
+    return "Collect baseline and follow-up data for learning, reporting, and program improvement."
+
+
 def calculate_scorecard_scores(question_map: Dict[str, models.ScorecardQuestion], responses: List[schemas.ScorecardResponseInput]):
     category_values: Dict[str, List[int]] = {category: [] for category in SCORECARD_CATEGORIES}
     all_values: List[int] = []
@@ -896,6 +908,10 @@ try:
             """ALTER TABLE events
                ADD COLUMN IF NOT EXISTS scorecard_enabled BOOLEAN DEFAULT TRUE;""",
             """ALTER TABLE events
+               ADD COLUMN IF NOT EXISTS scorecard_title VARCHAR;""",
+            """ALTER TABLE events
+               ADD COLUMN IF NOT EXISTS scorecard_description VARCHAR;""",
+            """ALTER TABLE events
                ADD COLUMN IF NOT EXISTS follow_up_requested_at TIMESTAMP;""",
             """ALTER TABLE events
                ADD COLUMN IF NOT EXISTS poster_url VARCHAR;""",
@@ -981,6 +997,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://lovedogs360.com",
+        "https://www.lovedogs360.com",
         "https://admin.lovedogs360.com",
         "https://hunter-k9lr.vercel.app",
         "http://localhost:3000",
@@ -2406,6 +2423,8 @@ def create_event(
         is_public=event.is_public,
         admin_created=admin_created,
         scorecard_enabled=event.scorecard_enabled if event.scorecard_enabled is not None else True,
+        scorecard_title=(event.scorecard_title or "").strip() or None,
+        scorecard_description=(event.scorecard_description or "").strip() or None,
     )
     db.add(new_event)
     db.flush()
@@ -2751,7 +2770,7 @@ def get_event_responses(
     return result
 
 
-# --- Mbwa Rafiki Coexistence Scorecard API ---
+# --- Event scorecard API ---
 
 @app.get("/scorecard/questions", response_model=List[schemas.ScorecardQuestionResponse])
 def get_scorecard_questions(survey_type: Optional[str] = None, db: Session = Depends(database.get_db)):
@@ -2851,6 +2870,8 @@ def admin_scorecard_events(db: Session = Depends(database.get_db), admin: models
             "start_time": str(event.start_time),
             "location": event.location,
             "scorecard_enabled": event.scorecard_enabled,
+            "scorecard_title": get_event_scorecard_title(event),
+            "scorecard_description": get_event_scorecard_description(event),
             "admin_created": event.admin_created,
             "total_participants": dashboard["total_participants"],
             "baseline_surveys_completed": dashboard["baseline_surveys_completed"],
@@ -2914,11 +2935,12 @@ def admin_prompt_scorecard_followup(event_id: str, db: Session = Depends(databas
     notified = 0
     for registration in registrations:
         if registration.user_id:
+            scorecard_title = get_event_scorecard_title(event)
             add_notification(
                 db,
                 registration.user_id,
-                "Mbwa Rafiki follow-up",
-                f"Please complete the follow-up Coexistence Scorecard for {event.title}.",
+                f"{scorecard_title} follow-up",
+                f"Please complete the follow-up survey for {event.title}.",
                 "info",
                 commit=False,
             )
@@ -4419,6 +4441,8 @@ def admin_list_events(db: Session = Depends(database.get_db), admin: models.User
             "attendee_type_question": e.attendee_type_question,
             "category": e.category, "is_public": e.is_public,
             "admin_created": e.admin_created, "scorecard_enabled": e.scorecard_enabled,
+            "scorecard_title": get_event_scorecard_title(e),
+            "scorecard_description": get_event_scorecard_description(e),
             "follow_up_requested_at": str(e.follow_up_requested_at) if e.follow_up_requested_at else None,
             "is_pinned": pin is not None, "pin_priority": pin.priority if pin else None,
             "organizer_name": organizer.full_name if organizer else "Unknown",
@@ -4476,6 +4500,33 @@ def admin_update_event_ticketing(
     event.ticket_price = ticket_price
     event.ticket_tiers = tiers
     event.attendee_type_question = ticketing.attendee_type_question if tiers else None
+
+    db.commit()
+    db.refresh(event)
+    event.registrant_count = db.query(models.Registration).filter(
+        models.Registration.event_id == event.id,
+        models.Registration.status.in_(["registered", "checked-in"])
+    ).count()
+    pin = get_active_pin_map(db, "event").get(event.id)
+    event.is_pinned = pin is not None
+    event.pin_priority = pin.priority if pin else None
+    return event
+
+
+@app.put("/admin/events/{event_id}/scorecard-settings", response_model=schemas.EventResponse)
+def admin_update_event_scorecard_settings(
+    event_id: str,
+    scorecard: schemas.EventScorecardUpdate,
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin)
+):
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    event.scorecard_enabled = bool(scorecard.scorecard_enabled)
+    event.scorecard_title = (scorecard.scorecard_title or "").strip() or None
+    event.scorecard_description = (scorecard.scorecard_description or "").strip() or None
 
     db.commit()
     db.refresh(event)

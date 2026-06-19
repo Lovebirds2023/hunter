@@ -48,8 +48,9 @@ const emptyProfile = {
 };
 
 export const ScorecardSurveyScreen = ({ route, navigation }) => {
-    const { eventId, eventTitle, surveyType = 'baseline' } = route.params || {};
+    const { eventId, eventTitle, surveyType = 'baseline', scorecardTitle } = route.params || {};
     const normalizedType = surveyType === 'followup' ? 'followup' : 'baseline';
+    const displayTitle = scorecardTitle || 'Impact Scorecard';
     const [questions, setQuestions] = useState([]);
     const [profile, setProfile] = useState(emptyProfile);
     const [answers, setAnswers] = useState({});
@@ -152,7 +153,7 @@ export const ScorecardSurveyScreen = ({ route, navigation }) => {
                     <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
                 </TouchableOpacity>
                 <View style={{ flex: 1 }}>
-                    <Text style={styles.headerTitle}>Mbwa Rafiki Coexistence Scorecard</Text>
+                    <Text style={styles.headerTitle}>{displayTitle}</Text>
                     <Text style={styles.headerSub}>{eventTitle || 'Event'} | {normalizedType === 'baseline' ? 'Baseline Survey' : 'Follow-up Survey'}</Text>
                 </View>
             </View>

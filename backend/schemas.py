@@ -204,9 +204,16 @@ class EventBase(BaseModel):
     category: Optional[str] = None
     is_public: Optional[int] = 1
     scorecard_enabled: Optional[bool] = True
+    scorecard_title: Optional[str] = None
+    scorecard_description: Optional[str] = None
 
 class EventCreate(EventBase):
     pass
+
+class EventScorecardUpdate(BaseModel):
+    scorecard_enabled: Optional[bool] = True
+    scorecard_title: Optional[str] = None
+    scorecard_description: Optional[str] = None
 
 class EventTicketingUpdate(BaseModel):
     ticket_price: Optional[float] = None
@@ -638,7 +645,7 @@ class CommunityMessageResponse(CommunityMessageBase):
         from_attributes = True
 
 # =====================================================
-# Mbwa Rafiki Coexistence Scorecard Schemas
+# Event scorecard schemas
 # =====================================================
 
 class ScorecardParticipantProfile(BaseModel):

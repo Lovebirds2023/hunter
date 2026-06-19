@@ -267,6 +267,8 @@ class Event(Base):
     is_public = Column(Integer, default=1) # 1 for public, 0 for private
     admin_created = Column(Boolean, default=False)
     scorecard_enabled = Column(Boolean, default=True)
+    scorecard_title = Column(String, nullable=True)
+    scorecard_description = Column(String, nullable=True)
     follow_up_requested_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     

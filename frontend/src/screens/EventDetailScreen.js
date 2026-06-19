@@ -154,7 +154,12 @@ export const EventDetailScreen = ({ route, navigation }) => {
         const selectedTier = ticketTiers.find(tier => tier.id === selectedTicketTierId);
         if (ticketTiers.length > 0) {
             if (!selectedTier) {
-                Alert.alert('Choose registration type', 'Select Mashinani or Corporate before continuing.');
+                const categoryNames = ticketTiers
+                    .map(tier => tier.label)
+                    .filter(Boolean)
+                    .slice(0, 3)
+                    .join(' or ');
+                Alert.alert('Choose registration type', `Select ${categoryNames || 'a registration category'} before continuing.`);
                 return;
             }
             if ((attendeeTypeJustification || '').trim().length < 3) {
@@ -217,6 +222,8 @@ export const EventDetailScreen = ({ route, navigation }) => {
         String(myRegistration.payment_status || '').toLowerCase() === 'pending' ||
         myRegistration.status === 'pending_payment'
     );
+    const scorecardTitle = event.scorecard_title || 'Impact Scorecard';
+    const scorecardDescription = event.scorecard_description || 'Share baseline or follow-up data for learning, reporting, and program improvement.';
 
     return (
         <View style={{ flex: 1, backgroundColor: 'white' }}>
@@ -254,21 +261,33 @@ export const EventDetailScreen = ({ route, navigation }) => {
                     <View style={styles.scorecardSection}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                             <Ionicons name="clipboard-outline" size={20} color={COLORS.primary} />
-                            <Text style={styles.scorecardTitle}>Mbwa Rafiki Coexistence Scorecard</Text>
+                            <Text style={styles.scorecardTitle}>{scorecardTitle}</Text>
                         </View>
                         <Text style={styles.scorecardText}>
-                            Share baseline or follow-up data for knowledge, attitudes, wellbeing, dog welfare, environment, and social cohesion reporting.
+                            {scorecardDescription}
                         </Text>
                         <View style={styles.scorecardActions}>
                             <TouchableOpacity
                                 style={styles.scorecardBtn}
-                                onPress={() => navigation.navigate('ScorecardSurvey', { eventId: event.id, eventTitle: event.title, surveyType: 'baseline' })}
+                                onPress={() => navigation.navigate('ScorecardSurvey', {
+                                    eventId: event.id,
+                                    eventTitle: event.title,
+                                    surveyType: 'baseline',
+                                    scorecardTitle,
+                                    scorecardDescription,
+                                })}
                             >
                                 <Text style={styles.scorecardBtnText}>Baseline Survey</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={[styles.scorecardBtn, { backgroundColor: '#4a90e2' }]}
-                                onPress={() => navigation.navigate('ScorecardSurvey', { eventId: event.id, eventTitle: event.title, surveyType: 'followup' })}
+                                onPress={() => navigation.navigate('ScorecardSurvey', {
+                                    eventId: event.id,
+                                    eventTitle: event.title,
+                                    surveyType: 'followup',
+                                    scorecardTitle,
+                                    scorecardDescription,
+                                })}
                             >
                                 <Text style={styles.scorecardBtnText}>Follow-up Survey</Text>
                             </TouchableOpacity>
