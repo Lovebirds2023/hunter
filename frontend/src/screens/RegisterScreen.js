@@ -149,7 +149,7 @@ const RegisterScreen = ({ navigation }) => {
     const handleGoogleSignupPress = async () => {
         setGoogleLoading(true);
         try {
-            const result = await promptGoogleAsync();
+            const result = await promptGoogleAsync({ useProxy: false });
             if (result?.type && result.type !== 'success') {
                 setGoogleLoading(false);
             }

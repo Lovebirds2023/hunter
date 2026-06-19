@@ -82,8 +82,37 @@ export const getGoogleAuthRequestConfig = () => {
     return config;
 };
 
+const getUrlParam = (url, key) => {
+    if (!url) return null;
+
+    try {
+        const baseUrl = Platform.OS === 'web' && typeof window !== 'undefined'
+            ? window.location.origin
+            : 'https://localhost';
+        const parsedUrl = new URL(url, baseUrl);
+        const queryParams = new URLSearchParams(parsedUrl.search);
+        const hashParams = new URLSearchParams(parsedUrl.hash?.replace(/^#/, '') || '');
+
+        return queryParams.get(key) || hashParams.get(key);
+    } catch (error) {
+        if (__DEV__) console.log('Could not parse Google auth URL', error);
+        return null;
+    }
+};
+
+export const getGoogleIdTokenFromUrl = (url) => getUrlParam(url, 'id_token');
+
+export const getGoogleAuthErrorFromUrl = (url) => {
+    const error = getUrlParam(url, 'error');
+    const description = getUrlParam(url, 'error_description');
+
+    if (!error && !description) return null;
+    return [error, description].filter(Boolean).join(': ');
+};
+
 export const getGoogleIdTokenFromResponse = (response) => (
     response?.authentication?.idToken
     || response?.params?.id_token
+    || getGoogleIdTokenFromUrl(response?.url)
     || null
 );

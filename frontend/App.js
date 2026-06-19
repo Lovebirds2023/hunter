@@ -18,6 +18,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 import LoginScreen from './src/screens/LoginScreen.js';
 import RegisterScreen from './src/screens/RegisterScreen.js';
+import GoogleAuthCallbackScreen from './src/screens/GoogleAuthCallbackScreen.js';
 import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen.js';
 import { MarketplaceScreen } from './src/screens/MarketplaceScreen';
 import { DogIdentityScreen } from './src/screens/DogIdentityScreen';
@@ -195,7 +196,7 @@ function AppNavigator() {
             {!userToken ? (
                 <>
                     <Stack.Screen name="Login" component={LoginScreen} />
-                    <Stack.Screen name="GoogleAuthCallback" component={LoginScreen} />
+                    <Stack.Screen name="GoogleAuthCallback" component={GoogleAuthCallbackScreen} />
                     <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
                     <Stack.Screen name="Onboarding" component={OnboardingScreen} />
                     <Stack.Screen name="Register" component={RegisterScreen} />

@@ -60,7 +60,7 @@ const GoogleSignInButton = ({ googleLogin, label, disabledLabel, onAuthNotice })
     const handleGooglePress = async () => {
         setGoogleLoading(true);
         try {
-            const result = await promptAsync();
+            const result = await promptAsync({ useProxy: false });
             if (result?.type && result.type !== 'success') {
                 setGoogleLoading(false);
             }
