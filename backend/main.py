@@ -273,6 +273,409 @@ FALLBACK_EXCHANGE_RATES = {
 
 ADMIN_ROLE_VALUES = {models.UserRole.ADMIN.value, models.UserRole.SUPER_ADMIN.value}
 PINNABLE_TARGET_TYPES = {"event", "service", "case", "community"}
+
+LOST_FOUND_CASE_TYPES = {"lost_dog", "found_dog"}
+OPPOSITE_LOST_FOUND_TYPE = {
+    "lost_dog": "found_dog",
+    "found_dog": "lost_dog",
+}
+PET_MATCH_STORE_THRESHOLD = 35.0
+PET_MATCH_NOTIFY_THRESHOLD = 55.0
+
+def normalize_match_text(value: Optional[str]) -> str:
+    if value is None:
+        return ""
+    return " ".join(str(value).strip().lower().replace("-", " ").replace("_", " ").split())
+
+def text_tokens(value: Optional[str]) -> set:
+    return {token for token in normalize_match_text(value).split() if len(token) >= 3}
+
+def text_similarity_ratio(left: Optional[str], right: Optional[str]) -> float:
+    left_tokens = text_tokens(left)
+    right_tokens = text_tokens(right)
+    if not left_tokens or not right_tokens:
+        return 0.0
+    overlap = left_tokens.intersection(right_tokens)
+    return len(overlap) / max(len(left_tokens), len(right_tokens))
+
+def string_match_score(left: Optional[str], right: Optional[str], exact_points: float, partial_points: float = 0.0):
+    left_norm = normalize_match_text(left)
+    right_norm = normalize_match_text(right)
+    if not left_norm or not right_norm:
+        return 0.0, "missing"
+    if left_norm == right_norm:
+        return exact_points, "exact"
+    if partial_points and (left_norm in right_norm or right_norm in left_norm or text_similarity_ratio(left_norm, right_norm) >= 0.4):
+        return partial_points, "partial"
+    return 0.0, "different"
+
+def image_evidence_count(item: Any) -> int:
+    images = getattr(item, "images", None) or []
+    count = len(images) if isinstance(images, list) else 0
+    return count + (1 if getattr(item, "image_url", None) else 0)
+
+def registered_pet_image_count(dog: models.Dog) -> int:
+    return sum(1 for field in [dog.nose_print_image, dog.body_image, dog.birthmark_image] if field)
+
+def score_location(report: models.CaseReport, candidate: Any):
+    if report.latitude is None or report.longitude is None:
+        return 0.0, None
+    if getattr(candidate, "latitude", None) is None or getattr(candidate, "longitude", None) is None:
+        return 0.0, None
+
+    distance_km = calculate_distance(report.latitude, report.longitude, candidate.latitude, candidate.longitude)
+    if distance_km <= 1:
+        return 16.0, distance_km
+    if distance_km <= 5:
+        return 12.0, distance_km
+    if distance_km <= 15:
+        return 8.0, distance_km
+    if distance_km <= 50:
+        return 4.0, distance_km
+    return 0.0, distance_km
+
+def score_case_candidate(report: models.CaseReport, candidate: models.CaseReport) -> Dict[str, Any]:
+    score = 0.0
+    reasons = []
+    signals = {}
+
+    pet_points, pet_result = string_match_score(report.pet_type or "dog", candidate.pet_type or "dog", 12)
+    score += pet_points
+    signals["pet_type"] = pet_result
+    if pet_points:
+        reasons.append(f"Same animal type: {report.pet_type or 'dog'}")
+
+    breed_points, breed_result = string_match_score(report.breed, candidate.breed, 14, 8)
+    score += breed_points
+    signals["breed"] = breed_result
+    if breed_points:
+        reasons.append("Breed looks similar")
+
+    color_points, color_result = string_match_score(report.color, candidate.color, 15, 9)
+    score += color_points
+    signals["color"] = color_result
+    if color_points:
+        reasons.append("Color/pattern looks similar")
+
+    size_points, size_result = string_match_score(report.size, candidate.size, 8, 4)
+    score += size_points
+    signals["size"] = size_result
+    if size_points:
+        reasons.append("Size is similar")
+
+    sex_points, sex_result = string_match_score(report.sex, candidate.sex, 6)
+    score += sex_points
+    signals["sex"] = sex_result
+    if sex_points:
+        reasons.append("Sex matches")
+
+    microchip_points, microchip_result = string_match_score(report.microchip_id, candidate.microchip_id, 35)
+    score += microchip_points
+    signals["microchip"] = microchip_result
+    if microchip_points:
+        reasons.append("Microchip/tag ID matches")
+
+    marking_ratio = text_similarity_ratio(report.unique_markings, candidate.unique_markings)
+    marking_points = min(marking_ratio * 14, 14)
+    score += marking_points
+    signals["unique_markings"] = round(marking_ratio, 2)
+    if marking_points >= 5:
+        reasons.append("Unique markings overlap")
+
+    collar_ratio = text_similarity_ratio(report.collar_description, candidate.collar_description)
+    collar_points = min(collar_ratio * 8, 8)
+    score += collar_points
+    signals["collar"] = round(collar_ratio, 2)
+    if collar_points >= 4:
+        reasons.append("Collar/tag description overlaps")
+
+    description_ratio = max(
+        text_similarity_ratio(report.description, candidate.description),
+        text_similarity_ratio(report.title, candidate.title),
+    )
+    description_points = min(description_ratio * 8, 8)
+    score += description_points
+    signals["description"] = round(description_ratio, 2)
+
+    location_points, distance_km = score_location(report, candidate)
+    score += location_points
+    signals["distance_km"] = round(distance_km, 2) if distance_km is not None else None
+    if location_points:
+        reasons.append(f"Locations are about {distance_km:.1f} km apart")
+
+    if image_evidence_count(report) and image_evidence_count(candidate):
+        score += 4
+        reasons.append("Both reports include photos")
+        signals["photo_evidence"] = True
+
+    if report.created_at and candidate.created_at:
+        days_apart = abs((report.created_at - candidate.created_at).days)
+        signals["days_apart"] = days_apart
+        if days_apart <= 30:
+            score += 5
+        elif days_apart <= 90:
+            score += 2
+
+    score = min(round(score, 1), 100.0)
+    return {
+        "confidence": score,
+        "reasons": reasons[:6],
+        "signals": signals,
+        "candidate_type": "case",
+    }
+
+def score_registered_pet_candidate(report: models.CaseReport, dog: models.Dog) -> Dict[str, Any]:
+    score = 0.0
+    reasons = []
+    signals = {}
+
+    pet_points, pet_result = string_match_score(report.pet_type or "dog", dog.pet_type or "dog", 14)
+    score += pet_points
+    signals["pet_type"] = pet_result
+    if pet_points:
+        reasons.append(f"Same animal type: {dog.pet_type or 'dog'}")
+
+    breed_points, breed_result = string_match_score(report.breed, dog.breed, 16, 9)
+    score += breed_points
+    signals["breed"] = breed_result
+    if breed_points:
+        reasons.append("Breed looks similar")
+
+    color_points, color_result = string_match_score(report.color, dog.color, 18, 10)
+    score += color_points
+    signals["color"] = color_result
+    if color_points:
+        reasons.append("Color/pattern looks similar")
+
+    size_points, size_result = string_match_score(report.size, dog.body_structure, 9, 4)
+    score += size_points
+    signals["size"] = size_result
+    if size_points:
+        reasons.append("Body size looks similar")
+
+    notes_ratio = max(
+        text_similarity_ratio(report.unique_markings, dog.bio),
+        text_similarity_ratio(report.description, dog.bio),
+    )
+    notes_points = min(notes_ratio * 10, 10)
+    score += notes_points
+    signals["profile_notes"] = round(notes_ratio, 2)
+    if notes_points >= 4:
+        reasons.append("Profile notes overlap with report details")
+
+    owner = getattr(dog, "owner", None)
+    location_points, distance_km = score_location(report, owner) if owner else (0.0, None)
+    score += location_points
+    signals["owner_distance_km"] = round(distance_km, 2) if distance_km is not None else None
+    if location_points:
+        reasons.append(f"Found near registered owner area ({distance_km:.1f} km)")
+
+    if image_evidence_count(report) and registered_pet_image_count(dog):
+        score += 5
+        reasons.append("Both records include photos")
+        signals["photo_evidence"] = True
+
+    score = min(round(score, 1), 100.0)
+    return {
+        "confidence": score,
+        "reasons": reasons[:6],
+        "signals": signals,
+        "candidate_type": "registered_pet",
+    }
+
+def get_or_create_pet_match(
+    db: Session,
+    report: models.CaseReport,
+    confidence: float,
+    score_breakdown: Dict[str, Any],
+    matched_case_report: Optional[models.CaseReport] = None,
+    matched_dog: Optional[models.Dog] = None,
+):
+    query = db.query(models.PetMatchCandidate).filter(
+        models.PetMatchCandidate.case_report_id == report.id,
+    )
+    if matched_case_report:
+        query = query.filter(models.PetMatchCandidate.matched_case_report_id == matched_case_report.id)
+    else:
+        query = query.filter(models.PetMatchCandidate.matched_case_report_id.is_(None))
+    if matched_dog:
+        query = query.filter(models.PetMatchCandidate.matched_dog_id == matched_dog.id)
+    else:
+        query = query.filter(models.PetMatchCandidate.matched_dog_id.is_(None))
+
+    existing = query.first()
+    if existing:
+        existing.confidence = confidence
+        existing.score_breakdown = score_breakdown
+        existing.updated_at = datetime.utcnow()
+        return existing
+
+    match = models.PetMatchCandidate(
+        id=str(uuid.uuid4()),
+        case_report_id=report.id,
+        matched_case_report_id=matched_case_report.id if matched_case_report else None,
+        matched_dog_id=matched_dog.id if matched_dog else None,
+        match_source="case" if matched_case_report else "registered_pet",
+        confidence=confidence,
+        score_breakdown=score_breakdown,
+        status="suggested",
+        notified_user_ids=[],
+    )
+    db.add(match)
+    return match
+
+def notify_pet_match_users(
+    db: Session,
+    match: models.PetMatchCandidate,
+    report: models.CaseReport,
+    matched_case: Optional[models.CaseReport] = None,
+    matched_dog: Optional[models.Dog] = None,
+):
+    if match.confidence < PET_MATCH_NOTIFY_THRESHOLD:
+        return
+
+    user_ids = set(match.notified_user_ids or [])
+    recipients = []
+    if report.author_id:
+        recipients.append(report.author_id)
+    if matched_case and matched_case.author_id:
+        recipients.append(matched_case.author_id)
+    if matched_dog and matched_dog.owner_id:
+        recipients.append(matched_dog.owner_id)
+
+    new_recipients = [user_id for user_id in recipients if user_id and user_id not in user_ids]
+    if not new_recipients:
+        return
+
+    for user_id in new_recipients:
+        add_notification(
+            db,
+            user_id,
+            "Possible pet match found",
+            f"We found a {match.confidence:.0f}% possible match for '{report.title}'. Please review before contacting anyone.",
+            "pet_match",
+            commit=False,
+            target_type="case",
+            target_id=report.id,
+            target_route="CaseDetail",
+        )
+        user_ids.add(user_id)
+
+    match.notified_user_ids = list(user_ids)
+    match.status = "notified"
+
+def run_pet_match_for_case(db: Session, report: models.CaseReport) -> List[models.PetMatchCandidate]:
+    if report.case_type not in LOST_FOUND_CASE_TYPES:
+        return []
+
+    matches = []
+    opposite_type = OPPOSITE_LOST_FOUND_TYPE.get(report.case_type)
+    if opposite_type:
+        candidate_cases = db.query(models.CaseReport).filter(
+            models.CaseReport.id != report.id,
+            models.CaseReport.case_type == opposite_type,
+            models.CaseReport.status != models.CaseStatus.RESOLVED.value,
+        ).order_by(models.CaseReport.created_at.desc()).limit(100).all()
+
+        for candidate in candidate_cases:
+            score = score_case_candidate(report, candidate)
+            if score["confidence"] >= PET_MATCH_STORE_THRESHOLD:
+                match = get_or_create_pet_match(
+                    db,
+                    report,
+                    score["confidence"],
+                    score,
+                    matched_case_report=candidate,
+                )
+                notify_pet_match_users(db, match, report, matched_case=candidate)
+                matches.append(match)
+
+    if report.case_type == "found_dog":
+        registered_pets = db.query(models.Dog).all()
+        for dog in registered_pets:
+            score = score_registered_pet_candidate(report, dog)
+            if score["confidence"] >= PET_MATCH_STORE_THRESHOLD:
+                match = get_or_create_pet_match(
+                    db,
+                    report,
+                    score["confidence"],
+                    score,
+                    matched_dog=dog,
+                )
+                notify_pet_match_users(db, match, report, matched_dog=dog)
+                matches.append(match)
+
+    return sorted(matches, key=lambda item: item.confidence or 0, reverse=True)
+
+def summarize_case_for_match(case: Optional[models.CaseReport]):
+    if not case:
+        return None
+    return {
+        "id": case.id,
+        "case_type": case.case_type,
+        "title": case.title,
+        "description": case.description,
+        "image_url": case.image_url,
+        "images": case.images or [],
+        "breed": case.breed,
+        "color": case.color,
+        "pet_type": case.pet_type or "dog",
+        "sex": case.sex,
+        "size": case.size,
+        "location": case.location,
+        "created_at": case.created_at,
+    }
+
+def summarize_dog_for_match(dog: Optional[models.Dog]):
+    if not dog:
+        return None
+    return {
+        "id": dog.id,
+        "name": dog.name,
+        "breed": dog.breed,
+        "color": dog.color,
+        "pet_type": dog.pet_type or "dog",
+        "size": dog.body_structure,
+        "body_image": dog.body_image,
+    }
+
+def can_view_pet_match(match: models.PetMatchCandidate, current_user: models.User):
+    if current_user.role in ADMIN_ROLE_VALUES:
+        return True
+    if match.case_report and match.case_report.author_id == current_user.id:
+        return True
+    if match.matched_case_report and match.matched_case_report.author_id == current_user.id:
+        return True
+    if match.matched_dog and match.matched_dog.owner_id == current_user.id:
+        return True
+    return False
+
+def serialize_pet_match(match: models.PetMatchCandidate):
+    return {
+        "id": match.id,
+        "case_report_id": match.case_report_id,
+        "matched_case_report_id": match.matched_case_report_id,
+        "matched_dog_id": match.matched_dog_id,
+        "match_source": match.match_source,
+        "confidence": match.confidence or 0,
+        "status": match.status,
+        "score_breakdown": match.score_breakdown or {},
+        "notified_user_ids": match.notified_user_ids or [],
+        "created_at": match.created_at,
+        "updated_at": match.updated_at,
+        "matched_case": summarize_case_for_match(match.matched_case_report),
+        "matched_dog": summarize_dog_for_match(match.matched_dog),
+    }
+
+def get_pet_match_summary(db: Session, case_id: str):
+    matches = db.query(models.PetMatchCandidate).filter(
+        (models.PetMatchCandidate.case_report_id == case_id) |
+        (models.PetMatchCandidate.matched_case_report_id == case_id)
+    ).all()
+    if not matches:
+        return 0, None
+    top_confidence = max((match.confidence or 0) for match in matches)
+    return len(matches), round(top_confidence, 1)
 PIN_ROUTE_BY_TARGET = {
     "event": "EventDetail",
     "service": "Marketplace",
@@ -831,13 +1234,26 @@ def calculate_karma_redemption(user: models.User, order_total: float, requested_
     discount_amount = round(points_to_redeem * KARMA_POINT_VALUE, 2)
     return points_to_redeem, discount_amount
 
-def add_notification(db: Session, user_id: str, title: str, message: str, type: str = "info", commit: bool = True):
+def add_notification(
+    db: Session,
+    user_id: str,
+    title: str,
+    message: str,
+    type: str = "info",
+    commit: bool = True,
+    target_type: Optional[str] = None,
+    target_id: Optional[str] = None,
+    target_route: Optional[str] = None,
+):
     new_notif = models.Notification(
         id=str(uuid.uuid4()),
         user_id=user_id,
         title=title,
         message=message,
-        type=type
+        type=type,
+        target_type=target_type,
+        target_id=target_id,
+        target_route=target_route,
     )
     db.add(new_notif)
     if commit:
@@ -986,6 +1402,38 @@ try:
                ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP;""",
             """ALTER TABLE case_reports
                ADD COLUMN IF NOT EXISTS location_accuracy_meters DOUBLE PRECISION;""",
+            """ALTER TABLE case_reports
+               ADD COLUMN IF NOT EXISTS pet_type VARCHAR DEFAULT 'dog';""",
+            """ALTER TABLE case_reports
+               ADD COLUMN IF NOT EXISTS sex VARCHAR;""",
+            """ALTER TABLE case_reports
+               ADD COLUMN IF NOT EXISTS size VARCHAR;""",
+            """ALTER TABLE case_reports
+               ADD COLUMN IF NOT EXISTS microchip_id VARCHAR;""",
+            """ALTER TABLE case_reports
+               ADD COLUMN IF NOT EXISTS collar_description VARCHAR;""",
+            """ALTER TABLE case_reports
+               ADD COLUMN IF NOT EXISTS unique_markings VARCHAR;""",
+            """ALTER TABLE notifications
+               ADD COLUMN IF NOT EXISTS target_type VARCHAR;""",
+            """ALTER TABLE notifications
+               ADD COLUMN IF NOT EXISTS target_id VARCHAR;""",
+            """ALTER TABLE notifications
+               ADD COLUMN IF NOT EXISTS target_route VARCHAR;""",
+            """CREATE TABLE IF NOT EXISTS pet_match_candidates (
+                id VARCHAR PRIMARY KEY,
+                case_report_id VARCHAR NOT NULL REFERENCES case_reports(id),
+                matched_case_report_id VARCHAR REFERENCES case_reports(id),
+                matched_dog_id VARCHAR REFERENCES dogs(id),
+                match_source VARCHAR NOT NULL DEFAULT 'case',
+                confidence DOUBLE PRECISION DEFAULT 0,
+                status VARCHAR DEFAULT 'suggested',
+                score_breakdown JSON,
+                notified_user_ids JSON,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                reviewed_at TIMESTAMP
+            );""",
             """CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);""",
             """CREATE INDEX IF NOT EXISTS idx_users_auth_provider ON users(auth_provider);""",
             """CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);""",
@@ -996,6 +1444,9 @@ try:
             """CREATE INDEX IF NOT EXISTS idx_scorecard_surveys_event_type ON scorecard_surveys(event_id, survey_type);""",
             """CREATE INDEX IF NOT EXISTS idx_registrations_payment ON registrations(payment_status, pesapal_tracking_id);""",
             """CREATE INDEX IF NOT EXISTS idx_orders_payment ON orders(status, pesapal_tracking_id);""",
+            """CREATE INDEX IF NOT EXISTS idx_pet_match_case ON pet_match_candidates(case_report_id);""",
+            """CREATE INDEX IF NOT EXISTS idx_pet_match_candidate_case ON pet_match_candidates(matched_case_report_id);""",
+            """CREATE INDEX IF NOT EXISTS idx_pet_match_dog ON pet_match_candidates(matched_dog_id);""",
         ]
         
         for i, stmt in enumerate(migration_statements, 1):
@@ -4727,6 +5178,12 @@ def create_case_report(
         image_url=report.image_url,
         breed=report.breed,
         color=report.color,
+        pet_type=(report.pet_type or "dog").lower(),
+        sex=report.sex,
+        size=report.size,
+        microchip_id=report.microchip_id,
+        collar_description=report.collar_description,
+        unique_markings=report.unique_markings,
         location=report.location,
         latitude=latitude,
         longitude=longitude,
@@ -4755,12 +5212,31 @@ def create_case_report(
         commit=True,
     )
 
+    match_count = 0
+    top_match_confidence = None
+    try:
+        matches = run_pet_match_for_case(db, new_report)
+        if matches:
+            match_count = len(matches)
+            top_match_confidence = max((match.confidence or 0) for match in matches)
+            db.commit()
+            db.refresh(new_report)
+    except Exception as exc:
+        db.rollback()
+        logger.warning("Pet matching failed for case %s: %s", new_report.id, exc)
+        try:
+            db.refresh(new_report)
+        except Exception:
+            pass
+
     return {
         **{c.name: getattr(new_report, c.name) for c in new_report.__table__.columns},
         "author": {"id": current_user.id, "full_name": current_user.full_name, "profile_image": current_user.profile_image},
         "like_count": 0,
         "comment_count": 0,
         "is_liked": False,
+        "match_count": match_count,
+        "top_match_confidence": top_match_confidence,
     }
 
 
@@ -4803,6 +5279,7 @@ def list_case_reports(
         ).first() is not None
 
         author = db.query(models.User).filter(models.User.id == r.author_id).first()
+        match_count, top_match_confidence = get_pet_match_summary(db, r.id)
 
         results.append({
             **{c.name: getattr(r, c.name) for c in r.__table__.columns},
@@ -4812,6 +5289,8 @@ def list_case_reports(
             "is_liked": is_liked,
             "is_pinned": getattr(r, "is_pinned", False),
             "pin_priority": getattr(r, "pin_priority", None),
+            "match_count": match_count,
+            "top_match_confidence": top_match_confidence,
         })
 
     return results
@@ -4839,6 +5318,7 @@ def get_case_report(
     ).first() is not None
     author = db.query(models.User).filter(models.User.id == r.author_id).first()
     pin = get_active_pin_map(db, "case").get(r.id)
+    match_count, top_match_confidence = get_pet_match_summary(db, r.id)
 
     return {
         **{c.name: getattr(r, c.name) for c in r.__table__.columns},
@@ -4848,7 +5328,78 @@ def get_case_report(
         "is_liked": is_liked,
         "is_pinned": pin is not None,
         "pin_priority": pin.priority if pin else None,
+        "match_count": match_count,
+        "top_match_confidence": top_match_confidence,
     }
+
+
+@app.get("/cases/{report_id}/matches", response_model=List[schemas.PetMatchCandidateResponse])
+def list_case_matches(
+    report_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    report = db.query(models.CaseReport).filter(models.CaseReport.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Case report not found")
+
+    matches = db.query(models.PetMatchCandidate).filter(
+        (models.PetMatchCandidate.case_report_id == report_id) |
+        (models.PetMatchCandidate.matched_case_report_id == report_id)
+    ).order_by(models.PetMatchCandidate.confidence.desc()).all()
+
+    visible = [match for match in matches if can_view_pet_match(match, current_user)]
+    return [serialize_pet_match(match) for match in visible]
+
+
+@app.post("/cases/{report_id}/matches/refresh", response_model=List[schemas.PetMatchCandidateResponse])
+def refresh_case_matches(
+    report_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    report = db.query(models.CaseReport).filter(models.CaseReport.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Case report not found")
+    if report.author_id != current_user.id and current_user.role not in ADMIN_ROLE_VALUES:
+        raise HTTPException(status_code=403, detail="Only the reporter or admin can refresh matches")
+
+    matches = run_pet_match_for_case(db, report)
+    db.commit()
+    refreshed_matches = db.query(models.PetMatchCandidate).filter(
+        (models.PetMatchCandidate.case_report_id == report_id) |
+        (models.PetMatchCandidate.matched_case_report_id == report_id)
+    ).order_by(models.PetMatchCandidate.confidence.desc()).all()
+    return [serialize_pet_match(match) for match in refreshed_matches if can_view_pet_match(match, current_user)]
+
+
+@app.post("/cases/{report_id}/matches/{match_id}", response_model=schemas.PetMatchCandidateResponse)
+def update_case_match_status(
+    report_id: str,
+    match_id: str,
+    payload: schemas.CaseMatchStatusUpdate,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    allowed_statuses = {"suggested", "notified", "confirmed", "rejected"}
+    if payload.status not in allowed_statuses:
+        raise HTTPException(status_code=400, detail="Invalid match status")
+
+    match = db.query(models.PetMatchCandidate).filter(
+        models.PetMatchCandidate.id == match_id,
+        (models.PetMatchCandidate.case_report_id == report_id) |
+        (models.PetMatchCandidate.matched_case_report_id == report_id)
+    ).first()
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+    if not can_view_pet_match(match, current_user):
+        raise HTTPException(status_code=403, detail="You cannot update this match")
+
+    match.status = payload.status
+    match.reviewed_at = datetime.utcnow()
+    db.commit()
+    db.refresh(match)
+    return serialize_pet_match(match)
 
 
 @app.post("/cases/{report_id}/comments", response_model=schemas.CaseCommentResponse)

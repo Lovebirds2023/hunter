@@ -8,6 +8,7 @@ import { COLORS, SPACING } from '../constants/theme';
 import { Button } from '../components/Button';
 import client from '../api/client';
 import { BREEDS, COLORS_DESC } from '../constants/data';
+import { uploadImagesToSupabase } from '../utils/uploadImages';
 
 // Only import CameraView for native platforms
 let CameraView: any = null;
@@ -125,6 +126,7 @@ export const DogIdentityScreen = ({ navigation }: any) => {
     const finishIdentity = async (images: string[]) => {
         setIsSubmitting(true);
         try {
+            const uploadedImages = await uploadImagesToSupabase(images, 'pet-identity');
             const payload = {
                 name: dogName,
                 breed: breed === 'Other' ? customBreed : breed,
@@ -135,9 +137,9 @@ export const DogIdentityScreen = ({ navigation }: any) => {
                 pet_type: petType,
                 body_structure: "Normal",
                 bio: description,
-                nose_print_image: images[0],
-                body_image: images[1],
-                birthmark_image: images[2]
+                nose_print_image: uploadedImages[0],
+                body_image: uploadedImages[1],
+                birthmark_image: uploadedImages[2]
             };
 
             await client.post('/dogs', payload);

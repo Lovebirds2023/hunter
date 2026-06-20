@@ -390,6 +390,9 @@ class NotificationResponse(BaseModel):
     title: str
     message: str
     type: str
+    target_type: Optional[str] = None
+    target_id: Optional[str] = None
+    target_route: Optional[str] = None
     is_read: bool
     created_at: datetime.datetime
     class Config:
@@ -446,6 +449,12 @@ class CaseReportCreate(BaseModel):
     image_url: Optional[str] = None
     breed: Optional[str] = None
     color: Optional[str] = None
+    pet_type: Optional[str] = "dog"
+    sex: Optional[str] = None
+    size: Optional[str] = None
+    microchip_id: Optional[str] = None
+    collar_description: Optional[str] = None
+    unique_markings: Optional[str] = None
     location: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
@@ -479,6 +488,12 @@ class CaseReportResponse(BaseModel):
     image_url: Optional[str] = None
     breed: Optional[str] = None
     color: Optional[str] = None
+    pet_type: Optional[str] = "dog"
+    sex: Optional[str] = None
+    size: Optional[str] = None
+    microchip_id: Optional[str] = None
+    collar_description: Optional[str] = None
+    unique_markings: Optional[str] = None
     location: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
@@ -495,6 +510,29 @@ class CaseReportResponse(BaseModel):
     is_liked: Optional[bool] = False
     is_pinned: Optional[bool] = False
     pin_priority: Optional[int] = None
+    match_count: Optional[int] = 0
+    top_match_confidence: Optional[float] = None
+    class Config:
+        from_attributes = True
+
+class CaseMatchStatusUpdate(BaseModel):
+    status: str
+
+class PetMatchCandidateResponse(BaseModel):
+    id: str
+    case_report_id: str
+    matched_case_report_id: Optional[str] = None
+    matched_dog_id: Optional[str] = None
+    match_source: str
+    confidence: float
+    status: str
+    score_breakdown: Optional[Dict[str, Any]] = None
+    notified_user_ids: Optional[List[str]] = None
+    created_at: datetime.datetime
+    updated_at: Optional[datetime.datetime] = None
+    matched_case: Optional[Dict[str, Any]] = None
+    matched_dog: Optional[Dict[str, Any]] = None
+
     class Config:
         from_attributes = True
 

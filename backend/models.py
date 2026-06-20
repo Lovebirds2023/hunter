@@ -379,6 +379,9 @@ class Notification(Base):
     title = Column(String, nullable=False)
     message = Column(String, nullable=False)
     type = Column(String, default="info") # info, approval, rejection, feedback
+    target_type = Column(String, nullable=True)
+    target_id = Column(String, nullable=True)
+    target_route = Column(String, nullable=True)
     is_read = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
@@ -475,6 +478,12 @@ class CaseReport(Base):
     image_url = Column(String, nullable=True)
     breed = Column(String, nullable=True)
     color = Column(String, nullable=True)
+    pet_type = Column(String, default="dog")
+    sex = Column(String, nullable=True)
+    size = Column(String, nullable=True)
+    microchip_id = Column(String, nullable=True)
+    collar_description = Column(String, nullable=True)
+    unique_markings = Column(String, nullable=True)
     location = Column(String, nullable=True)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
@@ -489,6 +498,28 @@ class CaseReport(Base):
     author = relationship("User", back_populates="case_reports")
     comments = relationship("CaseComment", back_populates="report", order_by="CaseComment.created_at")
     likes = relationship("CaseLike", back_populates="report")
+    matches_as_report = relationship("PetMatchCandidate", foreign_keys="PetMatchCandidate.case_report_id", back_populates="case_report")
+    matches_as_candidate = relationship("PetMatchCandidate", foreign_keys="PetMatchCandidate.matched_case_report_id", back_populates="matched_case_report")
+
+class PetMatchCandidate(Base):
+    __tablename__ = "pet_match_candidates"
+
+    id = Column(String, primary_key=True, index=True)
+    case_report_id = Column(String, ForeignKey("case_reports.id"), nullable=False, index=True)
+    matched_case_report_id = Column(String, ForeignKey("case_reports.id"), nullable=True, index=True)
+    matched_dog_id = Column(String, ForeignKey("dogs.id"), nullable=True, index=True)
+    match_source = Column(String, nullable=False, default="case")  # case, registered_pet
+    confidence = Column(Float, default=0.0)
+    status = Column(String, default="suggested")  # suggested, notified, confirmed, rejected
+    score_breakdown = Column(JSON, nullable=True)
+    notified_user_ids = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    reviewed_at = Column(DateTime, nullable=True)
+
+    case_report = relationship("CaseReport", foreign_keys=[case_report_id], back_populates="matches_as_report")
+    matched_case_report = relationship("CaseReport", foreign_keys=[matched_case_report_id], back_populates="matches_as_candidate")
+    matched_dog = relationship("Dog")
 
 class CaseComment(Base):
     __tablename__ = "case_comments"

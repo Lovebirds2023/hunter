@@ -13,6 +13,7 @@ import { Button } from '../components/Button';
 import client from '../api/client';
 import { AuthContext } from '../context/AuthContext';
 import { BREEDS, COLORS_DESC } from '../constants/data';
+import { uploadImagesToSupabase } from '../utils/uploadImages';
 import {
     formatCoordinatePair,
     formatLocationAccuracy,
@@ -32,6 +33,12 @@ const CASE_TYPES = [
 ];
 
 const MAX_IMAGES = 5;
+const PET_TYPES = [
+    { value: 'dog', label: 'Dog', icon: 'paw' },
+    { value: 'cat', label: 'Cat', icon: 'sparkles' },
+];
+const PET_SIZES = ['Small', 'Medium', 'Large', 'Giant'];
+const SEX_OPTIONS = ['Unknown', 'Male', 'Female'];
 
 const ReportCaseScreen = ({ navigation, route }) => {
     const { t } = useTranslation();
@@ -47,9 +54,16 @@ const ReportCaseScreen = ({ navigation, route }) => {
     const [customBreed, setCustomBreed] = useState('');
     const [color, setColor] = useState('');
     const [customColor, setCustomColor] = useState('');
+    const [petType, setPetType] = useState('dog');
+    const [sex, setSex] = useState('Unknown');
+    const [petSize, setPetSize] = useState('');
+    const [microchipId, setMicrochipId] = useState('');
+    const [collarDescription, setCollarDescription] = useState('');
+    const [uniqueMarkings, setUniqueMarkings] = useState('');
     const [images, setImages] = useState([]);
     const [submitting, setSubmitting] = useState(false);
     const [fetchingLocation, setFetchingLocation] = useState(false);
+    const isLostFoundCase = caseType === 'lost_dog' || caseType === 'found_dog';
 
     const getCurrentLocation = async () => {
         setFetchingLocation(true);
@@ -147,20 +161,36 @@ const ReportCaseScreen = ({ navigation, route }) => {
 
         setSubmitting(true);
         try {
-            await client.post('/cases', {
+            const uploadedImages = images.length > 0
+                ? await uploadImagesToSupabase(images, 'cases')
+                : [];
+
+            const res = await client.post('/cases', {
                 case_type: caseType,
                 title: title.trim(),
                 description: description.trim(),
-                image_url: images.length > 0 ? images[0] : null,
-                images: images,
+                image_url: uploadedImages.length > 0 ? uploadedImages[0] : null,
+                images: uploadedImages,
                 breed: breed === 'Other' ? customBreed : breed,
                 color: color === 'Other' ? customColor : color,
+                pet_type: isLostFoundCase ? petType : null,
+                sex: isLostFoundCase && sex !== 'Unknown' ? sex : null,
+                size: isLostFoundCase ? petSize : null,
+                microchip_id: isLostFoundCase ? microchipId.trim() : null,
+                collar_description: isLostFoundCase ? collarDescription.trim() : null,
+                unique_markings: isLostFoundCase ? uniqueMarkings.trim() : null,
                 location: location.trim(),
                 latitude: latitude,
                 longitude: longitude,
                 location_accuracy_meters: locationAccuracy,
             });
-            Alert.alert(t('report.form.title'), t('report.form.alerts.success'), [
+            const matchCount = res.data?.match_count || 0;
+            const topConfidence = res.data?.top_match_confidence;
+            const successMessage = matchCount > 0
+                ? `${t('report.form.alerts.success')} We found ${matchCount} possible match${matchCount === 1 ? '' : 'es'}${topConfidence ? `, up to ${Math.round(topConfidence)}% confidence` : ''}.`
+                : t('report.form.alerts.success');
+
+            Alert.alert(t('report.form.title'), successMessage, [
                 { text: 'OK', onPress: () => navigation.goBack() }
             ]);
         } catch (e) {
@@ -217,8 +247,26 @@ const ReportCaseScreen = ({ navigation, route }) => {
                             ))}
                         </View>
 
-                        {(caseType === 'lost_dog' || caseType === 'found_dog') && (
+                        {isLostFoundCase && (
                             <View style={styles.lostFoundFields}>
+                                <Text style={styles.matchHint}>
+                                    Add clear details and photos. Lovedogs 360 will compare this report with opposite lost/found reports and registered pet profiles.
+                                </Text>
+
+                                <Text style={styles.fieldSectionTitle}>Animal type</Text>
+                                <View style={styles.segmentRow}>
+                                    {PET_TYPES.map(item => (
+                                        <TouchableOpacity
+                                            key={item.value}
+                                            style={[styles.segmentBtn, petType === item.value && styles.segmentBtnActive]}
+                                            onPress={() => setPetType(item.value)}
+                                        >
+                                            <Ionicons name={item.icon} size={16} color={petType === item.value ? COLORS.primary : COLORS.accent} />
+                                            <Text style={[styles.segmentText, petType === item.value && styles.segmentTextActive]}>{item.label}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+
                                 <Text style={styles.label}>{t('report.labels.breed')}</Text>
                                 <View style={styles.pickerWrapper}>
                                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -268,6 +316,62 @@ const ReportCaseScreen = ({ navigation, route }) => {
                                         onChangeText={setCustomColor}
                                     />
                                 )}
+
+                                <Text style={styles.label}>Size</Text>
+                                <View style={styles.colorGrid}>
+                                    {PET_SIZES.map(size => (
+                                        <TouchableOpacity
+                                            key={size}
+                                            style={[styles.colorChip, petSize === size && styles.colorChipActive]}
+                                            onPress={() => setPetSize(size)}
+                                        >
+                                            <Text style={[styles.colorChipText, petSize === size && styles.colorChipTextActive]}>{size}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+
+                                <Text style={styles.label}>Sex</Text>
+                                <View style={styles.colorGrid}>
+                                    {SEX_OPTIONS.map(option => (
+                                        <TouchableOpacity
+                                            key={option}
+                                            style={[styles.colorChip, sex === option && styles.colorChipActive]}
+                                            onPress={() => setSex(option)}
+                                        >
+                                            <Text style={[styles.colorChipText, sex === option && styles.colorChipTextActive]}>{option}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+
+                                <Text style={styles.label}>Microchip or tag number, if visible</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Optional ID, tag, or microchip number"
+                                    placeholderTextColor="rgba(255,255,255,0.4)"
+                                    value={microchipId}
+                                    onChangeText={setMicrochipId}
+                                    autoCapitalize="characters"
+                                />
+
+                                <Text style={styles.label}>Collar or tag description</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Example: red collar, blue tag, bell"
+                                    placeholderTextColor="rgba(255,255,255,0.4)"
+                                    value={collarDescription}
+                                    onChangeText={setCollarDescription}
+                                />
+
+                                <Text style={styles.label}>Unique markings</Text>
+                                <TextInput
+                                    style={[styles.input, styles.smallTextArea]}
+                                    placeholder="Example: white left paw, scar near ear, black tail tip"
+                                    placeholderTextColor="rgba(255,255,255,0.4)"
+                                    value={uniqueMarkings}
+                                    onChangeText={setUniqueMarkings}
+                                    multiline
+                                    numberOfLines={3}
+                                />
                             </View>
                         )}
 
@@ -319,6 +423,11 @@ const ReportCaseScreen = ({ navigation, route }) => {
                             <Text style={[styles.label, { marginTop: SPACING.md }]}>{t('report.form.labels.photo')}</Text>
                             <Text style={styles.photoCountText}>({images.length}/{MAX_IMAGES})</Text>
                         </View>
+                        {isLostFoundCase && (
+                            <Text style={styles.photoGuidance}>
+                                Best for matching: face, full body side, unique markings, collar/tag, and nose close-up for dogs.
+                            </Text>
+                        )}
 
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScroll}>
                             <TouchableOpacity 
@@ -350,9 +459,10 @@ const ReportCaseScreen = ({ navigation, route }) => {
                         </ScrollView>
 
                         <Button
-                            title={t('report.form.buttons.submit')}
+                            title={submitting ? 'Saving report...' : t('report.form.buttons.submit')}
                             onPress={handleSubmit}
                             loading={submitting}
+                            disabled={submitting}
                             variant="gold"
                             style={{ marginTop: SPACING.lg }}
                         />
@@ -425,6 +535,7 @@ const styles = StyleSheet.create({
         fontSize: 15,
     },
     textArea: { height: 100, textAlignVertical: 'top' },
+    smallTextArea: { minHeight: 76, textAlignVertical: 'top' },
     locationInputRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -489,6 +600,48 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: 'rgba(255,215,0,0.1)',
     },
+    matchHint: {
+        color: 'rgba(255,255,255,0.72)',
+        fontSize: 12,
+        lineHeight: 18,
+        marginBottom: SPACING.sm,
+    },
+    fieldSectionTitle: {
+        color: COLORS.accent,
+        fontSize: 13,
+        fontWeight: '800',
+        marginBottom: 8,
+        marginTop: 4,
+    },
+    segmentRow: {
+        flexDirection: 'row',
+        gap: 10,
+        marginBottom: SPACING.sm,
+    },
+    segmentBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 10,
+        borderRadius: 12,
+        backgroundColor: 'rgba(255,255,255,0.07)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,215,0,0.18)',
+    },
+    segmentBtnActive: {
+        backgroundColor: COLORS.accent,
+        borderColor: COLORS.accent,
+    },
+    segmentText: {
+        color: COLORS.accent,
+        fontWeight: '800',
+        marginLeft: 6,
+        fontSize: 13,
+    },
+    segmentTextActive: {
+        color: COLORS.primary,
+    },
     pickerWrapper: {
         marginBottom: 12,
     },
@@ -548,6 +701,12 @@ const styles = StyleSheet.create({
         color: COLORS.accent,
         fontWeight: 'bold',
         marginTop: SPACING.md
+    },
+    photoGuidance: {
+        color: 'rgba(255,255,255,0.55)',
+        fontSize: 12,
+        lineHeight: 17,
+        marginBottom: 4,
     }
 });
 

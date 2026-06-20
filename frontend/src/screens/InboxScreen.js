@@ -92,6 +92,7 @@ export const InboxScreen = ({ navigation }) => {
             case 'rejection': return "close-circle";
             case 'approval': return "checkmark-circle";
             case 'feedback': return "chatbubble-ellipses";
+            case 'pet_match': return "git-compare";
             case 'purchase': return "bag-check";
             case 'sale': return "cash";
             case 'delivery': return "checkmark-done";
@@ -106,6 +107,7 @@ export const InboxScreen = ({ navigation }) => {
             case 'rejection': return "#ff4d4d";
             case 'approval': return "#2ecc71";
             case 'feedback': return "#3498db";
+            case 'pet_match': return COLORS.accent;
             case 'purchase': return "#2E7D32";
             case 'sale': return COLORS.accent;
             case 'delivery': return "#1565C0";
@@ -129,13 +131,23 @@ export const InboxScreen = ({ navigation }) => {
             if (item.itemType === 'notification' && !item.is_read) {
                 markAsRead(item.id);
             }
+
+            if (item.itemType === 'notification' && item.target_route === 'CaseDetail' && item.target_id) {
+                navigation.navigate('Main', {
+                    screen: 'Report',
+                    params: {
+                        screen: 'CaseDetail',
+                        params: { reportId: item.target_id },
+                    },
+                });
+            }
         };
 
         return (
             <TouchableOpacity 
                 style={[styles.card, isUnread && styles.unreadCard]}
                 onPress={handlePress}
-                disabled={item.itemType === 'announcement' || (item.itemType === 'notification' && item.is_read)}
+                disabled={item.itemType === 'announcement' || (item.itemType === 'notification' && item.is_read && !item.target_id)}
             >
                 <View style={styles.cardHeader}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>

@@ -35,11 +35,15 @@ const CaseDetailScreen = ({ route, navigation }) => {
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
     const [tagSuggestions, setTagSuggestions] = useState([]);
+    const [matches, setMatches] = useState([]);
+    const [matchesLoading, setMatchesLoading] = useState(false);
+    const [refreshingMatches, setRefreshingMatches] = useState(false);
     const scrollRef = useRef(null);
 
     useEffect(() => {
         fetchReport();
         fetchComments();
+        fetchMatches();
     }, [reportId]);
 
     const fetchReport = async () => {
@@ -59,6 +63,45 @@ const CaseDetailScreen = ({ route, navigation }) => {
             setComments(res.data);
         } catch (e) {
             if (__DEV__) console.log('Failed to fetch comments', e);
+        }
+    };
+
+    const fetchMatches = async () => {
+        setMatchesLoading(true);
+        try {
+            const res = await client.get(`/cases/${reportId}/matches`);
+            setMatches(res.data || []);
+        } catch (e) {
+            if (__DEV__) console.log('Failed to fetch case matches', e);
+        } finally {
+            setMatchesLoading(false);
+        }
+    };
+
+    const refreshMatches = async () => {
+        setRefreshingMatches(true);
+        try {
+            const res = await client.post(`/cases/${reportId}/matches/refresh`);
+            const nextMatches = res.data || [];
+            setMatches(nextMatches);
+            setReport(prev => prev ? ({
+                ...prev,
+                match_count: nextMatches.length,
+                top_match_confidence: nextMatches.length ? Math.max(...nextMatches.map(item => item.confidence || 0)) : null,
+            }) : prev);
+        } catch (e) {
+            if (__DEV__) console.log('Failed to refresh case matches', e);
+        } finally {
+            setRefreshingMatches(false);
+        }
+    };
+
+    const updateMatchStatus = async (matchId, status) => {
+        try {
+            const res = await client.post(`/cases/${reportId}/matches/${matchId}`, { status });
+            setMatches(prev => prev.map(item => item.id === matchId ? res.data : item));
+        } catch (e) {
+            if (__DEV__) console.log('Failed to update match status', e);
         }
     };
 
@@ -171,6 +214,91 @@ const CaseDetailScreen = ({ route, navigation }) => {
         );
     };
 
+    const openMatchedCase = (matchedCaseId) => {
+        if (!matchedCaseId || matchedCaseId === reportId) return;
+        if (navigation.push) {
+            navigation.push('CaseDetail', { reportId: matchedCaseId });
+        } else {
+            navigation.navigate('CaseDetail', { reportId: matchedCaseId });
+        }
+    };
+
+    const renderMatchCard = (match) => {
+        const matchedCase = match.matched_case;
+        const matchedDog = match.matched_dog;
+        const candidate = matchedCase || matchedDog || {};
+        const reasons = match.score_breakdown?.reasons || [];
+        const imageUrl = candidate.image_url || candidate.body_image || candidate.images?.[0];
+        const confidence = Math.round(match.confidence || 0);
+        const candidateTitle = matchedCase
+            ? candidate.title
+            : candidate.name || 'Registered pet profile';
+        const candidateMeta = matchedCase
+            ? t(`report.types.${candidate.case_type}`, { defaultValue: candidate.case_type || 'Case report' })
+            : `${candidate.pet_type || 'pet'} profile`;
+
+        return (
+            <View key={match.id} style={styles.matchCard}>
+                <View style={styles.matchCardHeader}>
+                    <View style={[styles.matchScore, confidence >= 75 && styles.matchScoreStrong]}>
+                        <Text style={[styles.matchScoreText, confidence >= 75 && styles.matchScoreTextStrong]}>{confidence}%</Text>
+                    </View>
+                    <View style={styles.matchTitleCol}>
+                        <Text style={styles.matchTitle} numberOfLines={1}>{candidateTitle}</Text>
+                        <Text style={styles.matchMeta} numberOfLines={1}>{candidateMeta}</Text>
+                    </View>
+                    <Text style={[styles.matchStatus, match.status === 'confirmed' && styles.matchStatusConfirmed]}>
+                        {match.status}
+                    </Text>
+                </View>
+
+                <View style={styles.matchBody}>
+                    {imageUrl ? (
+                        <Image source={{ uri: imageUrl }} style={styles.matchImage} />
+                    ) : (
+                        <View style={styles.matchImagePlaceholder}>
+                            <Ionicons name="paw-outline" size={22} color={COLORS.accent} />
+                        </View>
+                    )}
+                    <View style={styles.matchEvidence}>
+                        {(candidate.breed || candidate.color || candidate.location) && (
+                            <Text style={styles.matchCandidateDetails} numberOfLines={2}>
+                                {[candidate.breed, candidate.color, candidate.location].filter(Boolean).join(' | ')}
+                            </Text>
+                        )}
+                        {reasons.length > 0 ? (
+                            reasons.slice(0, 3).map(reason => (
+                                <View key={reason} style={styles.reasonRow}>
+                                    <Ionicons name="checkmark-circle" size={13} color={COLORS.accent} />
+                                    <Text style={styles.reasonText}>{reason}</Text>
+                                </View>
+                            ))
+                        ) : (
+                            <Text style={styles.reasonText}>Matched from available profile, location, and photo evidence.</Text>
+                        )}
+                    </View>
+                </View>
+
+                <View style={styles.matchActions}>
+                    {matchedCase?.id && matchedCase.id !== reportId && (
+                        <TouchableOpacity style={styles.matchActionBtn} onPress={() => openMatchedCase(matchedCase.id)}>
+                            <Ionicons name="open-outline" size={14} color={COLORS.accent} />
+                            <Text style={styles.matchActionText}>Open case</Text>
+                        </TouchableOpacity>
+                    )}
+                    <TouchableOpacity style={styles.matchActionBtn} onPress={() => updateMatchStatus(match.id, 'confirmed')}>
+                        <Ionicons name="checkmark" size={14} color={COLORS.accent} />
+                        <Text style={styles.matchActionText}>Confirm</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.matchActionBtn} onPress={() => updateMatchStatus(match.id, 'rejected')}>
+                        <Ionicons name="close" size={14} color="#FF8888" />
+                        <Text style={[styles.matchActionText, { color: '#FFBBBB' }]}>Not a match</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        );
+    };
+
     if (loading) {
         return (
             <ThemeBackground>
@@ -232,8 +360,17 @@ const CaseDetailScreen = ({ route, navigation }) => {
                                 ) : null}
 
                                 {/* Metadata Grid */}
-                                {(report.breed || report.color) && (
+                                {(report.breed || report.color || report.pet_type || report.sex || report.size || report.collar_description || report.unique_markings || report.microchip_id) && (
                                     <View style={styles.detailsGrid}>
+                                        {report.pet_type && (
+                                            <View style={styles.detailItem}>
+                                                <Ionicons name="paw" size={16} color={COLORS.accent} />
+                                                <View style={styles.detailTextCol}>
+                                                    <Text style={styles.detailLabel}>Animal</Text>
+                                                    <Text style={styles.detailValue}>{report.pet_type}</Text>
+                                                </View>
+                                            </View>
+                                        )}
                                         {report.breed && (
                                             <View style={styles.detailItem}>
                                                 <Ionicons name="paw-outline" size={16} color={COLORS.accent} />
@@ -249,6 +386,51 @@ const CaseDetailScreen = ({ route, navigation }) => {
                                                 <View style={styles.detailTextCol}>
                                                     <Text style={styles.detailLabel}>{t('report.labels.color')}</Text>
                                                     <Text style={styles.detailValue}>{report.color}</Text>
+                                                </View>
+                                            </View>
+                                        )}
+                                        {report.size && (
+                                            <View style={styles.detailItem}>
+                                                <Ionicons name="resize-outline" size={16} color={COLORS.accent} />
+                                                <View style={styles.detailTextCol}>
+                                                    <Text style={styles.detailLabel}>Size</Text>
+                                                    <Text style={styles.detailValue}>{report.size}</Text>
+                                                </View>
+                                            </View>
+                                        )}
+                                        {report.sex && (
+                                            <View style={styles.detailItem}>
+                                                <Ionicons name="male-female-outline" size={16} color={COLORS.accent} />
+                                                <View style={styles.detailTextCol}>
+                                                    <Text style={styles.detailLabel}>Sex</Text>
+                                                    <Text style={styles.detailValue}>{report.sex}</Text>
+                                                </View>
+                                            </View>
+                                        )}
+                                        {report.microchip_id && (
+                                            <View style={styles.detailItem}>
+                                                <Ionicons name="pricetag-outline" size={16} color={COLORS.accent} />
+                                                <View style={styles.detailTextCol}>
+                                                    <Text style={styles.detailLabel}>ID or tag</Text>
+                                                    <Text style={styles.detailValue}>{report.microchip_id}</Text>
+                                                </View>
+                                            </View>
+                                        )}
+                                        {report.collar_description && (
+                                            <View style={styles.detailItem}>
+                                                <Ionicons name="ellipse-outline" size={16} color={COLORS.accent} />
+                                                <View style={styles.detailTextCol}>
+                                                    <Text style={styles.detailLabel}>Collar/tag</Text>
+                                                    <Text style={styles.detailValue}>{report.collar_description}</Text>
+                                                </View>
+                                            </View>
+                                        )}
+                                        {report.unique_markings && (
+                                            <View style={styles.detailItem}>
+                                                <Ionicons name="finger-print-outline" size={16} color={COLORS.accent} />
+                                                <View style={styles.detailTextCol}>
+                                                    <Text style={styles.detailLabel}>Unique markings</Text>
+                                                    <Text style={styles.detailValue}>{report.unique_markings}</Text>
                                                 </View>
                                             </View>
                                         )}
@@ -349,6 +531,43 @@ const CaseDetailScreen = ({ route, navigation }) => {
                                         <Text style={styles.actionCount}>{t('case_detail.comments_count', { count: comments.length })}</Text>
                                     </View>
                                 </View>
+
+                                {(report.case_type === 'lost_dog' || report.case_type === 'found_dog') && (
+                                    <View style={styles.matchesSection}>
+                                        <View style={styles.matchesHeader}>
+                                            <View>
+                                                <Text style={styles.matchesTitle}>Possible Matches</Text>
+                                                <Text style={styles.matchesSubtitle}>
+                                                    Trait, location, timing, and photo evidence. Please confirm manually.
+                                                </Text>
+                                            </View>
+                                            <TouchableOpacity
+                                                style={[styles.refreshMatchBtn, refreshingMatches && { opacity: 0.6 }]}
+                                                onPress={refreshMatches}
+                                                disabled={refreshingMatches}
+                                            >
+                                                {refreshingMatches ? (
+                                                    <ActivityIndicator size="small" color={COLORS.primary} />
+                                                ) : (
+                                                    <Ionicons name="refresh" size={16} color={COLORS.primary} />
+                                                )}
+                                            </TouchableOpacity>
+                                        </View>
+
+                                        {matchesLoading ? (
+                                            <ActivityIndicator color={COLORS.accent} style={{ marginVertical: SPACING.md }} />
+                                        ) : matches.length > 0 ? (
+                                            matches.map(renderMatchCard)
+                                        ) : (
+                                            <View style={styles.noMatchesBox}>
+                                                <Ionicons name="search-outline" size={20} color={COLORS.accent} />
+                                                <Text style={styles.noMatchesText}>
+                                                    No strong matches yet. Tap refresh after more lost/found reports are added.
+                                                </Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                )}
 
                                 {/* Comments Section */}
                                 <View style={styles.commentsSection}>
@@ -465,6 +684,7 @@ const styles = StyleSheet.create({
     },
     detailsGrid: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
         backgroundColor: 'rgba(255,255,255,0.05)',
         borderRadius: 12,
         padding: 12,
@@ -472,12 +692,15 @@ const styles = StyleSheet.create({
         gap: 16,
     },
     detailItem: {
+        minWidth: '44%',
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
     },
     detailTextCol: {
         marginLeft: 8,
+        flex: 1,
+        minWidth: 0,
     },
     detailLabel: {
         fontSize: 10,
@@ -527,6 +750,176 @@ const styles = StyleSheet.create({
         marginRight: 24,
     },
     actionCount: { fontSize: 13, color: 'rgba(255,255,255,0.6)', marginLeft: 6 },
+    matchesSection: {
+        backgroundColor: 'rgba(255,215,0,0.06)',
+        borderRadius: 16,
+        padding: SPACING.md,
+        borderWidth: 1,
+        borderColor: 'rgba(255,215,0,0.16)',
+        marginBottom: SPACING.lg,
+    },
+    matchesHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: SPACING.sm,
+        gap: 12,
+    },
+    matchesTitle: {
+        color: COLORS.white,
+        fontSize: 16,
+        fontWeight: '900',
+    },
+    matchesSubtitle: {
+        color: 'rgba(255,255,255,0.58)',
+        fontSize: 11,
+        lineHeight: 16,
+        marginTop: 3,
+        maxWidth: 260,
+    },
+    refreshMatchBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: COLORS.accent,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    matchCard: {
+        backgroundColor: 'rgba(0,0,0,0.24)',
+        borderRadius: 14,
+        padding: 12,
+        marginTop: SPACING.sm,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.08)',
+    },
+    matchCardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    matchScore: {
+        width: 46,
+        height: 46,
+        borderRadius: 23,
+        backgroundColor: 'rgba(255,255,255,0.12)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255,215,0,0.25)',
+    },
+    matchScoreStrong: {
+        backgroundColor: COLORS.accent,
+        borderColor: COLORS.accent,
+    },
+    matchScoreText: {
+        color: COLORS.white,
+        fontWeight: '900',
+        fontSize: 13,
+    },
+    matchScoreTextStrong: {
+        color: COLORS.primary,
+    },
+    matchTitleCol: {
+        flex: 1,
+        minWidth: 0,
+        marginLeft: 10,
+    },
+    matchTitle: {
+        color: COLORS.white,
+        fontWeight: '900',
+        fontSize: 14,
+    },
+    matchMeta: {
+        color: COLORS.accent,
+        fontSize: 11,
+        marginTop: 2,
+        textTransform: 'capitalize',
+    },
+    matchStatus: {
+        color: 'rgba(255,255,255,0.55)',
+        fontSize: 10,
+        fontWeight: '800',
+        textTransform: 'uppercase',
+    },
+    matchStatusConfirmed: {
+        color: '#8DFF9C',
+    },
+    matchBody: {
+        flexDirection: 'row',
+        gap: 10,
+    },
+    matchImage: {
+        width: 74,
+        height: 74,
+        borderRadius: 12,
+        backgroundColor: 'rgba(255,255,255,0.08)',
+    },
+    matchImagePlaceholder: {
+        width: 74,
+        height: 74,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(255,255,255,0.08)',
+    },
+    matchEvidence: {
+        flex: 1,
+        minWidth: 0,
+    },
+    matchCandidateDetails: {
+        color: 'rgba(255,255,255,0.72)',
+        fontSize: 12,
+        marginBottom: 6,
+        lineHeight: 16,
+    },
+    reasonRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 4,
+    },
+    reasonText: {
+        color: 'rgba(255,255,255,0.68)',
+        fontSize: 11,
+        lineHeight: 16,
+        marginLeft: 5,
+        flex: 1,
+    },
+    matchActions: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginTop: 10,
+    },
+    matchActionBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 10,
+        paddingVertical: 7,
+        borderRadius: 16,
+        backgroundColor: 'rgba(255,255,255,0.08)',
+    },
+    matchActionText: {
+        color: COLORS.accent,
+        fontSize: 11,
+        fontWeight: '800',
+        marginLeft: 5,
+    },
+    noMatchesBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.18)',
+        borderRadius: 12,
+        padding: 12,
+        marginTop: 8,
+    },
+    noMatchesText: {
+        flex: 1,
+        color: 'rgba(255,255,255,0.64)',
+        fontSize: 12,
+        lineHeight: 17,
+        marginLeft: 8,
+    },
     commentsSection: { marginTop: SPACING.xs },
     commentsSectionTitle: {
         fontSize: 16,

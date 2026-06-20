@@ -190,6 +190,14 @@ const CaseFeedScreen = ({ navigation }) => {
                             <Text style={styles.pinnedBadgeText}>Pinned</Text>
                         </View>
                     )}
+                    {(item.match_count || 0) > 0 && (
+                        <View style={styles.matchBadge}>
+                            <Ionicons name="git-compare-outline" size={12} color={COLORS.primary} />
+                            <Text style={styles.matchBadgeText}>
+                                {item.match_count} match{item.match_count === 1 ? '' : 'es'}
+                            </Text>
+                        </View>
+                    )}
                 </View>
 
                 {/* Content */}
@@ -484,6 +492,16 @@ const styles = StyleSheet.create({
         marginLeft: 6,
     },
     pinnedBadgeText: { color: COLORS.primary, fontSize: 10, fontWeight: '900', marginLeft: 4 },
+    matchBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        backgroundColor: COLORS.accent,
+        marginLeft: 6,
+    },
+    matchBadgeText: { color: COLORS.primary, fontSize: 10, fontWeight: '900', marginLeft: 4 },
     cardTitle: { fontSize: 16, fontWeight: 'bold', color: COLORS.white, marginBottom: 4 },
     cardDesc: { fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 8, lineHeight: 18 },
     metaRow: {
