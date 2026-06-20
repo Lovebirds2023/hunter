@@ -13,24 +13,38 @@ const isUnauthorizedError = (error) => error?.response?.status === 401;
 const getFulfilledArray = (result) => (
     result.status === 'fulfilled' && Array.isArray(result.value.data) ? result.value.data : []
 );
+const isCommunityCaseItem = (item) => (
+    item?.is_case ||
+    item?.target_type === 'case' ||
+    item?.target_route === 'CaseDetail' ||
+    Boolean(item?.case_type)
+);
+const normalizeCommunityCaseItem = (item) => ({
+    ...item,
+    is_case: true,
+    target_route: 'CaseDetail',
+    target_id: String(item?.target_id || item?.id || ''),
+});
+const itemTargetKey = (item) => String(item?.target_id || item?.id || '');
 
 const HomeScreen = ({ navigation }) => {
     const { t } = useTranslation();
     const { userInfo, logout } = useContext(AuthContext);
     const [stats, setStats] = useState({ dogsCount: 0, casesCount: 0 });
     const [loading, setLoading] = useState(true);
-    const [spotlightItems, setSpotlightItems] = useState([]);
-    const [currentIndex, setCurrentIndex] = useState(0);
+    const [sponsoredItems, setSponsoredItems] = useState([]);
+    const [communityItems, setCommunityItems] = useState([]);
+    const [sponsoredIndex, setSponsoredIndex] = useState(0);
+    const [communityIndex, setCommunityIndex] = useState(0);
     const [healthSummary, setHealthSummary] = useState(null);
 
     useEffect(() => {
         const fetchStats = async () => {
             try {
-                // Fetch stats for the dashboard
                 const [dogsRes, casesRes, spotlightRes, healthRes] = await Promise.allSettled([
                     client.get('/my-dogs'),
                     client.get('/cases'),
-                    client.get('/spotlight').catch(() => ({ data: null })), // Handle optional spotlight
+                    client.get('/spotlight').catch(() => ({ data: null })),
                     client.get('/health/summary').catch(() => ({ data: null }))
                 ]);
 
@@ -45,29 +59,32 @@ const HomeScreen = ({ navigation }) => {
                     ? spotlightRes.value.data
                     : [];
                 const healthData = healthRes.status === 'fulfilled' ? healthRes.value.data : null;
-                
-                let combined = [];
-                if (spotlight.length > 0) {
-                    combined = [...spotlight];
-                }
-                
+
+                const promotedSpotlight = [];
+                const communitySpotlight = [];
+                spotlight.forEach(item => {
+                    if (isCommunityCaseItem(item)) {
+                        communitySpotlight.push(normalizeCommunityCaseItem(item));
+                    } else {
+                        promotedSpotlight.push(item);
+                    }
+                });
+
                 if (cases.length > 0) {
                     const approved = cases.filter(c => c.is_approved).slice(0, 3);
                     approved.forEach(c => {
-                        // Avoid duplicates if a case is already in spotlight
-                        if (!combined.some(s => s.target_id === c.id.toString() || s.id === c.id)) {
-                            combined.push({
-                                ...c,
-                                is_case: true,
-                                target_route: 'CaseDetail',
-                                target_id: c.id.toString()
-                            });
+                        if (!communitySpotlight.some(s => itemTargetKey(s) === String(c.id))) {
+                            communitySpotlight.push(normalizeCommunityCaseItem(c));
                         }
                     });
                 }
-                setSpotlightItems(combined);
+
+                setSponsoredItems(promotedSpotlight);
+                setCommunityItems(communitySpotlight);
+                setSponsoredIndex(0);
+                setCommunityIndex(0);
                 setHealthSummary(healthData);
-                
+
                 setStats({
                     dogsCount: dogs.length,
                     casesCount: cases.length
@@ -85,16 +102,148 @@ const HomeScreen = ({ navigation }) => {
         fetchStats();
     }, [logout]);
 
-    // Auto-rotation effect
     useEffect(() => {
-        if (spotlightItems.length <= 1) return;
-        
+        if (sponsoredItems.length <= 1) return;
+
         const interval = setInterval(() => {
-            setCurrentIndex(prev => (prev + 1) % spotlightItems.length);
-        }, 6000); // 6 seconds per slide
-        
+            setSponsoredIndex(prev => (prev + 1) % sponsoredItems.length);
+        }, 6000);
+
         return () => clearInterval(interval);
-    }, [spotlightItems]);
+    }, [sponsoredItems]);
+
+    useEffect(() => {
+        if (communityItems.length <= 1) return;
+
+        const interval = setInterval(() => {
+            setCommunityIndex(prev => (prev + 1) % communityItems.length);
+        }, 6000);
+
+        return () => clearInterval(interval);
+    }, [communityItems]);
+
+    const navigateToSpotlightItem = (item) => {
+        if (item.target_route === 'CaseDetail') {
+            navigation.navigate('Report', { screen: 'CaseDetail', params: { reportId: item.target_id || item.id } });
+        } else if (item.target_route === 'EventDetail') {
+            navigation.navigate('Events', { screen: 'EventDetail', params: { eventId: item.target_id } });
+        } else if (item.target_route === 'Marketplace') {
+            navigation.navigate('Marketplace');
+        } else if (item.target_route === 'Community') {
+            navigation.navigate('Community');
+        } else if (item.target_route) {
+            navigation.navigate(item.target_route, item.target_id ? { id: item.target_id } : {});
+        } else {
+            navigation.navigate('Report', { screen: 'CaseDetail', params: { reportId: item.id } });
+        }
+    };
+
+    const renderSpotlightSection = ({ title, items, currentIndex, isSponsored = false, onSeeAll }) => {
+        if (!items.length) return null;
+        const item = items[currentIndex] || items[0];
+        const isCase = isCommunityCaseItem(item);
+        const badge = isCase ? (
+            <View style={styles.urgentBadge}>
+                <Ionicons name="alert-circle" size={12} color="#fff" />
+                <Text style={styles.urgentBadgeText}>{t('home.urgent')}</Text>
+            </View>
+        ) : item.target_route === 'EventDetail' ? (
+            <View style={styles.eventBadge}>
+                <Ionicons name="calendar" size={12} color="#fff" />
+                <Text style={styles.eventBadgeText}>{t('home.event')}</Text>
+            </View>
+        ) : (
+            <View style={styles.featuredBadge}>
+                <Ionicons name="star" size={12} color={COLORS.primaryDark} />
+                <Text style={styles.featuredBadgeText}>{t('home.featured')}</Text>
+            </View>
+        );
+
+        return (
+            <View style={styles.spotlightSection}>
+                <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>{title}</Text>
+                    {onSeeAll ? (
+                        <TouchableOpacity onPress={onSeeAll}>
+                            <Text style={styles.seeAll}>{t('home.see_all')}</Text>
+                        </TouchableOpacity>
+                    ) : null}
+                </View>
+
+                <TouchableOpacity
+                    style={styles.spotlightCard}
+                    activeOpacity={0.9}
+                    onPress={() => navigateToSpotlightItem(item)}
+                >
+                    {item.image_url ? (
+                        <Image source={{ uri: item.image_url }} style={styles.spotlightImage} resizeMode="cover" />
+                    ) : (
+                        <LinearGradient
+                            colors={isCase ? ['#D32F2F', '#B71C1C'] : [COLORS.primary, COLORS.primaryDark]}
+                            style={[styles.spotlightImage, { justifyContent: 'center', alignItems: 'center' }]}
+                        >
+                            <View style={styles.spotlightIconCircle}>
+                                <Ionicons name={isCase ? "alert-circle" : "megaphone"} size={40} color="#fff" />
+                            </View>
+                        </LinearGradient>
+                    )}
+
+                    <LinearGradient
+                        colors={['transparent', 'rgba(0,0,0,0.75)']}
+                        style={styles.spotlightOverlay}
+                    />
+
+                    <View style={styles.spotlightBadgeRow}>
+                        {badge}
+                        {isSponsored ? (
+                            <View style={styles.adLabel}>
+                                <Text style={styles.adLabelText}>{t('home.ad')}</Text>
+                            </View>
+                        ) : null}
+                    </View>
+
+                    <View style={styles.spotlightContentOverlay}>
+                        <Text style={styles.spotlightTitle} numberOfLines={1}>{item.title}</Text>
+                        <Text style={styles.spotlightDesc} numberOfLines={2}>
+                            {item.description || (item.case_type ? t('report.types.' + item.case_type) : '')}
+                        </Text>
+                        <View style={styles.spotlightFooterRow}>
+                            <View style={styles.spotlightLocationRow}>
+                                <Ionicons name="location" size={12} color="rgba(255,255,255,0.7)" />
+                                <Text style={styles.spotlightLocationText} numberOfLines={1}>
+                                    {item.location || (isCase ? t('home.community_report') : t('home.featured_content'))}
+                                </Text>
+                            </View>
+                            <View style={styles.ctaButton}>
+                                <Text style={styles.ctaText}>
+                                    {isCase ? t('home.help_now') : t('common.view_details')}
+                                </Text>
+                                <Ionicons name="arrow-forward" size={14} color={COLORS.primaryDark} />
+                            </View>
+                        </View>
+                    </View>
+                </TouchableOpacity>
+
+                <View style={styles.spotlightMeta}>
+                    {isSponsored ? (
+                        <Text style={styles.sponsoredTag}>{t('home.sponsored')}</Text>
+                    ) : (
+                        <View />
+                    )}
+                    {items.length > 1 && (
+                        <View style={styles.dotContainer}>
+                            {items.map((_, i) => (
+                                <View
+                                    key={i}
+                                    style={[styles.dot, i === currentIndex && styles.activeDot]}
+                                />
+                            ))}
+                        </View>
+                    )}
+                </View>
+            </View>
+        );
+    };
 
     const QuickAction = ({ title, icon, color, onPress, subtitle }) => (
         <TouchableOpacity style={styles.actionCard} onPress={onPress}>
@@ -109,7 +258,6 @@ const HomeScreen = ({ navigation }) => {
     return (
         <SafeAreaView style={styles.safeArea}>
             <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-                {/* Modern Header Section */}
                 <LinearGradient
                     colors={[COLORS.primary, COLORS.primaryDark]}
                     style={styles.header}
@@ -132,7 +280,6 @@ const HomeScreen = ({ navigation }) => {
                         </View>
                     </View>
 
-                    {/* Stats Widget Overlay */}
                     <View style={styles.statsContainer}>
                         <View style={styles.statItem}>
                             <Text style={styles.statNumber}>{stats.dogsCount}</Text>
@@ -147,10 +294,9 @@ const HomeScreen = ({ navigation }) => {
                 </LinearGradient>
 
                 <View style={styles.content}>
-                    {/* Health & Wellness Smart Alert */}
                     <TouchableOpacity
                         style={[styles.healthCard, { borderColor: healthSummary?.upcoming_alert ? 'rgba(211, 47, 47, 0.3)' : 'rgba(76, 175, 80, 0.3)' }]}
-                        onPress={() => navigation.navigate('WellnessHub')} // Link to Hub
+                        onPress={() => navigation.navigate('WellnessHub')}
                     >
                         <LinearGradient
                             colors={healthSummary?.upcoming_alert ? ['rgba(211, 47, 47, 0.08)', 'rgba(211, 47, 47, 0.02)'] : ['rgba(76, 175, 80, 0.08)', 'rgba(76, 175, 80, 0.02)']}
@@ -160,7 +306,7 @@ const HomeScreen = ({ navigation }) => {
                                 <Ionicons name="medical" size={20} color={healthSummary?.upcoming_alert ? '#D32F2F' : '#388E3C'} />
                                 <Text style={[styles.healthTitle, { color: healthSummary?.upcoming_alert ? '#D32F2F' : '#388E3C'}]}>{t('home.health_wellness')}</Text>
                             </View>
-                            
+
                             {healthSummary?.upcoming_alert ? (
                                 <Text style={[styles.healthText, { color: '#D32F2F', fontWeight: 'bold' }]}>
                                     <Ionicons name="alert-circle" size={14} /> {healthSummary.upcoming_alert}
@@ -172,7 +318,7 @@ const HomeScreen = ({ navigation }) => {
                             ) : (
                                 <Text style={styles.healthText}>{t('home.health_status')}</Text>
                             )}
-                            
+
                             <View style={styles.healthFooter}>
                                 <Text style={[styles.healthAction, { color: healthSummary?.upcoming_alert ? '#D32F2F' : '#388E3C'}]}>{t('home.view_records')}</Text>
                                 <Ionicons name="chevron-forward" size={14} color={healthSummary?.upcoming_alert ? '#D32F2F' : '#388E3C'} />
@@ -180,7 +326,6 @@ const HomeScreen = ({ navigation }) => {
                         </LinearGradient>
                     </TouchableOpacity>
 
-                    {/* Quick Actions Grid */}
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>{t('home.quick_actions')}</Text>
                     </View>
@@ -223,142 +368,47 @@ const HomeScreen = ({ navigation }) => {
                         />
                     </View>
 
-                    {/* Community Spotlight */}
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>{t('home.community_spotlight')}</Text>
-                        <TouchableOpacity onPress={() => navigation.navigate('Report')}>
-                            <Text style={styles.seeAll}>{t('home.see_all')}</Text>
-                        </TouchableOpacity>
-                    </View>
+                    {renderSpotlightSection({
+                        title: t('home.sponsored_spotlight'),
+                        items: sponsoredItems,
+                        currentIndex: sponsoredIndex,
+                        isSponsored: true,
+                    })}
 
-                    {spotlightItems.length > 0 ? (
-                        <View>
-                            <TouchableOpacity 
-                                style={styles.spotlightCard} 
-                                activeOpacity={0.9}
-                                onPress={() => {
-                                    const item = spotlightItems[currentIndex];
-                                    if (item.target_route === 'CaseDetail') {
-                                        navigation.navigate('Report', { screen: 'CaseDetail', params: { reportId: item.target_id || item.id } });
-                                    } else if (item.target_route === 'EventDetail') {
-                                        navigation.navigate('Events', { screen: 'EventDetail', params: { eventId: item.target_id } });
-                                    } else if (item.target_route === 'Marketplace') {
-                                        navigation.navigate('Marketplace');
-                                    } else if (item.target_route) {
-                                        navigation.navigate(item.target_route, item.target_id ? { id: item.target_id } : {});
-                                    } else {
-                                        navigation.navigate('Report', { screen: 'CaseDetail', params: { reportId: item.id } });
-                                    }
-                                }}
-                            >
-                                {/* Hero Image */}
-                                {spotlightItems[currentIndex].image_url ? (
-                                    <Image source={{ uri: spotlightItems[currentIndex].image_url }} style={styles.spotlightImage} resizeMode="cover" />
-                                ) : (
-                                    <LinearGradient
-                                        colors={spotlightItems[currentIndex].is_case ? ['#D32F2F', '#B71C1C'] : [COLORS.primary, COLORS.primaryDark]}
-                                        style={[styles.spotlightImage, { justifyContent: 'center', alignItems: 'center' }]}
-                                    >
-                                        <View style={styles.spotlightIconCircle}>
-                                            <Ionicons name={spotlightItems[currentIndex].is_case ? "alert-circle" : "megaphone"} size={40} color="#fff" />
-                                        </View>
-                                    </LinearGradient>
-                                )}
-
-                                {/* Gradient Overlay on Image */}
+                    {communityItems.length > 0 ? (
+                        renderSpotlightSection({
+                            title: t('home.community_spotlight'),
+                            items: communityItems,
+                            currentIndex: communityIndex,
+                            onSeeAll: () => navigation.navigate('Report', { screen: 'CaseFeed' }),
+                        })
+                    ) : (
+                        <>
+                            <View style={styles.sectionHeader}>
+                                <Text style={styles.sectionTitle}>{t('home.community_spotlight')}</Text>
+                                <TouchableOpacity onPress={() => navigation.navigate('Report', { screen: 'CaseFeed' })}>
+                                    <Text style={styles.seeAll}>{t('home.see_all')}</Text>
+                                </TouchableOpacity>
+                            </View>
+                            <TouchableOpacity style={styles.spotlightCard} activeOpacity={0.9} onPress={() => navigation.navigate('Report', { screen: 'CaseFeed' })}>
+                                <Image
+                                    source={require('../../assets/dog_placeholder.png')}
+                                    style={styles.spotlightImage}
+                                    resizeMode="cover"
+                                />
                                 <LinearGradient
                                     colors={['transparent', 'rgba(0,0,0,0.75)']}
                                     style={styles.spotlightOverlay}
                                 />
-
-                                {/* Smart Badge — top-left */}
-                                <View style={styles.spotlightBadgeRow}>
-                                    {spotlightItems[currentIndex].is_case ? (
-                                        <View style={styles.urgentBadge}>
-                                            <Ionicons name="alert-circle" size={12} color="#fff" />
-                                            <Text style={styles.urgentBadgeText}>{t('home.urgent')}</Text>
-                                        </View>
-                                    ) : spotlightItems[currentIndex].target_route === 'EventDetail' ? (
-                                        <View style={styles.eventBadge}>
-                                            <Ionicons name="calendar" size={12} color="#fff" />
-                                            <Text style={styles.eventBadgeText}>{t('home.event')}</Text>
-                                        </View>
-                                    ) : (
-                                        <View style={styles.featuredBadge}>
-                                            <Ionicons name="star" size={12} color={COLORS.primaryDark} />
-                                            <Text style={styles.featuredBadgeText}>{t('home.featured')}</Text>
-                                        </View>
-                                    )}
-                                    {/* AD transparency label */}
-                                    {!spotlightItems[currentIndex].is_case && (
-                                        <View style={styles.adLabel}>
-                                            <Text style={styles.adLabelText}>{t('home.ad')}</Text>
-                                        </View>
-                                    )}
-                                </View>
-
-                                {/* Content Overlay — sits on top of the image */}
                                 <View style={styles.spotlightContentOverlay}>
-                                    <Text style={styles.spotlightTitle} numberOfLines={1}>{spotlightItems[currentIndex].title}</Text>
-                                    <Text style={styles.spotlightDesc} numberOfLines={2}>
-                                        {spotlightItems[currentIndex].description || (spotlightItems[currentIndex].case_type ? t('report.types.' + spotlightItems[currentIndex].case_type) : '')}
-                                    </Text>
-                                    <View style={styles.spotlightFooterRow}>
-                                        <View style={styles.spotlightLocationRow}>
-                                            <Ionicons name="location" size={12} color="rgba(255,255,255,0.7)" />
-                                            <Text style={styles.spotlightLocationText} numberOfLines={1}>
-                                                {spotlightItems[currentIndex].location || (spotlightItems[currentIndex].is_case ? t('home.community_report') : t('home.marketplace'))}
-                                            </Text>
-                                        </View>
-                                        <View style={styles.ctaButton}>
-                                            <Text style={styles.ctaText}>
-                                                {spotlightItems[currentIndex].is_case ? t('home.help_now') : t('common.view_details')}
-                                            </Text>
-                                            <Ionicons name="arrow-forward" size={14} color={COLORS.primaryDark} />
-                                        </View>
-                                    </View>
+                                    <Text style={styles.spotlightTitle}>{t('home.community_reports')}</Text>
+                                    <Text style={styles.spotlightDesc}>{t('home.community_reports_desc')}</Text>
                                 </View>
                             </TouchableOpacity>
-
-                            {/* Sponsored Tag + Navigation Dots */}
-                            <View style={styles.spotlightMeta}>
-                                {!spotlightItems[currentIndex].is_case ? (
-                                    <Text style={styles.sponsoredTag}>{t('home.sponsored')}</Text>
-                                ) : (
-                                    <View />
-                                )}
-                                {spotlightItems.length > 1 && (
-                                    <View style={styles.dotContainer}>
-                                        {spotlightItems.map((_, i) => (
-                                            <View 
-                                                key={i} 
-                                                style={[styles.dot, i === currentIndex && styles.activeDot]} 
-                                            />
-                                        ))}
-                                    </View>
-                                )}
-                            </View>
-                        </View>
-                    ) : (
-                        <TouchableOpacity style={styles.spotlightCard} activeOpacity={0.9} onPress={() => navigation.navigate('Report')}>
-                            <Image
-                                source={require('../../assets/dog_placeholder.png')}
-                                style={styles.spotlightImage}
-                                resizeMode="cover"
-                            />
-                            <LinearGradient
-                                colors={['transparent', 'rgba(0,0,0,0.75)']}
-                                style={styles.spotlightOverlay}
-                            />
-                            <View style={styles.spotlightContentOverlay}>
-                                <Text style={styles.spotlightTitle}>{t('home.community_walk')}</Text>
-                                <Text style={styles.spotlightDesc}>{t('home.community_walk_desc')}</Text>
-                            </View>
-                        </TouchableOpacity>
+                        </>
                     )}
                 </View>
 
-                {/* Bottom Spacing */}
                 <View style={{ height: 100 }} />
             </ScrollView>
         </SafeAreaView>
@@ -434,6 +484,7 @@ const styles = StyleSheet.create({
     iconCircle: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
     actionTitle: { fontSize: 15, fontWeight: 'bold', color: COLORS.text },
     actionSubtitle: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2 },
+    spotlightSection: { marginTop: SPACING.sm },
     spotlightCard: {
         borderRadius: 20,
         overflow: 'hidden',
