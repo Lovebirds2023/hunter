@@ -18,8 +18,8 @@ const CASE_TYPE_CONFIG = {
     rabies_bite: { label: 'Rabies Bite', icon: 'warning', color: '#FF4444' },
     vehicle_hit: { label: 'Vehicle Hit', icon: 'car', color: '#FF8800' },
     injured_stray: { label: 'Injured Stray', icon: 'medkit', color: '#FF6600' },
-    lost_dog: { label: 'I lost a dog', icon: 'search', color: '#4488FF' },
-    found_dog: { label: 'I found a dog', icon: 'eye', color: '#00C851' },
+    lost_dog: { label: 'I lost a dog/cat', icon: 'search', color: '#4488FF' },
+    found_dog: { label: 'I found a dog/cat', icon: 'eye', color: '#00C851' },
     abuse: { label: 'Abuse Report', icon: 'alert-circle', color: '#CC0000' },
     other: { label: 'Other', icon: 'ellipsis-horizontal', color: '#888888' },
 };
@@ -202,6 +202,10 @@ const CaseDetailScreen = ({ route, navigation }) => {
         return date.toLocaleString();
     };
 
+    const getPetTypeLabel = (value) => (
+        String(value || 'dog').toLowerCase() === 'cat' ? 'Cat' : 'Dog'
+    );
+
     // Render @mentions in comment text with gold color
     const renderCommentText = (text) => {
         const parts = text.split(/(@\w[\w\s]*)/g);
@@ -367,7 +371,7 @@ const CaseDetailScreen = ({ route, navigation }) => {
                                                 <Ionicons name="paw" size={16} color={COLORS.accent} />
                                                 <View style={styles.detailTextCol}>
                                                     <Text style={styles.detailLabel}>Animal</Text>
-                                                    <Text style={styles.detailValue}>{report.pet_type}</Text>
+                                                    <Text style={styles.detailValue}>{getPetTypeLabel(report.pet_type)}</Text>
                                                 </View>
                                             </View>
                                         )}
@@ -384,7 +388,12 @@ const CaseDetailScreen = ({ route, navigation }) => {
                                             <View style={styles.detailItem}>
                                                 <Ionicons name="color-palette-outline" size={16} color={COLORS.accent} />
                                                 <View style={styles.detailTextCol}>
-                                                    <Text style={styles.detailLabel}>{t('report.labels.color')}</Text>
+                                                    <Text style={styles.detailLabel}>
+                                                        {t('report.labels.pet_color', {
+                                                            pet: getPetTypeLabel(report.pet_type),
+                                                            defaultValue: `${getPetTypeLabel(report.pet_type)} Color`,
+                                                        })}
+                                                    </Text>
                                                     <Text style={styles.detailValue}>{report.color}</Text>
                                                 </View>
                                             </View>

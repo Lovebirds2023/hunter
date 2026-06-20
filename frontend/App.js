@@ -1,7 +1,7 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import './src/i18n';
-import { StyleSheet, Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -242,6 +242,35 @@ export default function App() {
     const [isRequiredUpdate, setIsRequiredUpdate] = useState(false);
 
     const APP_VERSION = '1.0.1'; // Should match package.json
+
+    useEffect(() => {
+        if (Platform.OS !== 'web' || typeof document === 'undefined') return undefined;
+        const styleId = 'ld360-responsive-root';
+        if (document.getElementById(styleId)) return undefined;
+
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `
+            html, body, #root {
+                width: 100%;
+                min-height: 100%;
+                margin: 0;
+                overflow-x: hidden;
+            }
+            #root {
+                display: flex;
+                flex-direction: column;
+            }
+            *, *::before, *::after {
+                box-sizing: border-box;
+            }
+        `;
+        document.head.appendChild(style);
+
+        return () => {
+            style.remove();
+        };
+    }, []);
 
     // Check for app updates on startup
     useAppUpdateCheck(

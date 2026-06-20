@@ -1,7 +1,5 @@
-import { StyleSheet, Dimensions } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { COLORS } from '../../constants/theme';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 /* ─── Admin Color Palette ─── */
 export const ADMIN_COLORS = {
@@ -144,7 +142,7 @@ export const adminStyles = StyleSheet.create({
         marginTop: 8,
     },
     statCard: {
-        width: (SCREEN_WIDTH - 48) / 2,
+        width: '48%',
         backgroundColor: ADMIN_COLORS.surface,
         borderRadius: 16,
         padding: 16,
@@ -201,11 +199,14 @@ export const adminStyles = StyleSheet.create({
     listCardHeader: {
         flexDirection: 'row',
         alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 8,
     },
     listCardTitle: {
         fontSize: 15,
         fontWeight: '700',
         color: ADMIN_COLORS.textPrimary,
+        flexShrink: 1,
     },
     listCardSub: {
         fontSize: 12,
@@ -307,6 +308,7 @@ export const adminStyles = StyleSheet.create({
     },
     searchInput: {
         flex: 1,
+        minWidth: 0,
         fontSize: 14,
         color: ADMIN_COLORS.textPrimary,
         marginLeft: 10,
@@ -415,7 +417,7 @@ export const gridStyles = StyleSheet.create({
         marginTop: 6,
     },
     gridCard: {
-        width: (SCREEN_WIDTH - 48) / 2,
+        width: '48%',
         backgroundColor: ADMIN_COLORS.surface,
         borderRadius: 16,
         padding: 18,

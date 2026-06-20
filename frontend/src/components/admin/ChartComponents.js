@@ -1,22 +1,21 @@
 import React from 'react';
-import { View, Text, Dimensions } from 'react-native';
+import { View, Text } from 'react-native';
 import { ADMIN_COLORS } from './AdminStyles';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 /* ─── Mini Bar Chart (inline in cards) ─── */
 export const MiniBarChart = ({ data = [], color = ADMIN_COLORS.chart1, height = 40 }) => {
     if (!data.length) return null;
     const max = Math.max(...data, 1);
-    const barWidth = Math.min(6, (SCREEN_WIDTH * 0.25) / data.length);
 
     return (
-        <View style={{ flexDirection: 'row', alignItems: 'flex-end', height, gap: 2 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', height, gap: 2, width: '100%' }}>
             {data.map((val, i) => (
                 <View
                     key={i}
                     style={{
-                        width: barWidth,
+                        flex: 1,
+                        maxWidth: 6,
+                        minWidth: 2,
                         height: Math.max(2, (val / max) * height),
                         backgroundColor: i === data.length - 1 ? color : `${color}66`,
                         borderRadius: 2,
@@ -32,7 +31,6 @@ export const RevenueBarChart = ({ data = [] }) => {
     if (!data.length) return null;
     const maxRevenue = Math.max(...data.map(d => Number(d.revenue) || 0), 1);
     const chartHeight = 140;
-    const barWidth = Math.min(32, (SCREEN_WIDTH - 100) / data.length);
 
     return (
         <View style={{ marginTop: 8 }}>
@@ -48,9 +46,9 @@ export const RevenueBarChart = ({ data = [] }) => {
                             <Text style={{ fontSize: 9, color: ADMIN_COLORS.textMuted, marginBottom: 2 }}>
                                 {revenue > 0 ? `${(revenue / 1000).toFixed(0)}k` : ''}
                             </Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 2, width: '70%', maxWidth: 32 }}>
                                 <View style={{
-                                    width: barWidth * 0.45,
+                                    flex: 1,
                                     height: revenue > 0 ? Math.max(3, revHeight) : 0,
                                     backgroundColor: ADMIN_COLORS.chart2,
                                     borderRadius: 4,
@@ -58,7 +56,7 @@ export const RevenueBarChart = ({ data = [] }) => {
                                     borderBottomRightRadius: 0,
                                 }} />
                                 <View style={{
-                                    width: barWidth * 0.45,
+                                    flex: 1,
                                     height: commission > 0 ? Math.max(3, commHeight) : 0,
                                     backgroundColor: ADMIN_COLORS.accent,
                                     borderRadius: 4,

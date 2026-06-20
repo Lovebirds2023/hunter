@@ -17,6 +17,14 @@ const EventResponsesScreen = ({ route, navigation }) => {
     const [formFields, setFormFields] = useState([]);
     const [loading, setLoading] = useState(true);
 
+    const openEventBroadcast = () => {
+        navigation.navigate('AdminHome', {
+            initialTab: 'announcements',
+            broadcastTargetGroup: 'event_registrants',
+            broadcastEventId: eventId,
+        });
+    };
+
     useEffect(() => {
         fetchData();
     }, []);
@@ -39,7 +47,17 @@ const EventResponsesScreen = ({ route, navigation }) => {
 
     const renderHeader = () => (
         <View style={styles.header}>
-            <Text style={styles.headerTitle}>{t('event_responses.title')}</Text>
+            <View style={styles.headerTitleRow}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.headerTitle}>{t('event_responses.title')}</Text>
+                </View>
+                {isAdmin && (
+                    <TouchableOpacity style={styles.broadcastBtn} onPress={openEventBroadcast}>
+                        <Ionicons name="megaphone-outline" size={15} color="#4B0082" />
+                        <Text style={styles.broadcastBtnText}>Broadcast</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
             <Text style={styles.headerSubtitle}>{eventTitle}</Text>
             <Text style={styles.statsText}>{t('event_responses.total', { count: responses.length })}</Text>
         </View>
@@ -166,7 +184,10 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#f5f5f5' },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     header: { padding: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee', marginBottom: 16 },
-    headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#1A1A1A' },
+    headerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#1A1A1A', flexShrink: 1 },
+    broadcastBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#fff8dc', borderWidth: 1, borderColor: '#D4AF37', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 16 },
+    broadcastBtnText: { color: '#4B0082', fontSize: 12, fontWeight: '800' },
     headerSubtitle: { fontSize: 16, color: '#666', marginTop: 4 },
     statsText: { fontSize: 14, color: '#D4AF37', fontWeight: 'bold', marginTop: 12 },
     listContent: { paddingHorizontal: 16, paddingBottom: 40 },

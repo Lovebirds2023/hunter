@@ -56,8 +56,8 @@ export const AdminDogsTab = ({ onBack }) => {
                         <Ionicons name="arrow-back" size={24} color={ADMIN_COLORS.textPrimary} />
                     </TouchableOpacity>
                     <View style={{ flex: 1 }}>
-                        <Text style={s.sectionTitle}>Dog Registry</Text>
-                        <Text style={{ fontSize: 12, color: ADMIN_COLORS.textMuted }}>{dogs.length} dogs registered</Text>
+                        <Text style={s.sectionTitle}>Dog/Cat Registry</Text>
+                        <Text style={{ fontSize: 12, color: ADMIN_COLORS.textMuted }}>{dogs.length} pets registered</Text>
                     </View>
                 </View>
 
@@ -106,7 +106,7 @@ export const AdminDogsTab = ({ onBack }) => {
                     ListEmptyComponent={
                         <View style={s.emptyContainer}>
                             <Ionicons name="paw-outline" size={48} color={ADMIN_COLORS.textMuted} />
-                            <Text style={s.emptyText}>No dogs found</Text>
+                            <Text style={s.emptyText}>No pets found</Text>
                         </View>
                     }
                     renderItem={({ item }) => (

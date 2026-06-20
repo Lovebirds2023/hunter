@@ -14,7 +14,7 @@ const EXPORT_TYPES = [
     { id: 'orders', label: 'Orders', icon: 'cart', description: 'Financial transactions, status, and buyer details' },
     { id: 'registrations', label: 'Registrations', icon: 'document-text', description: 'Complete attendee list and form responses' },
     { id: 'events', label: 'Events', icon: 'calendar', description: 'All services/events with stats and organizer info' },
-    { id: 'dogs', label: 'Dog Registry', icon: 'paw', description: 'Dog database with breed, owner, and health stats' },
+    { id: 'dogs', label: 'Dog/Cat Registry', icon: 'paw', description: 'Pet database with breed, owner, and health stats' },
     { id: 'cases', label: 'Case Reports', icon: 'alert-circle', description: 'Community support and incident reports' },
     { id: 'community', label: 'Community Posts', icon: 'chatbubbles', description: 'All social feed content and engagement metrics' },
     { id: 'support', label: 'Support Tickets', icon: 'headset', description: 'Platform support history and status logs' },

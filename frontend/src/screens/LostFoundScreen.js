@@ -5,19 +5,31 @@ import { useTranslation } from 'react-i18next';
 import * as ImagePicker from 'expo-image-picker';
 import client from '../api/client';
 import { colors } from '../theme/colors';
+import { getBreedsForPetType, getColorsForPetType } from '../constants/data';
 
 const LostFoundScreen = () => {
     const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState('found'); // 'found' or 'lost'
+    const [petType, setPetType] = useState('dog');
     const [image, setImage] = useState(null);
     const [matchResult, setMatchResult] = useState(null);
     const [description, setDescription] = useState("");
-    const [breed, setBreed] = useState("German Shepherd");
+    const [breed, setBreed] = useState("");
     const [customBreed, setCustomBreed] = useState("");
-    const [color, setColor] = useState("Black");
+    const [color, setColor] = useState("");
 
-    const BREEDS = ["German Shepherd", "Bulldog", "Labrador", "Golden Retriever", "Poodle", "Beagle", "Rottweiler", "Other"];
-    const COLORS_LIST = ["Black", "White", "Brown", "Tan", "Spotted", "Merle", "Brindle", "Other"];
+    const breedOptions = getBreedsForPetType(petType);
+    const colorOptions = getColorsForPetType(petType);
+    const petLabel = petType === 'cat' ? t('dog_identity.cat', { defaultValue: 'Cat' }) : t('dog_identity.dog', { defaultValue: 'Dog' });
+
+    const handlePetTypeSelect = (nextType) => {
+        if (nextType === petType) return;
+        setPetType(nextType);
+        setBreed('');
+        setCustomBreed('');
+        setColor('');
+        setMatchResult(null);
+    };
 
     const pickImage = async () => {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -36,7 +48,7 @@ const LostFoundScreen = () => {
         }
     };
 
-    const identifyDog = async () => {
+    const identifyPet = async () => {
         if (!image) {
             Alert.alert(t('common.error'), t('lost_found.alerts.photo_first'));
             return;
@@ -47,6 +59,7 @@ const LostFoundScreen = () => {
                 name: "Unidentified",
                 breed: finalBreed,
                 color,
+                pet_type: petType,
                 height: 0,
                 weight: 0,
                 body_structure: "Unknown",
@@ -67,7 +80,7 @@ const LostFoundScreen = () => {
 
     const submitReport = async () => {
         if (activeTab === 'found') {
-            await identifyDog();
+            await identifyPet();
         } else {
             // Logic for lost report could be different, but for now we reuse identifying if they have photo
             Alert.alert(t('lost_found.alerts.success_report'), t('lost_found.alerts.success_report_desc'));
@@ -75,9 +88,10 @@ const LostFoundScreen = () => {
     };
 
     const getColorLabel = (c) => {
-        if (c === "Merle") return t('lost_found.colors.merle');
-        if (c === "Brindle") return t('lost_found.colors.brindle');
-        return c;
+        if (c.key === "merle") return t('lost_found.colors.merle');
+        if (c.key === "brindle") return t('lost_found.colors.brindle');
+        if (c.key === "other") return t('common.other');
+        return c.value;
     };
 
     return (
@@ -107,6 +121,22 @@ const LostFoundScreen = () => {
                     <Text style={styles.subtitle}>{activeTab === 'found' ? t('lost_found.i_found') : t('lost_found.i_lost')}</Text>
                     <Text style={styles.descText}>{activeTab === 'found' ? t('lost_found.i_found_desc') : t('lost_found.i_lost_desc')}</Text>
 
+                    <Text style={styles.label}>Animal Type</Text>
+                    <View style={styles.petTypeRow}>
+                        {[
+                            { value: 'dog', label: t('dog_identity.dog', { defaultValue: 'Dog' }) },
+                            { value: 'cat', label: t('dog_identity.cat', { defaultValue: 'Cat' }) },
+                        ].map(item => (
+                            <TouchableOpacity
+                                key={item.value}
+                                style={[styles.petTypeBtn, petType === item.value && styles.petTypeBtnActive]}
+                                onPress={() => handlePetTypeSelect(item.value)}
+                            >
+                                <Text style={[styles.petTypeText, petType === item.value && styles.petTypeTextActive]}>{item.label}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+
                     {activeTab === 'found' && (
                         <>
                             <Button title={t('lost_found.scan_button')} onPress={pickImage} color={colors.secondary} />
@@ -117,7 +147,8 @@ const LostFoundScreen = () => {
                     <Text style={styles.label}>{t('lost_found.labels.estimated_breed')}</Text>
                     <View style={styles.pickerContainer}>
                         <Picker selectedValue={breed} onValueChange={setBreed}>
-                            {BREEDS.map(b => (
+                            <Picker.Item label={`Select ${petLabel} Breed`} value="" />
+                            {breedOptions.map(b => (
                                 <Picker.Item key={b} label={b} value={b} />
                             ))}
                         </Picker>
@@ -132,11 +163,12 @@ const LostFoundScreen = () => {
                         />
                     )}
 
-                    <Text style={styles.label}>{t('lost_found.labels.color')}</Text>
+                    <Text style={styles.label}>{petLabel} {t('lost_found.labels.color')}</Text>
                     <View style={styles.pickerContainer}>
                         <Picker selectedValue={color} onValueChange={setColor}>
-                            {COLORS_LIST.map(c => (
-                                <Picker.Item key={c} label={getColorLabel(c)} value={c} />
+                            <Picker.Item label={`Select ${petLabel} Color`} value="" />
+                            {colorOptions.map(c => (
+                                <Picker.Item key={c.value} label={getColorLabel(c)} value={c.value} />
                             ))}
                         </Picker>
                     </View>
@@ -177,7 +209,12 @@ const styles = StyleSheet.create({
     input: { borderWidth: 1, borderColor: colors.goldAccent, padding: 10, marginBottom: 15, borderRadius: 5, backgroundColor: '#fff', height: 80, textAlignVertical: 'top' },
     inputSmall: { borderWidth: 1, borderColor: colors.goldAccent, padding: 10, marginBottom: 15, borderRadius: 5, backgroundColor: '#fff', height: 45 },
     label: { fontSize: 14, color: colors.primary, fontWeight: 'bold', marginTop: 10, marginBottom: 5 },
-    pickerContainer: { borderWidth: 1, borderColor: colors.goldAccent, borderRadius: 5, marginBottom: 10, backgroundColor: '#fff', height: 50, justifyContent: 'center' },
+    pickerContainer: { borderWidth: 1, borderColor: colors.goldAccent, borderRadius: 5, marginBottom: 10, backgroundColor: '#fff', minHeight: 50, justifyContent: 'center' },
+    petTypeRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
+    petTypeBtn: { flex: 1, paddingVertical: 12, borderWidth: 1, borderColor: colors.goldAccent, borderRadius: 8, alignItems: 'center', backgroundColor: '#fff' },
+    petTypeBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+    petTypeText: { color: colors.primary, fontWeight: 'bold' },
+    petTypeTextActive: { color: '#fff' },
 });
 
 export default LostFoundScreen;

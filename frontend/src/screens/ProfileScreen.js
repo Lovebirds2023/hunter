@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useState, useMemo } from 'react';
-import { View, Text, StyleSheet, Image, FlatList, TouchableOpacity, Alert, Modal, TextInput, ScrollView, KeyboardAvoidingView, Platform, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Image, FlatList, TouchableOpacity, Alert, Modal, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '../context/AuthContext';
 import { COLORS, SPACING, SIZES } from '../constants/theme';
@@ -19,8 +19,6 @@ import {
     getCountryCodeSelection,
     isValidCountryCode,
 } from '../constants/countryCodes';
-
-const { width } = Dimensions.get('window');
 
 const LANGUAGES = [
     { label: "English", value: "en" },
@@ -249,7 +247,7 @@ export const ProfileScreen = ({ navigation }) => {
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}>
                     <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 15 }}>
                         <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
                     </TouchableOpacity>
@@ -336,10 +334,6 @@ export const ProfileScreen = ({ navigation }) => {
                                     ))}
                                 </View>
                             </View>
-                            <TouchableOpacity style={styles.rateAction}>
-                                <Text style={styles.rateActionText}>{t('profile_screen.rate_experience')}</Text>
-                                <Ionicons name="chevron-forward" size={16} color={COLORS.primary} />
-                            </TouchableOpacity>
                         </View>
                         <Text style={styles.ratingSubtitle}>{t('profile_screen.based_on', { count: userInfo?.total_ratings || 0 })}</Text>
                     </View>
@@ -661,25 +655,27 @@ export const ProfileScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#fcfcfc' },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: COLORS.white, zIndex: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-    title: { fontSize: 22, fontWeight: 'bold', color: COLORS.primaryDark, letterSpacing: -0.5 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, padding: 20, backgroundColor: COLORS.white, zIndex: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+    title: { fontSize: 22, fontWeight: 'bold', color: COLORS.primaryDark, letterSpacing: -0.5, flexShrink: 1 },
     logoutBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff1f1', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20 },
     logoutText: { marginLeft: 5, color: COLORS.error, fontWeight: 'bold', fontSize: 13 },
     scrollContent: { paddingBottom: 100 },
     brandingBanner: { height: 140, width: '100%', position: 'absolute', top: 0 },
     glowOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,215,0,0.05)' },
     profileCard: { backgroundColor: COLORS.white, marginHorizontal: 15, marginTop: 40, borderRadius: 25, overflow: 'hidden', elevation: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.2, shadowRadius: 15, marginBottom: 25, borderWidth: 1, borderColor: 'rgba(255,215,0,0.3)' },
-    cardHeader: { padding: 25, flexDirection: 'row', alignItems: 'center' },
+    cardHeader: { padding: 25, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 16 },
     avatarContainer: { position: 'relative' },
     avatarImage: { width: 95, height: 95, borderRadius: 47.5, borderWidth: 4, borderColor: 'rgba(255,255,255,0.4)' },
     placeholderAvatar: { width: 95, height: 95, borderRadius: 47.5, backgroundColor: COLORS.white, justifyContent: 'center', alignItems: 'center' },
     cameraBadge: { position: 'absolute', bottom: 2, right: 2, backgroundColor: COLORS.accent, width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: COLORS.white, elevation: 4 },
-    headerInfo: { marginLeft: 20, flex: 1 },
+    headerInfo: { flex: 1, minWidth: 0 },
     nameRow: { flexDirection: 'row', alignItems: 'center' },
-    userName: { fontSize: 24, fontWeight: 'bold', color: COLORS.white },
+    userName: { fontSize: 24, fontWeight: 'bold', color: COLORS.white, flexShrink: 1 },
     userEmail: { fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 4 },
-    statsContainer: { flexDirection: 'row', padding: 20, backgroundColor: '#fff' },
-    statBox: { flex: 1, alignItems: 'center' },
+    statsContainer: { flexDirection: 'row', flexWrap: 'wrap', padding: 20, backgroundColor: '#fff', gap: 10 },
+    statBox: { flex: 1, minWidth: 86, alignItems: 'center' },
+    statNumber: { fontSize: 22, fontWeight: 'bold', color: COLORS.accentDark },
+    statLabel: { fontSize: 12, color: COLORS.gray, marginTop: 4, fontWeight: '600', textTransform: 'uppercase', textAlign: 'center' },
     middleStat: { borderLeftWidth: 1, borderRightWidth: 1, borderColor: '#f0f0f0' },
     statValue: { fontSize: 22, fontWeight: 'bold', color: COLORS.accentDark },
     statLine: { fontSize: 12, color: COLORS.gray, marginTop: 4, fontWeight: '600', textTransform: 'uppercase' },
@@ -710,17 +706,15 @@ const styles = StyleSheet.create({
     configureBtn: { backgroundColor: COLORS.accent, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
     configureBtnText: { color: COLORS.primaryDark, fontWeight: 'bold', fontSize: 13 },
     ratingCard: { backgroundColor: COLORS.white, borderRadius: 20, padding: 25, elevation: 6, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, borderWidth: 1, borderColor: '#f0f0f0' },
-    ratingInfo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    ratingInfo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 },
     ratingNumber: { fontSize: 26, fontWeight: 'bold', color: COLORS.primaryDark },
     starsRow: { flexDirection: 'row', marginTop: 4 },
-    rateAction: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.accent, paddingHorizontal: 15, paddingVertical: 10, borderRadius: 15, elevation: 4 },
-    rateActionText: { color: COLORS.primaryDark, fontWeight: 'bold', fontSize: 14, marginRight: 5 },
     ratingSubtitle: { fontSize: 12, color: COLORS.gray, marginTop: 12, fontStyle: 'italic' },
     miniDogCard: { width: 120, marginRight: 15, alignItems: 'center', backgroundColor: COLORS.white, borderRadius: 20, padding: 12, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
     miniDogImg: { width: 95, height: 95, borderRadius: 18, backgroundColor: '#eee' },
     miniDogName: { marginTop: 10, fontWeight: 'bold', color: COLORS.primaryDark, fontSize: 14 },
     miniAddBtn: { backgroundColor: COLORS.accent, width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', elevation: 6, position: 'absolute', right: -5, bottom: 20 },
-    emptyCard: { width: width - 80, backgroundColor: '#f8f9fa', borderRadius: 20, padding: 30, alignItems: 'center', borderStyle: 'dashed', borderWidth: 1.5, borderColor: '#ddd' },
+    emptyCard: { width: '100%', backgroundColor: '#f8f9fa', borderRadius: 20, padding: 30, alignItems: 'center', borderStyle: 'dashed', borderWidth: 1.5, borderColor: '#ddd' },
     emptyText: { color: COLORS.gray, marginTop: 12, fontSize: 14, fontStyle: 'italic', fontWeight: '500' },
     dogsScrollRow: { position: 'relative', paddingRight: 30 },
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
@@ -752,8 +746,8 @@ const styles = StyleSheet.create({
     // Pet card styles
     petCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, borderRadius: 16, padding: 14, marginBottom: 12, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, borderWidth: 1, borderColor: '#f0f0f0' },
     petCardImg: { width: 65, height: 65, borderRadius: 14, backgroundColor: '#eee' },
-    petCardInfo: { flex: 1, marginLeft: 14 },
-    petCardName: { fontSize: 17, fontWeight: 'bold', color: COLORS.primaryDark },
+    petCardInfo: { flex: 1, minWidth: 0, marginLeft: 14 },
+    petCardName: { fontSize: 17, fontWeight: 'bold', color: COLORS.primaryDark, flexShrink: 1 },
     petCardBreed: { fontSize: 13, color: COLORS.gray, marginTop: 3 },
     petCardAge: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2, fontStyle: 'italic' },
     petTypeBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, gap: 3 },

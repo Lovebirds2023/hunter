@@ -57,7 +57,7 @@ const GoogleAuthCallbackScreen = ({ navigation }) => {
             }
 
             setStatus('info');
-            setMessage('This Google callback link only works after you choose a Google account. Go back and tap Continue with Google to start sign-in.');
+            setMessage('Go back and tap Continue with Google to start sign-in.');
         };
 
         finishGoogleLogin();

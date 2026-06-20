@@ -1848,8 +1848,11 @@ async def report_lost_dog(
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    # Enhanced matching logic: Breed match + Similarity in Color, Age, and Weight
-    query = db.query(models.Dog).filter(models.Dog.breed == lost_info.breed)
+    # Enhanced matching logic: animal type + breed match, then similarity in color, age, and weight.
+    query = db.query(models.Dog).filter(
+        models.Dog.pet_type == (lost_info.pet_type or "dog").lower(),
+        models.Dog.breed == lost_info.breed,
+    )
     
     potential_matches = []
     all_dogs = query.all()
@@ -1868,7 +1871,7 @@ async def report_lost_dog(
             
         if score >= 50:
             potential_matches.append({"id": d.id, "name": d.name, "similarity": f"{score}%"})
-            logger.info(f"Potential match found for dog {d.name} ({score}%). Notifying owner.")
+            logger.info(f"Potential match found for pet {d.name} ({score}%). Notifying owner.")
 
     return {
         "message": f"Lost report processed. Found {len(potential_matches)} potential matches.",
@@ -4261,14 +4264,14 @@ def export_data(
 
     elif type == "dogs":
         dogs = db.query(models.Dog).all()
-        headers = ["Dog ID", "Name", "Breed", "Owner ID", "Owner Name", "Owner Email", "Age", "Health Records", "Nose-PID", "Created At"]
+        headers = ["Pet ID", "Pet Type", "Name", "Breed", "Owner ID", "Owner Name", "Owner Email", "Age", "Health Records", "Nose-PID", "Created At"]
         ws.append(headers)
         for cell in ws[1]: cell.font = header_font
         for d in dogs:
             owner = db.query(models.User).filter(models.User.id == d.owner_id).first()
             health_records = db.query(models.HealthRecord).filter(models.HealthRecord.dog_id == d.id).count()
             ws.append([
-                d.id, d.name, d.breed, d.owner_id, owner.full_name if owner else None,
+                d.id, d.pet_type or "dog", d.name, d.breed, d.owner_id, owner.full_name if owner else None,
                 owner.email if owner else None, d.age, health_records,
                 "Yes" if d.nose_print_descriptor or d.nose_print_image else "No",
                 str(d.created_at) if hasattr(d, 'created_at') else "N/A"

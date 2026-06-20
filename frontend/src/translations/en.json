@@ -33,7 +33,7 @@
     "home": {
         "greeting": "Hello, {{name}}!",
         "sub_greeting": "How's your fur-friend today?",
-        "my_dogs": "My Dogs",
+        "my_dogs": "My Dogs/Cats",
         "local_alerts": "Local Alerts",
         "health_wellness": "Health & Wellness",
         "health_status": "Everything is looking great! No upcoming vaccinations this week.",
@@ -52,7 +52,7 @@
         "community_walk": "Community Walk this Sunday!",
         "community_walk_desc": "Join other dog parents at Cental Park for a social walk.",
         "attending": "{{count}} attending",
-        "all_healthy": "All your dogs are healthy! Overall Wellness: {{score}}%",
+        "all_healthy": "All your dogs/cats are healthy! Overall Wellness: {{score}}%",
         "urgent": "URGENT",
         "event": "EVENT",
         "featured": "FEATURED",
@@ -286,7 +286,7 @@
     },
     "report": {
         "title": "Cases",
-        "subtitle": "Report & Respond to Dog Cases",
+        "subtitle": "Report & Respond to Dog/Cat Cases",
         "toggles": {
             "list": "List",
             "map": "Map"
@@ -295,14 +295,14 @@
             "rabies_bite": "Rabies Bite",
             "vehicle_hit": "Vehicle Hit",
             "injured_stray": "Injured Stray",
-            "found_dog": "Found Dog",
-            "lost_dog": "Lost Dog",
+            "found_dog": "Found Dog/Cat",
+            "lost_dog": "Lost Dog/Cat",
             "abuse": "Abuse Report",
             "other": "Other"
         },
         "empty": {
             "title": "No Case Reports Yet",
-            "subtitle": "Be the first to report a dog case in your area"
+            "subtitle": "Be the first to report a dog/cat case in your area"
         },
         "form": {
             "title": "Report a Case",
@@ -337,15 +337,16 @@
         },
         "labels": {
             "breed": "Estimated Breed",
-            "color": "Dog Color",
+            "color": "Dog/Cat Color",
+            "pet_color": "{{pet}} Color",
             "custom_breed": "Type breed name...",
             "describe_color": "Describe the dog's color..."
         }
     },
     "lost_found": {
         "title": "Lost & Found",
-        "i_found": "I Found a Dog",
-        "i_lost": "I Lost a Dog",
+        "i_found": "I Found a Dog/Cat",
+        "i_lost": "I Lost a Dog/Cat",
         "labels": {
             "description": "Additional Details",
             "upload": "Take Photo / Select Image",
@@ -366,16 +367,16 @@
             "matches_found": "We found {{count}} potential matches!",
             "matches_none": "No direct biometric matches found yet.",
             "success_matches": "Potential Matches Found!",
-            "success_matches_desc": "Please review the matching dogs in your area.",
+            "success_matches_desc": "Please review the matching pets in your area.",
             "success_report": "Report Published",
             "success_report_desc": "Your report is now visible to the community.",
-            "error_process": "Could not process dog identity."
+            "error_process": "Could not process pet identity."
         },
         "scan_button": "Scan Image",
-        "identify_button": "Identify Dog",
+        "identify_button": "Identify Dog/Cat",
         "submit_lost": "Submit Lost Report",
-        "i_found_desc": "Scan and report a dog you found.",
-        "i_lost_desc": "Report your missing dog for community help."
+        "i_found_desc": "Scan and report a dog/cat you found.",
+        "i_lost_desc": "Report your missing dog/cat for community help."
     },
     "health": {
         "title": "Add Health Record",
@@ -446,7 +447,7 @@
             "success": "Dog {{name}} registered successfully!",
             "error": "Could not register dog"
         },
-        "my_dogs": "My Registered Dogs"
+        "my_dogs": "My Registered Dogs/Cats"
     },
     "wellness": {
         "title": "Wellness Hub",
@@ -648,7 +649,7 @@
     "profile_screen": {
         "account_dashboard": "Account Dashboard",
         "log_out": "Log Out",
-        "dogs_stat": "Dogs",
+        "dogs_stat": "Dogs/Cats",
         "activities_stat": "Activities",
         "deals_stat": "Deals",
         "rate_experience": "Rate Experience",
@@ -845,9 +846,9 @@
         "next_due": "Next Due",
         "edit_pet": "Edit {{name}}",
         "bio_notes": "Bio / Notes",
-        "bio_placeholder": "Tell us about your dog...",
-        "updated": "Dog details updated!",
-        "update_error": "Could not update dog details"
+        "bio_placeholder": "Tell us about your dog/cat...",
+        "updated": "Pet details updated!",
+        "update_error": "Could not update pet details"
     },
     "dog_identity": {
         "title": "Pet Identity",
@@ -874,7 +875,7 @@
         "cat_registered": "Cat Registered!",
         "registered_msg": "The {{pet}} passport has been created successfully. Proximity matching is now active.",
         "great": "Great",
-        "failed_register": "Failed to register dog. Please try again.",
+        "failed_register": "Failed to register pet. Please try again.",
         "what_registering": "What are you registering?",
         "identification_details": "Identification Details",
         "dog_name": "Dog's Name",
@@ -884,17 +885,18 @@
         "breed": "Breed",
         "specify_breed_placeholder": "Specify breed...",
         "primary_color": "Primary Color",
+        "pet_color": "{{pet}} Color",
         "describe_color": "Describe color...",
         "approx_age": "Approx. Age (Years)",
         "approx_weight": "Approx. Weight (KG)",
         "unique_identifiers": "Unique Identifiers (Description)",
-        "unique_placeholder": "Describe any unique birthmarks, scars, or characteristics that can help identify your dog if lost (e.g. 'White spot on left paw', 'Torn right ear')...",
+        "unique_placeholder": "Describe any unique birthmarks, scars, or characteristics that can help identify your dog/cat if lost (e.g. 'White spot on left paw', 'Torn right ear')...",
         "proceed_biometrics": "PROCEED TO BIOMETRICS",
         "web_upload_note": "Camera capture is available on mobile. On web, please upload from your gallery.",
         "upload_gallery": "UPLOAD FROM GALLERY",
         "capture_title": "CAPTURE {{title}}",
         "step_title": "STEP {{step}}: {{title}}",
-        "powered_by": "Powered by Lovedogs Biometrics & Similarity Engine"
+        "powered_by": "Powered by Lovedogs 360 Pet Biometrics & Similarity Engine"
     },
     "event_detail": {
         "title": "Event Details",

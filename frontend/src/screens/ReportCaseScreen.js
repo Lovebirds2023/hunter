@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     View, Text, StyleSheet, TextInput, ScrollView,
@@ -11,8 +11,7 @@ import { COLORS, SPACING, SIZES } from '../constants/theme';
 import { ThemeBackground } from '../components/ThemeBackground';
 import { Button } from '../components/Button';
 import client from '../api/client';
-import { AuthContext } from '../context/AuthContext';
-import { BREEDS, COLORS_DESC } from '../constants/data';
+import { getBreedsForPetType, getColorsForPetType } from '../constants/data';
 import { uploadImagesToSupabase } from '../utils/uploadImages';
 import {
     formatCoordinatePair,
@@ -64,6 +63,18 @@ const ReportCaseScreen = ({ navigation, route }) => {
     const [submitting, setSubmitting] = useState(false);
     const [fetchingLocation, setFetchingLocation] = useState(false);
     const isLostFoundCase = caseType === 'lost_dog' || caseType === 'found_dog';
+    const breedOptions = getBreedsForPetType(petType);
+    const colorOptions = getColorsForPetType(petType);
+    const petLabelTitle = petType === 'cat' ? 'Cat' : 'Dog';
+
+    const handlePetTypeSelect = (nextType) => {
+        if (nextType === petType) return;
+        setPetType(nextType);
+        setBreed('');
+        setCustomBreed('');
+        setColor('');
+        setCustomColor('');
+    };
 
     const getCurrentLocation = async () => {
         setFetchingLocation(true);
@@ -259,7 +270,7 @@ const ReportCaseScreen = ({ navigation, route }) => {
                                         <TouchableOpacity
                                             key={item.value}
                                             style={[styles.segmentBtn, petType === item.value && styles.segmentBtnActive]}
-                                            onPress={() => setPetType(item.value)}
+                                            onPress={() => handlePetTypeSelect(item.value)}
                                         >
                                             <Ionicons name={item.icon} size={16} color={petType === item.value ? COLORS.primary : COLORS.accent} />
                                             <Text style={[styles.segmentText, petType === item.value && styles.segmentTextActive]}>{item.label}</Text>
@@ -270,7 +281,7 @@ const ReportCaseScreen = ({ navigation, route }) => {
                                 <Text style={styles.label}>{t('report.labels.breed')}</Text>
                                 <View style={styles.pickerWrapper}>
                                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                                        {BREEDS.map(b => (
+                                        {breedOptions.map(b => (
                                             <TouchableOpacity
                                                 key={b}
                                                 style={[styles.chip, breed === b && styles.chipActive]}
@@ -292,9 +303,11 @@ const ReportCaseScreen = ({ navigation, route }) => {
                                     />
                                 )}
 
-                                <Text style={styles.label}>{t('report.labels.color')}</Text>
+                                <Text style={styles.label}>
+                                    {t('report.labels.pet_color', { pet: petLabelTitle, defaultValue: `${petLabelTitle} Color` })}
+                                </Text>
                                 <View style={styles.colorGrid}>
-                                    {COLORS_DESC.map(c => (
+                                    {colorOptions.map(c => (
                                         <TouchableOpacity
                                             key={c.value}
                                             style={[styles.colorChip, color === c.value && styles.colorChipActive]}
@@ -310,7 +323,7 @@ const ReportCaseScreen = ({ navigation, route }) => {
                                 {color === 'Other' && (
                                     <TextInput
                                         style={[styles.input, { marginTop: 10 }]}
-                                        placeholder={t('report.labels.describe_color')}
+                                        placeholder={petType === 'cat' ? 'Describe the cat color...' : t('report.labels.describe_color')}
                                         placeholderTextColor="rgba(255,255,255,0.4)"
                                         value={customColor}
                                         onChangeText={setCustomColor}
@@ -425,7 +438,9 @@ const ReportCaseScreen = ({ navigation, route }) => {
                         </View>
                         {isLostFoundCase && (
                             <Text style={styles.photoGuidance}>
-                                Best for matching: face, full body side, unique markings, collar/tag, and nose close-up for dogs.
+                                {petType === 'cat'
+                                    ? 'Best for matching: face, full body side, unique markings, and collar/tag if present.'
+                                    : 'Best for matching: face, full body side, unique markings, collar/tag, and nose close-up for dogs.'}
                             </Text>
                         )}
 

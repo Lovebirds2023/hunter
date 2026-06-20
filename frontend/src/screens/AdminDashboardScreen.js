@@ -32,14 +32,14 @@ const MANAGEMENT_GRID = [
     { id: 'events', label: 'Events Tracker', icon: 'calendar', sub: 'Check-ins & Regs', color: ADMIN_COLORS.chart3 },
     { id: 'scorecard', label: 'Impact Data', icon: 'clipboard', sub: 'Scorecards & Reporting', color: ADMIN_COLORS.success, badge: 'scorecard_participants' },
     { id: 'pins', label: 'Priority Pins', icon: 'pin', sub: 'Top-of-feed Content', color: ADMIN_COLORS.accent },
-    { id: 'dogs', label: 'Dog Registry', icon: 'paw', sub: 'Breed Distribution', color: ADMIN_COLORS.accent },
+    { id: 'dogs', label: 'Dog/Cat Registry', icon: 'paw', sub: 'Breed Distribution', color: ADMIN_COLORS.accent },
     { id: 'community', label: 'Moderation', icon: 'chatbubbles', sub: 'Social Monitor', color: ADMIN_COLORS.chart1, badge: 'flagged_posts' },
     { id: 'announcements', label: 'Inbox Broadcasts', icon: 'megaphone', sub: 'Targeted Updates', color: ADMIN_COLORS.chart1 },
     { id: 'support', label: 'Support Desk', icon: 'headset', sub: 'User Help Tickets', color: ADMIN_COLORS.chart5, badge: 'open_tickets' },
     { id: 'export', label: 'Reporting', icon: 'download', sub: 'XLSX Data Center', color: ADMIN_COLORS.info },
 ];
 
-export default function AdminDashboardScreen() {
+export default function AdminDashboardScreen({ route }) {
     const navigation = useNavigation();
     const { userInfo, logout } = useAuth();
     const [activeTab, setActiveTab] = useState('home'); // 'home', 'overview', 'users', etc.
@@ -89,6 +89,12 @@ export default function AdminDashboardScreen() {
             backHandler.remove();
         };
     }, [activeTab, fetchQuickStats]);
+
+    useEffect(() => {
+        if (route?.params?.initialTab) {
+            setActiveTab(route.params.initialTab);
+        }
+    }, [route?.params?.initialTab, route?.params?.broadcastEventId]);
 
     if (loading) {
         return (
@@ -213,7 +219,13 @@ export default function AdminDashboardScreen() {
             case 'pins': return <AdminPinsTab onBack={() => setActiveTab('home')} />;
             case 'orders': return <AdminOrdersTab onBack={() => setActiveTab('home')} />;
             case 'community': return <AdminCommunityTab onBack={() => setActiveTab('home')} />;
-            case 'announcements': return <AdminAnnouncementsTab onBack={() => setActiveTab('home')} />;
+            case 'announcements': return (
+                <AdminAnnouncementsTab
+                    onBack={() => setActiveTab('home')}
+                    initialTargetGroup={route?.params?.broadcastTargetGroup}
+                    initialEventId={route?.params?.broadcastEventId}
+                />
+            );
             case 'dogs': return <AdminDogsTab onBack={() => setActiveTab('home')} />;
             case 'support': return <AdminSupportTab onBack={() => setActiveTab('home')} />;
             case 'export': return <AdminExportTab onBack={() => setActiveTab('home')} />;

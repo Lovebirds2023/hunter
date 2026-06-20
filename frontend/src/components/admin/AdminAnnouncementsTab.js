@@ -51,7 +51,7 @@ const groupIcon = (group) => {
     }
 };
 
-export const AdminAnnouncementsTab = ({ onBack }) => {
+export const AdminAnnouncementsTab = ({ onBack, initialEventId = '', initialTargetGroup = '' }) => {
     const [campaigns, setCampaigns] = useState([]);
     const [options, setOptions] = useState(emptyOptions);
     const [loading, setLoading] = useState(true);
@@ -84,7 +84,8 @@ export const AdminAnnouncementsTab = ({ onBack }) => {
             setOptions(nextOptions);
             setForm(prev => ({
                 ...prev,
-                event_id: prev.event_id || nextOptions.events?.[0]?.id || '',
+                target_group: initialTargetGroup || prev.target_group,
+                event_id: initialEventId || prev.event_id || nextOptions.events?.[0]?.id || '',
             }));
         } catch (e) {
             console.error('Broadcast fetch error:', e);
@@ -93,7 +94,7 @@ export const AdminAnnouncementsTab = ({ onBack }) => {
             setLoading(false);
             setRefreshing(false);
         }
-    }, []);
+    }, [initialEventId, initialTargetGroup]);
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -337,6 +338,16 @@ export const AdminAnnouncementsTab = ({ onBack }) => {
                 <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 11, lineHeight: 16 }}>
                     {(options.target_groups || []).find(group => group.id === form.target_group)?.description || ''}
                 </Text>
+                {form.target_group === 'event_registrants' && selectedEvent && (
+                    <View style={{ backgroundColor: ADMIN_COLORS.infoBg, borderRadius: 10, padding: 10, marginTop: 10 }}>
+                        <Text style={{ color: ADMIN_COLORS.info, fontWeight: '800', fontSize: 12 }}>
+                            Selected event: {selectedEvent.title}
+                        </Text>
+                        <Text style={{ color: ADMIN_COLORS.textSecondary, fontSize: 11, lineHeight: 16, marginTop: 3 }}>
+                            This broadcast targets only users registered for this event. Use Preview count before sending to confirm the audience.
+                        </Text>
+                    </View>
+                )}
 
                 <View style={{ backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 12, padding: 12, marginTop: 12 }}>
                     <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800' }}>Audience filters</Text>

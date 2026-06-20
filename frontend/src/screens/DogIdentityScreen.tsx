@@ -7,7 +7,7 @@ import { ThemeBackground } from '../components/ThemeBackground';
 import { COLORS, SPACING } from '../constants/theme';
 import { Button } from '../components/Button';
 import client from '../api/client';
-import { BREEDS, COLORS_DESC } from '../constants/data';
+import { getBreedsForPetType, getColorsForPetType } from '../constants/data';
 import { uploadImagesToSupabase } from '../utils/uploadImages';
 
 // Only import CameraView for native platforms
@@ -32,6 +32,8 @@ export const DogIdentityScreen = ({ navigation }: any) => {
     // Pet type
     const [petType, setPetType] = useState<'dog' | 'cat'>('dog');
     const isDog = petType === 'dog';
+    const breedOptions = getBreedsForPetType(petType);
+    const colorOptions = getColorsForPetType(petType);
 
     // Pet Bio State
     const [dogName, setDogName] = useState('');
@@ -45,6 +47,15 @@ export const DogIdentityScreen = ({ navigation }: any) => {
 
     // Image State
     const [capturedImages, setCapturedImages] = useState<string[]>([]);
+
+    const handlePetTypeSelect = (nextType: 'dog' | 'cat') => {
+        if (nextType === petType) return;
+        setPetType(nextType);
+        setBreed('');
+        setCustomBreed('');
+        setColor('');
+        setCustomColor('');
+    };
 
     const steps = [
         { title: isDog ? t('dog_identity.canine_bio') : t('dog_identity.feline_bio'), instruction: t('dog_identity.bio_instruction', { pet: isDog ? t('dog_identity.dog') : t('dog_identity.cat') }), icon: 'list' },
@@ -163,14 +174,14 @@ export const DogIdentityScreen = ({ navigation }: any) => {
             <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20 }}>
                 <TouchableOpacity
                     style={[styles.petTypeBtn, isDog && styles.petTypeBtnActive]}
-                    onPress={() => setPetType('dog')}
+                    onPress={() => handlePetTypeSelect('dog')}
                 >
                     <Text style={{ fontSize: 28 }}>🐕</Text>
                     <Text style={[styles.petTypeBtnText, isDog && styles.petTypeBtnTextActive]}>{t('dog_identity.dog')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                     style={[styles.petTypeBtn, !isDog && styles.petTypeBtnActive]}
-                    onPress={() => setPetType('cat')}
+                    onPress={() => handlePetTypeSelect('cat')}
                 >
                     <Text style={{ fontSize: 28 }}>🐱</Text>
                     <Text style={[styles.petTypeBtnText, !isDog && styles.petTypeBtnTextActive]}>{t('dog_identity.cat')}</Text>
@@ -191,7 +202,7 @@ export const DogIdentityScreen = ({ navigation }: any) => {
             <Text style={styles.label}>{t('dog_identity.breed')}</Text>
             <View style={styles.pickerWrapper}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    {BREEDS.map(b => (
+                    {breedOptions.map(b => (
                         <TouchableOpacity
                             key={b}
                             style={[styles.chip, breed === b && styles.chipActive]}
@@ -213,9 +224,14 @@ export const DogIdentityScreen = ({ navigation }: any) => {
                 />
             )}
 
-            <Text style={styles.label}>{t('dog_identity.primary_color')}</Text>
+            <Text style={styles.label}>
+                {t('dog_identity.pet_color', {
+                    pet: isDog ? t('dog_identity.dog') : t('dog_identity.cat'),
+                    defaultValue: `${isDog ? 'Dog' : 'Cat'} Color`,
+                })}
+            </Text>
             <View style={styles.colorGrid}>
-                {COLORS_DESC.map(c => (
+                {colorOptions.map(c => (
                     <TouchableOpacity
                         key={c.value}
                         style={[styles.colorChip, color === c.value && styles.colorChipActive]}
@@ -231,7 +247,7 @@ export const DogIdentityScreen = ({ navigation }: any) => {
             {color === 'Other' && (
                 <TextInput
                     style={[styles.input, { marginTop: 10 }]}
-                    placeholder={t('dog_identity.describe_color')}
+                    placeholder={isDog ? t('dog_identity.describe_color') : 'Describe the cat color...'}
                     placeholderTextColor="rgba(255,255,255,0.4)"
                     value={customColor}
                     onChangeText={setCustomColor}
