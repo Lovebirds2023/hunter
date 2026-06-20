@@ -266,6 +266,7 @@ class Event(Base):
     currency = Column(String, default="KES")
     ticket_tiers = Column(JSON, nullable=True)
     attendee_type_question = Column(String, nullable=True)
+    available_slots = Column(JSON, nullable=True)
     organizer_id = Column(String, ForeignKey("users.id"))
     category = Column(String) # e.g., "walk", "training", "outreach"
     is_public = Column(Integer, default=1) # 1 for public, 0 for private
@@ -297,6 +298,10 @@ class Registration(Base):
     ticket_tier_id = Column(String, nullable=True)
     ticket_tier_label = Column(String, nullable=True)
     attendee_type_justification = Column(String, nullable=True)
+    booking_slot_id = Column(String, nullable=True)
+    booking_slot_label = Column(String, nullable=True)
+    booking_start_time = Column(DateTime, nullable=True)
+    booking_end_time = Column(DateTime, nullable=True)
     pesapal_tracking_id = Column(String, nullable=True, index=True)
     pesapal_merchant_reference = Column(String, nullable=True, index=True)
     paid_at = Column(DateTime, nullable=True)
@@ -386,6 +391,38 @@ class Notification(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     user = relationship("User")
+
+class NotificationCampaign(Base):
+    __tablename__ = "notification_campaigns"
+
+    id = Column(String, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    message = Column(String, nullable=False)
+    target_group = Column(String, nullable=False, index=True)
+    filters = Column(JSON, nullable=True)
+    type = Column(String, default="admin_broadcast")
+    target_type = Column(String, nullable=True)
+    target_id = Column(String, nullable=True)
+    target_route = Column(String, nullable=True)
+    recipient_count = Column(Integer, default=0)
+    created_by_id = Column(String, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    created_by = relationship("User", foreign_keys=[created_by_id])
+    recipients = relationship("NotificationCampaignRecipient", back_populates="campaign")
+
+class NotificationCampaignRecipient(Base):
+    __tablename__ = "notification_campaign_recipients"
+
+    id = Column(String, primary_key=True, index=True)
+    campaign_id = Column(String, ForeignKey("notification_campaigns.id"), nullable=False, index=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    notification_id = Column(String, ForeignKey("notifications.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    campaign = relationship("NotificationCampaign", back_populates="recipients")
+    user = relationship("User", foreign_keys=[user_id])
+    notification = relationship("Notification")
 
 class AppVersion(Base):
     __tablename__ = "app_versions"

@@ -205,6 +205,7 @@ class EventBase(BaseModel):
     currency: Optional[str] = "KES"
     ticket_tiers: Optional[List[Dict[str, Any]]] = None
     attendee_type_question: Optional[str] = None
+    available_slots: Optional[List[Dict[str, Any]]] = None
     category: Optional[str] = None
     is_public: Optional[int] = 1
     scorecard_enabled: Optional[bool] = True
@@ -224,6 +225,9 @@ class EventTicketingUpdate(BaseModel):
     currency: Optional[str] = "KES"
     ticket_tiers: Optional[List[Dict[str, Any]]] = None
     attendee_type_question: Optional[str] = None
+
+class EventScheduleUpdate(BaseModel):
+    available_slots: Optional[List[Dict[str, Any]]] = None
 
 class EventResponse(EventBase):
     id: str
@@ -265,6 +269,7 @@ class RegistrationCreate(BaseModel):
     share_phone: Optional[bool] = False
     ticket_tier_id: Optional[str] = None
     attendee_type_justification: Optional[str] = None
+    booking_slot_id: Optional[str] = None
     form_responses: Optional[List[FormResponseItem]] = []
 
 class RegistrationResponse(BaseModel):
@@ -281,6 +286,10 @@ class RegistrationResponse(BaseModel):
     ticket_tier_id: Optional[str] = None
     ticket_tier_label: Optional[str] = None
     attendee_type_justification: Optional[str] = None
+    booking_slot_id: Optional[str] = None
+    booking_slot_label: Optional[str] = None
+    booking_start_time: Optional[datetime.datetime] = None
+    booking_end_time: Optional[datetime.datetime] = None
     pesapal_tracking_id: Optional[str] = None
     paid_at: Optional[datetime.datetime] = None
     check_in_time: Optional[datetime.datetime] = None
@@ -345,6 +354,10 @@ class RegistrationWithResponses(BaseModel):
     ticket_tier_id: Optional[str] = None
     ticket_tier_label: Optional[str] = None
     attendee_type_justification: Optional[str] = None
+    booking_slot_id: Optional[str] = None
+    booking_slot_label: Optional[str] = None
+    booking_start_time: Optional[datetime.datetime] = None
+    booking_end_time: Optional[datetime.datetime] = None
     pesapal_tracking_id: Optional[str] = None
     paid_at: Optional[datetime.datetime] = None
     created_at: datetime.datetime
@@ -394,6 +407,36 @@ class NotificationResponse(BaseModel):
     target_id: Optional[str] = None
     target_route: Optional[str] = None
     is_read: bool
+    created_at: datetime.datetime
+    class Config:
+        from_attributes = True
+
+class NotificationCampaignRequest(BaseModel):
+    title: str
+    message: str
+    target_group: str
+    filters: Optional[Dict[str, Any]] = None
+    type: Optional[str] = "admin_broadcast"
+    target_type: Optional[str] = None
+    target_id: Optional[str] = None
+    target_route: Optional[str] = None
+
+class NotificationCampaignPreview(BaseModel):
+    target_group: str
+    recipient_count: int
+
+class NotificationCampaignResponse(BaseModel):
+    id: str
+    title: str
+    message: str
+    target_group: str
+    filters: Optional[Dict[str, Any]] = None
+    type: str
+    target_type: Optional[str] = None
+    target_id: Optional[str] = None
+    target_route: Optional[str] = None
+    recipient_count: int
+    created_by_id: Optional[str] = None
     created_at: datetime.datetime
     class Config:
         from_attributes = True

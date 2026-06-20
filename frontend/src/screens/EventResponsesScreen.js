@@ -45,7 +45,18 @@ const EventResponsesScreen = ({ route, navigation }) => {
         </View>
     );
 
+    const formatBookingTime = (item) => {
+        if (!item.booking_start_time) return null;
+        const start = moment(item.booking_start_time);
+        const end = item.booking_end_time ? moment(item.booking_end_time) : null;
+        if (!start.isValid()) return item.booking_start_time;
+        return end?.isValid()
+            ? `${start.format('MMM D, YYYY h:mm A')} - ${end.format('h:mm A')}`
+            : start.format('MMM D, YYYY h:mm A');
+    };
+
     const renderResponseItem = ({ item, index }) => {
+        const bookingTime = formatBookingTime(item);
         return (
             <View style={styles.card}>
                 <View style={styles.cardHeader}>
@@ -77,12 +88,22 @@ const EventResponsesScreen = ({ route, navigation }) => {
                     </View>
                 )}
 
-                {(item.ticket_tier_label || item.attendee_type_justification) && (
+                {(item.ticket_tier_label || item.attendee_type_justification || item.booking_slot_label) && (
                     <View style={styles.tierBox}>
                         {item.ticket_tier_label && (
                             <View style={styles.tierHeader}>
                                 <Text style={styles.tierLabel}>Registration type</Text>
                                 <Text style={styles.tierValue}>{item.ticket_tier_label}</Text>
+                            </View>
+                        )}
+                        {item.booking_slot_label && (
+                            <View style={styles.bookingRow}>
+                                <Ionicons name="calendar-number-outline" size={16} color="#6d5b12" />
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.tierLabel}>Booking date/time</Text>
+                                    <Text style={styles.tierValue}>{item.booking_slot_label}</Text>
+                                    {bookingTime && <Text style={styles.bookingTime}>{bookingTime}</Text>}
+                                </View>
                             </View>
                         )}
                         {item.attendee_type_justification && (
@@ -166,6 +187,8 @@ const styles = StyleSheet.create({
     tierHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
     tierLabel: { fontSize: 12, color: '#6d5b12', fontWeight: '700', textTransform: 'uppercase' },
     tierValue: { fontSize: 13, color: '#1A1A1A', fontWeight: '900' },
+    bookingRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', marginBottom: 10 },
+    bookingTime: { fontSize: 12, color: '#6d5b12', marginTop: 3 },
     paymentLine: { fontSize: 12, color: '#6d5b12', fontWeight: '700', marginTop: 4, textTransform: 'capitalize' },
     responsesContainer: { backgroundColor: '#fafafa', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#eee' },
     qaRow: { marginBottom: 12 },

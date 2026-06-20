@@ -1382,6 +1382,8 @@ try:
                ADD COLUMN IF NOT EXISTS ticket_tiers JSON;""",
             """ALTER TABLE events
                ADD COLUMN IF NOT EXISTS attendee_type_question VARCHAR;""",
+            """ALTER TABLE events
+               ADD COLUMN IF NOT EXISTS available_slots JSON;""",
             """ALTER TABLE registrations
                ADD COLUMN IF NOT EXISTS amount DOUBLE PRECISION DEFAULT 0;""",
             """ALTER TABLE registrations
@@ -1394,6 +1396,14 @@ try:
                ADD COLUMN IF NOT EXISTS ticket_tier_label VARCHAR;""",
             """ALTER TABLE registrations
                ADD COLUMN IF NOT EXISTS attendee_type_justification VARCHAR;""",
+            """ALTER TABLE registrations
+               ADD COLUMN IF NOT EXISTS booking_slot_id VARCHAR;""",
+            """ALTER TABLE registrations
+               ADD COLUMN IF NOT EXISTS booking_slot_label VARCHAR;""",
+            """ALTER TABLE registrations
+               ADD COLUMN IF NOT EXISTS booking_start_time TIMESTAMP;""",
+            """ALTER TABLE registrations
+               ADD COLUMN IF NOT EXISTS booking_end_time TIMESTAMP;""",
             """ALTER TABLE registrations
                ADD COLUMN IF NOT EXISTS pesapal_tracking_id VARCHAR;""",
             """ALTER TABLE registrations
@@ -1420,6 +1430,27 @@ try:
                ADD COLUMN IF NOT EXISTS target_id VARCHAR;""",
             """ALTER TABLE notifications
                ADD COLUMN IF NOT EXISTS target_route VARCHAR;""",
+            """CREATE TABLE IF NOT EXISTS notification_campaigns (
+                id VARCHAR PRIMARY KEY,
+                title VARCHAR NOT NULL,
+                message VARCHAR NOT NULL,
+                target_group VARCHAR NOT NULL,
+                filters JSON,
+                type VARCHAR DEFAULT 'admin_broadcast',
+                target_type VARCHAR,
+                target_id VARCHAR,
+                target_route VARCHAR,
+                recipient_count INTEGER DEFAULT 0,
+                created_by_id VARCHAR REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );""",
+            """CREATE TABLE IF NOT EXISTS notification_campaign_recipients (
+                id VARCHAR PRIMARY KEY,
+                campaign_id VARCHAR NOT NULL REFERENCES notification_campaigns(id),
+                user_id VARCHAR NOT NULL REFERENCES users(id),
+                notification_id VARCHAR REFERENCES notifications(id),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );""",
             """CREATE TABLE IF NOT EXISTS pet_match_candidates (
                 id VARCHAR PRIMARY KEY,
                 case_report_id VARCHAR NOT NULL REFERENCES case_reports(id),
@@ -1444,6 +1475,8 @@ try:
             """CREATE INDEX IF NOT EXISTS idx_scorecard_surveys_event_type ON scorecard_surveys(event_id, survey_type);""",
             """CREATE INDEX IF NOT EXISTS idx_registrations_payment ON registrations(payment_status, pesapal_tracking_id);""",
             """CREATE INDEX IF NOT EXISTS idx_orders_payment ON orders(status, pesapal_tracking_id);""",
+            """CREATE INDEX IF NOT EXISTS idx_notification_campaigns_target ON notification_campaigns(target_group, created_at);""",
+            """CREATE INDEX IF NOT EXISTS idx_notification_campaign_recipients ON notification_campaign_recipients(campaign_id, user_id);""",
             """CREATE INDEX IF NOT EXISTS idx_pet_match_case ON pet_match_candidates(case_report_id);""",
             """CREATE INDEX IF NOT EXISTS idx_pet_match_candidate_case ON pet_match_candidates(matched_case_report_id);""",
             """CREATE INDEX IF NOT EXISTS idx_pet_match_dog ON pet_match_candidates(matched_dog_id);""",
@@ -2197,6 +2230,84 @@ def normalize_event_ticket_tiers(event: models.Event) -> List[Dict[str, Any]]:
     return sanitize_ticket_tiers(getattr(event, "ticket_tiers", None), getattr(event, "currency", None) or "KES")
 
 
+def sanitize_event_available_slots(slots: Optional[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    slots = slots or []
+    if not isinstance(slots, list):
+        return []
+
+    normalized = []
+    for idx, slot in enumerate(slots):
+        if not isinstance(slot, dict):
+            continue
+        start_raw = slot.get("start_time") or slot.get("date")
+        end_raw = slot.get("end_time")
+        if not start_raw:
+            continue
+
+        try:
+            start_time = parse_datetime_value(start_raw)
+            end_time = parse_datetime_value(end_raw) if end_raw else start_time + timedelta(hours=1)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Use valid date/time values for every booking slot")
+
+        if not isinstance(start_time, datetime) or not isinstance(end_time, datetime) or end_time <= start_time:
+            raise HTTPException(status_code=400, detail="Each booking slot must end after it starts")
+
+        label = str(slot.get("label") or slot.get("title") or "").strip()
+        if not label:
+            label = f"{start_time.strftime('%b %d, %Y %H:%M')} slot"
+
+        slot_id = str(slot.get("id") or label.lower().replace(" ", "_") or f"slot_{idx + 1}").strip()
+        try:
+            capacity = int(slot.get("capacity") or 0)
+        except (TypeError, ValueError):
+            capacity = 0
+
+        normalized.append({
+            "id": slot_id,
+            "label": label,
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat(),
+            "capacity": max(capacity, 0),
+            "location": str(slot.get("location") or "").strip(),
+            "notes": str(slot.get("notes") or "").strip(),
+        })
+    return normalized
+
+
+def normalize_event_available_slots(event: models.Event) -> List[Dict[str, Any]]:
+    return sanitize_event_available_slots(getattr(event, "available_slots", None))
+
+
+def resolve_event_booking_slot(event: models.Event, booking_slot_id: Optional[str]) -> Optional[Dict[str, Any]]:
+    slots = normalize_event_available_slots(event)
+    if not slots:
+        return None
+
+    selected_id = str(booking_slot_id or "").strip()
+    if not selected_id:
+        raise HTTPException(status_code=400, detail="Choose an available date/time for this event")
+    for slot in slots:
+        if slot["id"] == selected_id:
+            return slot
+    raise HTTPException(status_code=400, detail="Invalid event booking slot")
+
+
+def ensure_booking_slot_capacity(db: Session, event_id: str, slot: Optional[Dict[str, Any]]):
+    if not slot:
+        return
+    capacity = int(slot.get("capacity") or 0)
+    if capacity <= 0:
+        return
+    current_count = db.query(models.Registration).filter(
+        models.Registration.event_id == event_id,
+        models.Registration.booking_slot_id == slot["id"],
+        models.Registration.status.in_(["registered", "checked-in", "pending_payment"]),
+    ).count()
+    if current_count >= capacity:
+        raise HTTPException(status_code=400, detail="This date/time is fully booked")
+
+
 def resolve_event_ticket_tier(event: models.Event, ticket_tier_id: Optional[str]) -> Dict[str, Any]:
     tiers = normalize_event_ticket_tiers(event)
     if not tiers:
@@ -2239,6 +2350,18 @@ def mark_event_registration_paid(db: Session, registration: models.Registration,
             registration.payment_status = "paid"
             registration.pesapal_tracking_id = tracking_id or registration.pesapal_tracking_id
             registration.paid_at = datetime.utcnow()
+            slot_text = event_registration_slot_text(registration)
+            add_notification(
+                db,
+                registration.user_id,
+                "Event waitlist update",
+                f"Your payment for '{event.title}'{slot_text} is confirmed, but the event is currently full. You are on the waitlist.",
+                "payment",
+                commit=False,
+                target_type="event",
+                target_id=event.id,
+                target_route="EventDetail",
+            )
             return True
 
     registration.status = "registered"
@@ -2249,13 +2372,17 @@ def mark_event_registration_paid(db: Session, registration: models.Registration,
         registration.ticket_token = secrets.token_urlsafe(16)
 
     if event:
+        slot_text = event_registration_slot_text(registration)
         add_notification(
             db,
             registration.user_id,
             "Event payment confirmed",
-            f"Your payment for '{event.title}' is confirmed. Your ticket is ready.",
+            f"Your payment for '{event.title}'{slot_text} is confirmed. Your ticket is ready.",
             "payment",
             commit=False,
+            target_type="event",
+            target_id=event.id,
+            target_route="EventDetail",
         )
         reward = calculate_karma_reward(registration.amount or 0)
         if reward:
@@ -2268,6 +2395,235 @@ def mark_event_registration_paid(db: Session, registration: models.Registration,
                 commit=False,
             )
     return True
+
+
+NOTIFICATION_TARGET_GROUPS = [
+    {
+        "id": "all_users",
+        "label": "All users",
+        "description": "Everyone with an account on Lovedogs 360.",
+    },
+    {
+        "id": "role_users",
+        "label": "Users by role",
+        "description": "Buyers, providers/sellers, admins, or super admins.",
+    },
+    {
+        "id": "event_registrants",
+        "label": "Event registrants",
+        "description": "People registered for a selected event, with optional payment, ticket, and booking-slot filters.",
+        "requires_event": True,
+    },
+    {
+        "id": "case_reporters",
+        "label": "Case reporters",
+        "description": "People who have reported cases, optionally filtered by case type or status.",
+    },
+    {
+        "id": "listing_publishers",
+        "label": "Listing publishers",
+        "description": "People who have published products or services in the marketplace.",
+    },
+    {
+        "id": "product_publishers",
+        "label": "Product publishers",
+        "description": "People who have published product listings.",
+    },
+    {
+        "id": "sellers_with_sales",
+        "label": "Sellers with paid sales",
+        "description": "Providers whose products or services have paid, completed, or settled orders.",
+    },
+]
+
+
+def filter_value(filters: Optional[Dict[str, Any]], key: str) -> Optional[str]:
+    value = (filters or {}).get(key)
+    if value is None:
+        return None
+    value = str(value).strip()
+    if not value or value.lower() in {"all", "any", "none"}:
+        return None
+    return value
+
+
+def truthy_filter(filters: Optional[Dict[str, Any]], key: str, default: bool = False) -> bool:
+    value = (filters or {}).get(key, default)
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def normalize_role_filter(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    normalized = value.strip().lower()
+    aliases = {
+        "buyers": models.UserRole.BUYER.value,
+        "buyer": models.UserRole.BUYER.value,
+        "providers": models.UserRole.PROVIDER.value,
+        "provider": models.UserRole.PROVIDER.value,
+        "sellers": models.UserRole.PROVIDER.value,
+        "seller": models.UserRole.PROVIDER.value,
+        "admins": models.UserRole.ADMIN.value,
+        "admin": models.UserRole.ADMIN.value,
+        "super_admins": models.UserRole.SUPER_ADMIN.value,
+        "super_admin": models.UserRole.SUPER_ADMIN.value,
+    }
+    return aliases.get(normalized, normalized)
+
+
+def normalize_item_type_filter(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    normalized = value.strip().lower()
+    aliases = {
+        "product": "products",
+        "products": "products",
+        "service": "services",
+        "services": "services",
+    }
+    return aliases.get(normalized, normalized)
+
+
+def distinct_user_ids(query) -> List[str]:
+    return list(dict.fromkeys(row[0] for row in query.all() if row and row[0]))
+
+
+def resolve_notification_campaign_recipients(
+    db: Session,
+    target_group: str,
+    filters: Optional[Dict[str, Any]] = None,
+) -> List[str]:
+    group = (target_group or "all_users").strip().lower()
+    filters = filters or {}
+
+    if group == "all_users":
+        return distinct_user_ids(db.query(models.User.id))
+
+    if group == "role_users":
+        role = normalize_role_filter(filter_value(filters, "role"))
+        if not role:
+            raise HTTPException(status_code=400, detail="Choose a role for this broadcast")
+        return distinct_user_ids(db.query(models.User.id).filter(models.User.role == role))
+
+    if group == "event_registrants":
+        event_id = filter_value(filters, "event_id")
+        if not event_id:
+            raise HTTPException(status_code=400, detail="Choose an event for this broadcast")
+        query = db.query(models.Registration.user_id).filter(models.Registration.event_id == event_id)
+        status_filter = filter_value(filters, "registration_status")
+        payment_filter = filter_value(filters, "payment_status")
+        tier_filter = filter_value(filters, "ticket_tier_id")
+        slot_filter = filter_value(filters, "booking_slot_id")
+        if status_filter:
+            query = query.filter(models.Registration.status == status_filter)
+        if payment_filter:
+            query = query.filter(models.Registration.payment_status == payment_filter)
+        if tier_filter:
+            query = query.filter(models.Registration.ticket_tier_id == tier_filter)
+        if slot_filter:
+            query = query.filter(models.Registration.booking_slot_id == slot_filter)
+        return distinct_user_ids(query.distinct())
+
+    if group == "case_reporters":
+        query = db.query(models.CaseReport.author_id)
+        case_type = filter_value(filters, "case_type")
+        status_filter = filter_value(filters, "case_status")
+        approved_filter = filter_value(filters, "approved")
+        if case_type:
+            query = query.filter(models.CaseReport.case_type == case_type)
+        if status_filter:
+            query = query.filter(models.CaseReport.status == status_filter)
+        if approved_filter:
+            query = query.filter(models.CaseReport.is_approved == truthy_filter(filters, "approved"))
+        return distinct_user_ids(query.distinct())
+
+    if group in {"listing_publishers", "product_publishers"}:
+        query = db.query(models.Service.provider_id)
+        item_type = "products" if group == "product_publishers" else normalize_item_type_filter(filter_value(filters, "item_type"))
+        if item_type:
+            query = query.filter(models.Service.item_type == item_type)
+        if truthy_filter(filters, "published_only", True):
+            query = query.filter(models.Service.is_published == True)
+        if truthy_filter(filters, "approved_only", False):
+            query = query.filter(models.Service.admin_approved == True)
+        return distinct_user_ids(query.distinct())
+
+    if group == "sellers_with_sales":
+        query = db.query(models.Service.provider_id).join(
+            models.Order,
+            models.Order.service_id == models.Service.id,
+        ).filter(models.Order.status.in_(PAID_ORDER_STATUS_VALUES))
+        item_type = normalize_item_type_filter(filter_value(filters, "item_type"))
+        if item_type:
+            query = query.filter(models.Service.item_type == item_type)
+        return distinct_user_ids(query.distinct())
+
+    raise HTTPException(status_code=400, detail="Unsupported notification target group")
+
+
+def default_campaign_target(target_group: str, filters: Optional[Dict[str, Any]]) -> Dict[str, Optional[str]]:
+    group = (target_group or "").strip().lower()
+    filters = filters or {}
+    if group == "event_registrants" and filter_value(filters, "event_id"):
+        return {
+            "target_type": "event",
+            "target_id": filter_value(filters, "event_id"),
+            "target_route": "EventDetail",
+        }
+    if group in {"listing_publishers", "product_publishers", "sellers_with_sales"}:
+        return {
+            "target_type": "marketplace",
+            "target_id": None,
+            "target_route": "Marketplace",
+        }
+    if group == "case_reporters":
+        return {
+            "target_type": "case",
+            "target_id": None,
+            "target_route": "Report",
+        }
+    return {"target_type": None, "target_id": None, "target_route": None}
+
+
+def event_registration_slot_text(registration: models.Registration) -> str:
+    if not getattr(registration, "booking_slot_label", None):
+        return ""
+    if getattr(registration, "booking_start_time", None):
+        return f" for {registration.booking_slot_label} on {registration.booking_start_time.strftime('%b %d, %Y %H:%M')}"
+    return f" for {registration.booking_slot_label}"
+
+
+def notify_event_registration_created(
+    db: Session,
+    event: models.Event,
+    registration: models.Registration,
+):
+    if not event or not registration or not registration.user_id:
+        return
+    slot_text = event_registration_slot_text(registration)
+    if registration.status == "waitlisted":
+        title = "Event waitlist joined"
+        message = f"You are on the waitlist for '{event.title}'{slot_text}. We will update you if a space opens."
+    elif str(registration.payment_status or "").lower() == "pending":
+        title = "Event registration saved"
+        message = f"Your registration for '{event.title}'{slot_text} is saved. Complete payment to receive your ticket."
+    else:
+        title = "Event registration confirmed"
+        message = f"You are registered for '{event.title}'{slot_text}. Your ticket is ready in the event page."
+
+    add_notification(
+        db,
+        registration.user_id,
+        title,
+        message,
+        "event",
+        commit=False,
+        target_type="event",
+        target_id=event.id,
+        target_route="EventDetail",
+    )
 
 @app.post("/orders", response_model=schemas.OrderResponse)
 def create_order(
@@ -2929,6 +3285,7 @@ def create_event(
         currency=(event.currency or "KES").strip().upper(),
         ticket_tiers=sanitize_ticket_tiers(event.ticket_tiers, event.currency or "KES"),
         attendee_type_question=event.attendee_type_question,
+        available_slots=sanitize_event_available_slots(event.available_slots),
         category=event.category,
         is_public=event.is_public,
         admin_created=admin_created,
@@ -2994,6 +3351,8 @@ def register_for_event(
         raise HTTPException(status_code=404, detail="Event not found")
 
     selected_tier = resolve_event_ticket_tier(event, registration.ticket_tier_id)
+    selected_slot = resolve_event_booking_slot(event, registration.booking_slot_id)
+    ensure_booking_slot_capacity(db, event_id, selected_slot)
     event_has_tiers = len(normalize_event_ticket_tiers(event)) > 0
     attendee_justification = (registration.attendee_type_justification or "").strip()
     if event_has_tiers and selected_tier.get("requires_justification", True) and len(attendee_justification) < 3:
@@ -3036,6 +3395,10 @@ def register_for_event(
         ticket_tier_id=selected_tier["id"],
         ticket_tier_label=selected_tier["label"],
         attendee_type_justification=attendee_justification or None,
+        booking_slot_id=selected_slot["id"] if selected_slot else None,
+        booking_slot_label=selected_slot["label"] if selected_slot else None,
+        booking_start_time=parse_datetime_value(selected_slot["start_time"]) if selected_slot else None,
+        booking_end_time=parse_datetime_value(selected_slot["end_time"]) if selected_slot else None,
         pesapal_merchant_reference=None,
     )
     new_reg.pesapal_merchant_reference = new_reg.id
@@ -3052,6 +3415,7 @@ def register_for_event(
             )
             db.add(new_resp)
 
+    notify_event_registration_created(db, event, new_reg)
     db.commit()
     db.refresh(new_reg)
     return new_reg
@@ -3258,6 +3622,10 @@ def get_event_responses(
             "ticket_tier_id": reg.ticket_tier_id,
             "ticket_tier_label": reg.ticket_tier_label,
             "attendee_type_justification": reg.attendee_type_justification,
+            "booking_slot_id": reg.booking_slot_id,
+            "booking_slot_label": reg.booking_slot_label,
+            "booking_start_time": reg.booking_start_time,
+            "booking_end_time": reg.booking_end_time,
             "pesapal_tracking_id": reg.pesapal_tracking_id,
             "paid_at": reg.paid_at,
             "created_at": reg.created_at,
@@ -3804,7 +4172,7 @@ def export_data(
             query = query.filter(models.Registration.event_id == event_id)
         
         registrations = query.all()
-        headers = ["Registration ID", "Event ID", "Event Title", "User ID", "User Name", "User Email", "Dog ID", "Dog Name", "Status", "Role", "Registration Type", "Type Justification", "Payment Status", "Amount", "Currency", "Pesapal Tracking ID", "Paid At", "Check-in Time", "Created At"]
+        headers = ["Registration ID", "Event ID", "Event Title", "User ID", "User Name", "User Email", "Dog ID", "Dog Name", "Status", "Role", "Registration Type", "Type Justification", "Booking Slot", "Booking Start", "Booking End", "Payment Status", "Amount", "Currency", "Pesapal Tracking ID", "Paid At", "Check-in Time", "Created At"]
         ws.append(headers)
         for cell in ws[1]: cell.font = header_font
         
@@ -3817,13 +4185,14 @@ def export_data(
                 reg.user_id, user.full_name if user else None, user.email if user else None,
                 reg.dog_id, dog.name if dog else None,
                 reg.status, reg.role, reg.ticket_tier_label, reg.attendee_type_justification,
+                reg.booking_slot_label, str(reg.booking_start_time), str(reg.booking_end_time),
                 reg.payment_status, reg.amount, reg.currency,
                 reg.pesapal_tracking_id, str(reg.paid_at), str(reg.check_in_time), str(reg.created_at)
             ])
             
     elif type == "events":
         events = db.query(models.Event).all()
-        headers = ["Event ID", "Title", "Date", "Location", "Poster URL", "Ticket Price", "Currency", "Ticket Tiers", "Attendee Type Question", "Organizer ID", "Organizer Name", "Organizer Email", "Category", "Registrations", "Paid Registrations", "Event Revenue", "Check-ins"]
+        headers = ["Event ID", "Title", "Date", "Location", "Poster URL", "Ticket Price", "Currency", "Ticket Tiers", "Attendee Type Question", "Available Slots", "Organizer ID", "Organizer Name", "Organizer Email", "Category", "Registrations", "Paid Registrations", "Event Revenue", "Check-ins"]
         ws.append(headers)
         for cell in ws[1]: cell.font = header_font
         for ev in events:
@@ -3841,6 +4210,7 @@ def export_data(
             ws.append([
                 ev.id, ev.title, str(ev.start_time), ev.location, ev.poster_url,
                 ev.ticket_price, ev.currency, json.dumps(ev.ticket_tiers or []), ev.attendee_type_question,
+                json.dumps(normalize_event_available_slots(ev)),
                 ev.organizer_id,
                 organizer.full_name if organizer else None, organizer.email if organizer else None,
                 ev.category, registrations, paid_registrations, float(event_revenue or 0), checkins
@@ -4960,6 +5330,7 @@ def admin_list_events(db: Session = Depends(database.get_db), admin: models.User
             "capacity": e.capacity, "ticket_price": e.ticket_price, "currency": e.currency,
             "ticket_tiers": normalize_event_ticket_tiers(e),
             "attendee_type_question": e.attendee_type_question,
+            "available_slots": normalize_event_available_slots(e),
             "category": e.category, "is_public": e.is_public,
             "admin_created": e.admin_created, "scorecard_enabled": e.scorecard_enabled,
             "scorecard_title": get_event_scorecard_title(e),
@@ -5022,6 +5393,30 @@ def admin_update_event_ticketing(
     event.ticket_tiers = tiers
     event.attendee_type_question = ticketing.attendee_type_question if tiers else None
 
+    db.commit()
+    db.refresh(event)
+    event.registrant_count = db.query(models.Registration).filter(
+        models.Registration.event_id == event.id,
+        models.Registration.status.in_(["registered", "checked-in"])
+    ).count()
+    pin = get_active_pin_map(db, "event").get(event.id)
+    event.is_pinned = pin is not None
+    event.pin_priority = pin.priority if pin else None
+    return event
+
+
+@app.put("/admin/events/{event_id}/schedule", response_model=schemas.EventResponse)
+def admin_update_event_schedule(
+    event_id: str,
+    schedule: schemas.EventScheduleUpdate,
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin)
+):
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    event.available_slots = sanitize_event_available_slots(schedule.available_slots)
     db.commit()
     db.refresh(event)
     event.registrant_count = db.query(models.Registration).filter(
@@ -5109,6 +5504,142 @@ class AnnouncementCreate(BaseModel):
     title: str
     message: str
     target_audience: Optional[str] = "all"
+
+@app.get("/admin/notification-target-options")
+def admin_notification_target_options(
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin),
+):
+    events = db.query(models.Event).order_by(models.Event.start_time.desc()).limit(100).all()
+    return {
+        "target_groups": NOTIFICATION_TARGET_GROUPS,
+        "roles": [
+            {"id": models.UserRole.BUYER.value, "label": "Buyers"},
+            {"id": models.UserRole.PROVIDER.value, "label": "Providers / sellers"},
+            {"id": models.UserRole.ADMIN.value, "label": "Admins"},
+            {"id": models.UserRole.SUPER_ADMIN.value, "label": "Super admins"},
+        ],
+        "events": [
+            {
+                "id": event.id,
+                "title": event.title,
+                "start_time": str(event.start_time),
+                "ticket_tiers": normalize_event_ticket_tiers(event),
+                "available_slots": normalize_event_available_slots(event),
+            }
+            for event in events
+        ],
+        "case_types": [
+            {"id": case_type.value, "label": case_type.value.replace("_", " ").title()}
+            for case_type in models.CaseType
+        ],
+        "case_statuses": [
+            {"id": case_status.value, "label": case_status.value.replace("_", " ").title()}
+            for case_status in models.CaseStatus
+        ],
+        "item_types": [
+            {"id": "products", "label": "Products"},
+            {"id": "services", "label": "Services"},
+        ],
+        "registration_statuses": [
+            {"id": "registered", "label": "Registered"},
+            {"id": "pending_payment", "label": "Pending payment"},
+            {"id": "waitlisted", "label": "Waitlisted"},
+            {"id": "checked-in", "label": "Checked in"},
+        ],
+        "payment_statuses": [
+            {"id": "free", "label": "Free"},
+            {"id": "pending", "label": "Payment pending"},
+            {"id": "paid", "label": "Paid"},
+            {"id": "failed", "label": "Failed"},
+        ],
+    }
+
+
+@app.get("/admin/notification-campaigns", response_model=List[schemas.NotificationCampaignResponse])
+def admin_list_notification_campaigns(
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin),
+):
+    return db.query(models.NotificationCampaign).order_by(
+        models.NotificationCampaign.created_at.desc()
+    ).limit(100).all()
+
+
+@app.post("/admin/notification-campaigns/preview", response_model=schemas.NotificationCampaignPreview)
+def admin_preview_notification_campaign(
+    data: schemas.NotificationCampaignRequest,
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin),
+):
+    recipient_ids = resolve_notification_campaign_recipients(db, data.target_group, data.filters)
+    return {
+        "target_group": data.target_group,
+        "recipient_count": len(recipient_ids),
+    }
+
+
+@app.post("/admin/notification-campaigns/send", response_model=schemas.NotificationCampaignResponse)
+def admin_send_notification_campaign(
+    data: schemas.NotificationCampaignRequest,
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin),
+):
+    title = (data.title or "").strip()
+    message = (data.message or "").strip()
+    if len(title) < 3 or len(message) < 3:
+        raise HTTPException(status_code=400, detail="Add a clear title and message before sending")
+
+    filters = data.filters or {}
+    recipient_ids = resolve_notification_campaign_recipients(db, data.target_group, filters)
+    if not recipient_ids:
+        raise HTTPException(status_code=400, detail="No users match this target group")
+
+    defaults = default_campaign_target(data.target_group, filters)
+    target_type = data.target_type or defaults.get("target_type")
+    target_id = data.target_id or defaults.get("target_id")
+    target_route = data.target_route or defaults.get("target_route")
+    notif_type = (data.type or "admin_broadcast").strip() or "admin_broadcast"
+
+    campaign = models.NotificationCampaign(
+        id=str(uuid.uuid4()),
+        title=title,
+        message=message,
+        target_group=data.target_group,
+        filters=filters,
+        type=notif_type,
+        target_type=target_type,
+        target_id=target_id,
+        target_route=target_route,
+        recipient_count=len(recipient_ids),
+        created_by_id=admin.id,
+    )
+    db.add(campaign)
+    db.flush()
+
+    for user_id in recipient_ids:
+        notification = add_notification(
+            db,
+            user_id,
+            title,
+            message,
+            notif_type,
+            commit=False,
+            target_type=target_type,
+            target_id=target_id,
+            target_route=target_route,
+        )
+        db.add(models.NotificationCampaignRecipient(
+            id=str(uuid.uuid4()),
+            campaign_id=campaign.id,
+            user_id=user_id,
+            notification_id=notification.id,
+        ))
+
+    db.commit()
+    db.refresh(campaign)
+    return campaign
+
 
 @app.get("/admin/announcements")
 def admin_list_announcements(db: Session = Depends(database.get_db), admin: models.User = Depends(require_admin)):
@@ -6002,9 +6533,9 @@ def get_announcements(
 ):
     # Depending on user role, filter target_audience
     if current_user.role == "buyer":
-        return db.query(models.Announcement).filter(models.Announcement.target_audience.in_(["all", "buyers"])).order_by(models.Announcement.created_at.desc()).all()
+        return db.query(models.Announcement).filter(models.Announcement.target_audience.in_(["all", "buyer", "buyers"])).order_by(models.Announcement.created_at.desc()).all()
     elif current_user.role == "provider":
-        return db.query(models.Announcement).filter(models.Announcement.target_audience.in_(["all", "providers"])).order_by(models.Announcement.created_at.desc()).all()
+        return db.query(models.Announcement).filter(models.Announcement.target_audience.in_(["all", "provider", "providers"])).order_by(models.Announcement.created_at.desc()).all()
     else:
         return db.query(models.Announcement).order_by(models.Announcement.created_at.desc()).all()
 

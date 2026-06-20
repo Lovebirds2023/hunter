@@ -34,7 +34,7 @@ const MANAGEMENT_GRID = [
     { id: 'pins', label: 'Priority Pins', icon: 'pin', sub: 'Top-of-feed Content', color: ADMIN_COLORS.accent },
     { id: 'dogs', label: 'Dog Registry', icon: 'paw', sub: 'Breed Distribution', color: ADMIN_COLORS.accent },
     { id: 'community', label: 'Moderation', icon: 'chatbubbles', sub: 'Social Monitor', color: ADMIN_COLORS.chart1, badge: 'flagged_posts' },
-    { id: 'announcements', label: 'Announcements', icon: 'megaphone', sub: 'Broadcast Updates', color: ADMIN_COLORS.chart1 },
+    { id: 'announcements', label: 'Inbox Broadcasts', icon: 'megaphone', sub: 'Targeted Updates', color: ADMIN_COLORS.chart1 },
     { id: 'support', label: 'Support Desk', icon: 'headset', sub: 'User Help Tickets', color: ADMIN_COLORS.chart5, badge: 'open_tickets' },
     { id: 'export', label: 'Reporting', icon: 'download', sub: 'XLSX Data Center', color: ADMIN_COLORS.info },
 ];

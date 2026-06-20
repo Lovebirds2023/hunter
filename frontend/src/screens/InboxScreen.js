@@ -140,6 +140,18 @@ export const InboxScreen = ({ navigation }) => {
                         params: { reportId: item.target_id },
                     },
                 });
+            } else if (item.itemType === 'notification' && item.target_route === 'EventDetail' && item.target_id) {
+                navigation.navigate('Main', {
+                    screen: 'Events',
+                    params: {
+                        screen: 'EventDetail',
+                        params: { eventId: item.target_id },
+                    },
+                });
+            } else if (item.itemType === 'notification' && item.target_route === 'Marketplace') {
+                navigation.navigate('Main', { screen: 'Marketplace' });
+            } else if (item.itemType === 'notification' && item.target_route === 'Report') {
+                navigation.navigate('Main', { screen: 'Report' });
             }
         };
 
@@ -147,7 +159,7 @@ export const InboxScreen = ({ navigation }) => {
             <TouchableOpacity 
                 style={[styles.card, isUnread && styles.unreadCard]}
                 onPress={handlePress}
-                disabled={item.itemType === 'announcement' || (item.itemType === 'notification' && item.is_read && !item.target_id)}
+                disabled={item.itemType === 'announcement' || (item.itemType === 'notification' && item.is_read && !item.target_id && !item.target_route)}
             >
                 <View style={styles.cardHeader}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>

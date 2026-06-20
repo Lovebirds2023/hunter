@@ -43,6 +43,8 @@ const newEventForm = () => {
         paid_tier_description: 'Paid registration for organizations, teams, companies, or sponsored participants.',
         paid_ticket_price: '0',
         attendee_type_question: 'Briefly explain why this registration category applies to you.',
+        schedule_enabled: false,
+        available_slots: [],
         scorecard_title: 'Impact Scorecard',
         scorecard_description: 'Collect baseline and follow-up data for learning, reporting, and program improvement.',
         is_public: true,
@@ -57,6 +59,67 @@ const defaultPaidTierLabel = 'Paid Access';
 const defaultPaidTierDescription = 'Paid registration for organizations, teams, companies, or sponsored participants.';
 const defaultScorecardTitle = 'Impact Scorecard';
 const defaultScorecardDescription = 'Collect baseline and follow-up data for learning, reporting, and program improvement.';
+
+const toDatetimeLocal = (value) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value).slice(0, 16);
+    return date.toISOString().slice(0, 16);
+};
+
+const makeSlot = (startTime, endTime, index = 0) => ({
+    id: `slot_${Date.now()}_${index + 1}`,
+    label: `Available slot ${index + 1}`,
+    start_time: toDatetimeLocal(startTime || new Date()),
+    end_time: toDatetimeLocal(endTime || new Date(Date.now() + 60 * 60 * 1000)),
+    capacity: '',
+    location: '',
+    notes: '',
+});
+
+const toSlotPayload = (slots = []) => {
+    const payload = [];
+    slots.forEach((slot, index) => {
+        const hasContent = slot.label || slot.start_time || slot.end_time || slot.capacity || slot.location || slot.notes;
+        if (!hasContent) return;
+        if (!slot.start_time || !slot.end_time) throw new Error('Missing slot time');
+
+        const start = new Date(slot.start_time);
+        const end = new Date(slot.end_time);
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+            throw new Error('Invalid slot time');
+        }
+
+        const capacity = Number(slot.capacity || 0);
+        if (Number.isNaN(capacity) || capacity < 0) throw new Error('Invalid slot capacity');
+
+        payload.push({
+            id: slot.id || `slot_${index + 1}`,
+            label: (slot.label || `Available slot ${index + 1}`).trim(),
+            start_time: start.toISOString(),
+            end_time: end.toISOString(),
+            capacity: Math.floor(capacity),
+            location: (slot.location || '').trim(),
+            notes: (slot.notes || '').trim(),
+        });
+    });
+    return payload;
+};
+
+const normalizeSlotsForForm = (slots, startTime, endTime) => {
+    if (Array.isArray(slots) && slots.length > 0) {
+        return slots.map((slot, index) => ({
+            id: slot.id || `slot_${index + 1}`,
+            label: slot.label || `Available slot ${index + 1}`,
+            start_time: toDatetimeLocal(slot.start_time),
+            end_time: toDatetimeLocal(slot.end_time),
+            capacity: slot.capacity ? String(slot.capacity) : '',
+            location: slot.location || '',
+            notes: slot.notes || '',
+        }));
+    }
+    return [makeSlot(startTime, endTime, 0)];
+};
 
 export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
     const [events, setEvents] = useState([]);
@@ -86,6 +149,9 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
         title: defaultScorecardTitle,
         description: defaultScorecardDescription,
     });
+    const [scheduleEvent, setScheduleEvent] = useState(null);
+    const [savingSchedule, setSavingSchedule] = useState(false);
+    const [scheduleSlots, setScheduleSlots] = useState([]);
 
     const uploadPosterIfNeeded = async (uri) => {
         if (!uri || /^https?:\/\//i.test(uri)) return uri;
@@ -154,6 +220,19 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
             Alert.alert('Check dates', 'Use valid start and end times, with the end after the start.');
             return;
         }
+        let availableSlots = [];
+        if (form.schedule_enabled) {
+            try {
+                availableSlots = toSlotPayload(form.available_slots);
+            } catch {
+                Alert.alert('Check schedule', 'Use valid start and end times for every booking slot.');
+                return;
+            }
+            if (availableSlots.length === 0) {
+                Alert.alert('Add dates', 'Add at least one available date/time slot, or turn booking schedule off.');
+                return;
+            }
+        }
         if (form.tiered_ticketing) {
             if (!form.free_tier_label.trim() || !form.paid_tier_label.trim()) {
                 Alert.alert('Category names required', 'Name both the free and paid registration categories.');
@@ -204,6 +283,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                 currency: form.currency || 'KES',
                 ticket_tiers: ticketTiers,
                 attendee_type_question: form.tiered_ticketing ? form.attendee_type_question : null,
+                available_slots: availableSlots,
                 category: form.category.trim() || 'outreach',
                 is_public: form.is_public ? 1 : 0,
                 scorecard_enabled: form.scorecard_enabled,
@@ -239,6 +319,8 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
             attendee_type_question: item.attendee_type_question || defaultTierQuestion,
         });
         setShowCreate(false);
+        setScorecardEvent(null);
+        setScheduleEvent(null);
     };
 
     const handleSaveTicketing = async () => {
@@ -303,6 +385,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
         });
         setShowCreate(false);
         setTicketingEvent(null);
+        setScheduleEvent(null);
     };
 
     const handleSaveScorecardSettings = async () => {
@@ -326,6 +409,83 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
             Alert.alert('Error', e.response?.data?.detail || 'Failed to update scorecard settings.');
         } finally {
             setSavingScorecard(false);
+        }
+    };
+
+    const updateFormSlot = (index, key, value) => {
+        setForm(prev => ({
+            ...prev,
+            available_slots: (prev.available_slots || []).map((slot, idx) => (
+                idx === index ? { ...slot, [key]: value } : slot
+            )),
+        }));
+    };
+
+    const addFormSlot = () => {
+        setForm(prev => ({
+            ...prev,
+            schedule_enabled: true,
+            available_slots: [
+                ...(prev.available_slots || []),
+                makeSlot(prev.start_time, prev.end_time, (prev.available_slots || []).length),
+            ],
+        }));
+    };
+
+    const removeFormSlot = (index) => {
+        setForm(prev => ({
+            ...prev,
+            available_slots: (prev.available_slots || []).filter((_, idx) => idx !== index),
+        }));
+    };
+
+    const openScheduleEditor = (item) => {
+        setScheduleEvent(item);
+        setScheduleSlots(normalizeSlotsForForm(item.available_slots, item.start_time, item.end_time));
+        setShowCreate(false);
+        setTicketingEvent(null);
+        setScorecardEvent(null);
+    };
+
+    const updateScheduleSlot = (index, key, value) => {
+        setScheduleSlots(prev => prev.map((slot, idx) => (
+            idx === index ? { ...slot, [key]: value } : slot
+        )));
+    };
+
+    const addScheduleSlot = () => {
+        setScheduleSlots(prev => [
+            ...prev,
+            makeSlot(scheduleEvent?.start_time, scheduleEvent?.end_time, prev.length),
+        ]);
+    };
+
+    const removeScheduleSlot = (index) => {
+        setScheduleSlots(prev => prev.filter((_, idx) => idx !== index));
+    };
+
+    const handleSaveSchedule = async () => {
+        if (!scheduleEvent) return;
+        let slots = [];
+        try {
+            slots = toSlotPayload(scheduleSlots);
+        } catch {
+            Alert.alert('Check schedule', 'Use valid start and end times for every booking slot.');
+            return;
+        }
+
+        setSavingSchedule(true);
+        try {
+            await client.put(`/admin/events/${scheduleEvent.id}/schedule`, {
+                available_slots: slots,
+            });
+            setScheduleEvent(null);
+            await fetchEvents(true);
+            Alert.alert('Saved', 'Event booking schedule updated.');
+        } catch (e) {
+            Alert.alert('Error', e.response?.data?.detail || 'Failed to update booking schedule.');
+        } finally {
+            setSavingSchedule(false);
         }
     };
 
@@ -428,6 +588,95 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                             />
                         </View>
                     ))}
+
+                    <View style={{ backgroundColor: ADMIN_COLORS.surface, borderRadius: 12, padding: 12, marginTop: 12 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <View style={{ flex: 1, paddingRight: 10 }}>
+                                <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800' }}>Booking schedule</Text>
+                                <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 11, marginTop: 3 }}>
+                                    Add available dates/times users can choose when booking this event.
+                                </Text>
+                            </View>
+                            <Switch
+                                value={form.schedule_enabled}
+                                onValueChange={(value) => setForm(prev => ({
+                                    ...prev,
+                                    schedule_enabled: value,
+                                    available_slots: value && (prev.available_slots || []).length === 0
+                                        ? [makeSlot(prev.start_time, prev.end_time, 0)]
+                                        : prev.available_slots,
+                                }))}
+                            />
+                        </View>
+                        {form.schedule_enabled && (
+                            <View style={{ marginTop: 12 }}>
+                                {(form.available_slots || []).map((slot, index) => (
+                                    <View key={slot.id || index} style={{ backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 12, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: ADMIN_COLORS.surfaceBorder }}>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                            <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800' }}>Slot {index + 1}</Text>
+                                            <TouchableOpacity onPress={() => removeFormSlot(index)} style={{ padding: 4 }}>
+                                                <Ionicons name="trash-outline" size={16} color={ADMIN_COLORS.danger} />
+                                            </TouchableOpacity>
+                                        </View>
+                                        <Text style={s.inputLabel}>Label</Text>
+                                        <TextInput
+                                            style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12 }]}
+                                            value={slot.label}
+                                            onChangeText={(value) => updateFormSlot(index, 'label', value)}
+                                        />
+                                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={s.inputLabel}>Starts</Text>
+                                                <TextInput
+                                                    style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12 }]}
+                                                    value={slot.start_time}
+                                                    onChangeText={(value) => updateFormSlot(index, 'start_time', value)}
+                                                />
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={s.inputLabel}>Ends</Text>
+                                                <TextInput
+                                                    style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12 }]}
+                                                    value={slot.end_time}
+                                                    onChangeText={(value) => updateFormSlot(index, 'end_time', value)}
+                                                />
+                                            </View>
+                                        </View>
+                                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={s.inputLabel}>Slot capacity</Text>
+                                                <TextInput
+                                                    style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12 }]}
+                                                    keyboardType="numeric"
+                                                    value={slot.capacity}
+                                                    onChangeText={(value) => updateFormSlot(index, 'capacity', value)}
+                                                />
+                                            </View>
+                                            <View style={{ flex: 2 }}>
+                                                <Text style={s.inputLabel}>Location override</Text>
+                                                <TextInput
+                                                    style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12 }]}
+                                                    value={slot.location}
+                                                    onChangeText={(value) => updateFormSlot(index, 'location', value)}
+                                                />
+                                            </View>
+                                        </View>
+                                        <Text style={s.inputLabel}>Notes</Text>
+                                        <TextInput
+                                            style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12, minHeight: 58, textAlignVertical: 'top' }]}
+                                            multiline
+                                            value={slot.notes}
+                                            onChangeText={(value) => updateFormSlot(index, 'notes', value)}
+                                        />
+                                    </View>
+                                ))}
+                                <TouchableOpacity style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg, alignSelf: 'flex-start' }]} onPress={addFormSlot}>
+                                    <Ionicons name="add-circle-outline" size={15} color={ADMIN_COLORS.info} />
+                                    <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>Add another slot</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </View>
 
                     <View style={{ flexDirection: 'row', gap: 10 }}>
                         <View style={{ flex: 1 }}>
@@ -710,6 +959,104 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                 </View>
             )}
 
+            {scheduleEvent && (
+                <View style={[s.card, { marginTop: 10, marginBottom: 12, backgroundColor: ADMIN_COLORS.surfaceLight }]}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 16, fontWeight: '800', color: ADMIN_COLORS.textPrimary }}>Schedule: {scheduleEvent.title}</Text>
+                            <Text style={{ fontSize: 12, color: ADMIN_COLORS.textMuted, marginTop: 4 }}>
+                                Set the dates/times users can choose when booking this event.
+                            </Text>
+                        </View>
+                        <TouchableOpacity onPress={() => setScheduleEvent(null)} style={{ padding: 8 }}>
+                            <Ionicons name="close" size={22} color={ADMIN_COLORS.textMuted} />
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={{ backgroundColor: ADMIN_COLORS.surface, borderRadius: 12, padding: 12, marginTop: 12 }}>
+                        {scheduleSlots.map((slot, index) => (
+                            <View key={slot.id || index} style={{ backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 12, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: ADMIN_COLORS.surfaceBorder }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                    <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800' }}>Booking slot {index + 1}</Text>
+                                    <TouchableOpacity onPress={() => removeScheduleSlot(index)} style={{ padding: 4 }}>
+                                        <Ionicons name="trash-outline" size={16} color={ADMIN_COLORS.danger} />
+                                    </TouchableOpacity>
+                                </View>
+                                <Text style={s.inputLabel}>Label</Text>
+                                <TextInput
+                                    style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12 }]}
+                                    value={slot.label}
+                                    onChangeText={(value) => updateScheduleSlot(index, 'label', value)}
+                                />
+                                <View style={{ flexDirection: 'row', gap: 8 }}>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={s.inputLabel}>Starts</Text>
+                                        <TextInput
+                                            style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12 }]}
+                                            value={slot.start_time}
+                                            onChangeText={(value) => updateScheduleSlot(index, 'start_time', value)}
+                                        />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={s.inputLabel}>Ends</Text>
+                                        <TextInput
+                                            style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12 }]}
+                                            value={slot.end_time}
+                                            onChangeText={(value) => updateScheduleSlot(index, 'end_time', value)}
+                                        />
+                                    </View>
+                                </View>
+                                <View style={{ flexDirection: 'row', gap: 8 }}>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={s.inputLabel}>Capacity</Text>
+                                        <TextInput
+                                            style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12 }]}
+                                            keyboardType="numeric"
+                                            value={slot.capacity}
+                                            onChangeText={(value) => updateScheduleSlot(index, 'capacity', value)}
+                                        />
+                                    </View>
+                                    <View style={{ flex: 2 }}>
+                                        <Text style={s.inputLabel}>Location override</Text>
+                                        <TextInput
+                                            style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12 }]}
+                                            value={slot.location}
+                                            onChangeText={(value) => updateScheduleSlot(index, 'location', value)}
+                                        />
+                                    </View>
+                                </View>
+                                <Text style={s.inputLabel}>Notes</Text>
+                                <TextInput
+                                    style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12, minHeight: 58, textAlignVertical: 'top' }]}
+                                    multiline
+                                    value={slot.notes}
+                                    onChangeText={(value) => updateScheduleSlot(index, 'notes', value)}
+                                />
+                            </View>
+                        ))}
+
+                        <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
+                            <TouchableOpacity style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg }]} onPress={addScheduleSlot}>
+                                <Ionicons name="add-circle-outline" size={15} color={ADMIN_COLORS.info} />
+                                <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>Add slot</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.warningBg }]}
+                                onPress={() => setScheduleSlots([])}
+                            >
+                                <Ionicons name="close-circle-outline" size={15} color={ADMIN_COLORS.warning} />
+                                <Text style={[s.actionBtnText, { color: ADMIN_COLORS.warning }]}>Clear schedule</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    <TouchableOpacity style={s.primaryButton} onPress={handleSaveSchedule} disabled={savingSchedule}>
+                        {savingSchedule ? <ActivityIndicator color={ADMIN_COLORS.bg} /> : <Ionicons name="save-outline" size={18} color={ADMIN_COLORS.bg} />}
+                        <Text style={s.primaryButtonText}>{savingSchedule ? 'Saving...' : 'Save booking schedule'}</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
                 {[
                     ['Upcoming', upcoming, ADMIN_COLORS.info],
@@ -772,6 +1119,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                         const status = getEventStatus(item.start_time, item.end_time);
                         const capacity = item.capacity || 0;
                         const hasTiers = Array.isArray(item.ticket_tiers) && item.ticket_tiers.length > 0;
+                        const slotCount = Array.isArray(item.available_slots) ? item.available_slots.length : 0;
                         const priceLabel = hasTiers
                             ? 'FREE + PAID'
                             : (Number(item.ticket_price || 0) > 0 ? `${item.currency || 'KES'} ${Number(item.ticket_price || 0).toLocaleString()}` : 'FREE');
@@ -798,6 +1146,11 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                                                     <Text style={[s.badgeText, { color: ADMIN_COLORS.info }]}>SCORECARD</Text>
                                                 </View>
                                             )}
+                                            {slotCount > 0 && (
+                                                <View style={[s.badge, { backgroundColor: ADMIN_COLORS.warningBg }]}>
+                                                    <Text style={[s.badgeText, { color: ADMIN_COLORS.warning }]}>{slotCount} SLOT{slotCount === 1 ? '' : 'S'}</Text>
+                                                </View>
+                                            )}
                                         </View>
                                         <Text style={s.listCardSub}>by {item.organizer_name} - {item.category}</Text>
                                     </View>
@@ -822,6 +1175,14 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                                             {new Date(item.start_time).toLocaleDateString()}
                                         </Text>
                                     </View>
+                                    {slotCount > 0 && (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Ionicons name="calendar-number-outline" size={13} color={ADMIN_COLORS.textMuted} />
+                                            <Text style={{ fontSize: 12, color: ADMIN_COLORS.textSecondary, marginLeft: 4 }}>
+                                                {slotCount} booking slot{slotCount === 1 ? '' : 's'}
+                                            </Text>
+                                        </View>
+                                    )}
                                 </View>
 
                                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
@@ -895,6 +1256,14 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                                     >
                                         <Ionicons name="ticket-outline" size={14} color={ADMIN_COLORS.success} />
                                         <Text style={[s.actionBtnText, { color: ADMIN_COLORS.success }]}>Ticketing</Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.warningBg, marginRight: 10 }]}
+                                        onPress={() => openScheduleEditor(item)}
+                                    >
+                                        <Ionicons name="calendar-number-outline" size={14} color={ADMIN_COLORS.warning} />
+                                        <Text style={[s.actionBtnText, { color: ADMIN_COLORS.warning }]}>Schedule</Text>
                                     </TouchableOpacity>
 
                                     <TouchableOpacity

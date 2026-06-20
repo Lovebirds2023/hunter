@@ -27,6 +27,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
     const [paymentTrackingId, setPaymentTrackingId] = useState(null);
     const [paymentLoading, setPaymentLoading] = useState(false);
     const [selectedTicketTierId, setSelectedTicketTierId] = useState(null);
+    const [selectedBookingSlotId, setSelectedBookingSlotId] = useState(null);
     const [attendeeTypeJustification, setAttendeeTypeJustification] = useState('');
 
     const [myRegistration, setMyRegistration] = useState(null);
@@ -51,6 +52,14 @@ export const EventDetailScreen = ({ route, navigation }) => {
             const tiers = Array.isArray(eventData.ticket_tiers) ? eventData.ticket_tiers : [];
             if (tiers.length > 0) {
                 setSelectedTicketTierId(prev => prev || tiers[0].id);
+            }
+            const slots = Array.isArray(eventData.available_slots) ? eventData.available_slots : [];
+            if (slots.length > 0) {
+                setSelectedBookingSlotId(prev => (
+                    slots.some(slot => slot.id === prev) ? prev : slots[0].id
+                ));
+            } else {
+                setSelectedBookingSlotId(null);
             }
 
             // Check if saved
@@ -152,6 +161,12 @@ export const EventDetailScreen = ({ route, navigation }) => {
 
         const ticketTiers = Array.isArray(event?.ticket_tiers) ? event.ticket_tiers : [];
         const selectedTier = ticketTiers.find(tier => tier.id === selectedTicketTierId);
+        const availableSlots = Array.isArray(event?.available_slots) ? event.available_slots : [];
+        const selectedBookingSlot = availableSlots.find(slot => slot.id === selectedBookingSlotId);
+        if (availableSlots.length > 0 && !selectedBookingSlot) {
+            Alert.alert('Choose a date', 'Select one available date/time before continuing.');
+            return;
+        }
         if (ticketTiers.length > 0) {
             if (!selectedTier) {
                 const categoryNames = ticketTiers
@@ -189,6 +204,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
                 share_phone: sharePhone,
                 ticket_tier_id: selectedTier?.id || null,
                 attendee_type_justification: ticketTiers.length > 0 ? attendeeTypeJustification.trim() : null,
+                booking_slot_id: selectedBookingSlot?.id || null,
                 form_responses: formattedResponses
             });
             setModalVisible(false);
@@ -218,6 +234,18 @@ export const EventDetailScreen = ({ route, navigation }) => {
     const selectedPriceLabel = selectedTicketPrice > 0
         ? `${selectedTicketCurrency} ${selectedTicketPrice.toLocaleString()}`
         : 'Free';
+    const availableSlots = Array.isArray(event.available_slots) ? event.available_slots : [];
+    const hasAvailableSlots = availableSlots.length > 0;
+    const formatSlotTime = (slot) => {
+        if (!slot?.start_time) return '';
+        const start = new Date(slot.start_time);
+        const end = slot.end_time ? new Date(slot.end_time) : null;
+        const startLabel = Number.isNaN(start.getTime()) ? String(slot.start_time) : start.toLocaleString();
+        const endLabel = end && !Number.isNaN(end.getTime())
+            ? end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : '';
+        return endLabel ? `${startLabel} - ${endLabel}` : startLabel;
+    };
     const pendingPayment = myRegistration && (
         String(myRegistration.payment_status || '').toLowerCase() === 'pending' ||
         myRegistration.status === 'pending_payment'
@@ -256,6 +284,30 @@ export const EventDetailScreen = ({ route, navigation }) => {
                 <Text style={styles.time}>{new Date(event.start_time).toLocaleString()}</Text>
                 <Text style={styles.location}>{event.location}</Text>
                 <Text style={styles.description}>{event.description}</Text>
+
+                {hasAvailableSlots && (
+                    <View style={styles.scheduleSection}>
+                        <View style={styles.scheduleHeader}>
+                            <Ionicons name="calendar-number-outline" size={20} color={COLORS.primary} />
+                            <Text style={styles.scheduleTitle}>Available booking dates</Text>
+                        </View>
+                        {availableSlots.map(slot => (
+                            <View key={slot.id} style={styles.scheduleItem}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.scheduleItemTitle}>{slot.label}</Text>
+                                    <Text style={styles.scheduleItemTime}>{formatSlotTime(slot)}</Text>
+                                    {!!slot.location && <Text style={styles.scheduleItemMeta}>{slot.location}</Text>}
+                                    {!!slot.notes && <Text style={styles.scheduleItemMeta}>{slot.notes}</Text>}
+                                </View>
+                                {Number(slot.capacity || 0) > 0 && (
+                                    <View style={styles.scheduleCapacityPill}>
+                                        <Text style={styles.scheduleCapacityText}>{slot.capacity} spots</Text>
+                                    </View>
+                                )}
+                            </View>
+                        ))}
+                    </View>
+                )}
 
                 {event.scorecard_enabled !== false && (
                     <View style={styles.scorecardSection}>
@@ -302,6 +354,11 @@ export const EventDetailScreen = ({ route, navigation }) => {
                                 <Ionicons name="card-outline" size={30} color={COLORS.primary} />
                                 <Text style={styles.paymentTitle}>Complete payment to receive your ticket</Text>
                                 <Text style={styles.paymentAmount}>{myRegistration.currency || event.currency || 'KES'} {Number(myRegistration.amount || ticketPrice || 0).toLocaleString()}</Text>
+                                {myRegistration.booking_slot_label && (
+                                    <Text style={styles.paymentCopy}>
+                                        Booking: {myRegistration.booking_slot_label} {myRegistration.booking_start_time ? `| ${new Date(myRegistration.booking_start_time).toLocaleString()}` : ''}
+                                    </Text>
+                                )}
                                 <Text style={styles.paymentCopy}>Your registration is saved, but the QR ticket is issued after Pesapal confirms payment.</Text>
                                 <View style={styles.paymentActions}>
                                     <TouchableOpacity
@@ -349,6 +406,11 @@ export const EventDetailScreen = ({ route, navigation }) => {
                                 <Text style={styles.ticketStatus}>
                                     {t('event_detail.status')}: {myRegistration.status === 'checked-in' ? t('event_detail.checked_in') : t('event_detail.valid')}
                                 </Text>
+                                {myRegistration.booking_slot_label && (
+                                    <Text style={styles.ticketSlot}>
+                                        {myRegistration.booking_slot_label} {myRegistration.booking_start_time ? `| ${new Date(myRegistration.booking_start_time).toLocaleString()}` : ''}
+                                    </Text>
+                                )}
                             </View>
                         )
                     ) : (
@@ -424,6 +486,32 @@ export const EventDetailScreen = ({ route, navigation }) => {
                                         value={attendeeTypeJustification}
                                         onChangeText={setAttendeeTypeJustification}
                                     />
+                                </View>
+                            )}
+
+                            {hasAvailableSlots && (
+                                <View style={styles.profileSection}>
+                                    <Text style={styles.sectionTitle}>Choose available date/time</Text>
+                                    {availableSlots.map((slot) => {
+                                        const isSelected = selectedBookingSlotId === slot.id;
+                                        return (
+                                            <TouchableOpacity
+                                                key={slot.id}
+                                                style={[styles.slotOption, isSelected && styles.selectedSlotOption]}
+                                                onPress={() => setSelectedBookingSlotId(slot.id)}
+                                            >
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={[styles.slotTitle, isSelected && styles.selectedSlotText]}>{slot.label}</Text>
+                                                    <Text style={[styles.slotTime, isSelected && styles.selectedSlotText]}>{formatSlotTime(slot)}</Text>
+                                                    {!!slot.location && <Text style={[styles.slotMeta, isSelected && styles.selectedSlotText]}>{slot.location}</Text>}
+                                                    {!!slot.notes && <Text style={[styles.slotMeta, isSelected && styles.selectedSlotText]}>{slot.notes}</Text>}
+                                                </View>
+                                                {Number(slot.capacity || 0) > 0 && (
+                                                    <Text style={[styles.slotCapacity, isSelected && styles.selectedSlotText]}>{slot.capacity} spots</Text>
+                                                )}
+                                            </TouchableOpacity>
+                                        );
+                                    })}
                                 </View>
                             )}
 
@@ -553,6 +641,36 @@ const styles = StyleSheet.create({
     time: { fontSize: 16, color: '#555', marginBottom: 5 },
     location: { fontSize: 16, color: '#555', marginBottom: 20 },
     description: { fontSize: 16, lineHeight: 24 },
+    scheduleSection: {
+        marginTop: 22,
+        padding: 16,
+        backgroundColor: '#f8fbff',
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#d9e9ff'
+    },
+    scheduleHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+    scheduleTitle: { marginLeft: 8, fontSize: 17, fontWeight: '900', color: COLORS.primary },
+    scheduleItem: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 10,
+        paddingVertical: 11,
+        borderTopWidth: 1,
+        borderTopColor: '#e8f1ff'
+    },
+    scheduleItemTitle: { fontSize: 15, fontWeight: '900', color: '#222' },
+    scheduleItemTime: { marginTop: 3, fontSize: 13, color: '#444', lineHeight: 18 },
+    scheduleItemMeta: { marginTop: 3, fontSize: 12, color: '#666', lineHeight: 17 },
+    scheduleCapacityPill: {
+        backgroundColor: '#fff8dc',
+        borderRadius: 14,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderWidth: 1,
+        borderColor: '#f0d875'
+    },
+    scheduleCapacityText: { color: COLORS.primary, fontSize: 11, fontWeight: '900' },
     footer: { marginTop: 30 },
     modalView: {
         margin: 20,
@@ -600,6 +718,26 @@ const styles = StyleSheet.create({
     tierDescription: { fontSize: 12, color: '#666', marginTop: 3, lineHeight: 17 },
     tierPrice: { fontSize: 13, fontWeight: '900', color: '#0f7a39' },
     selectedTierText: { color: '#fff' },
+    slotOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        borderWidth: 1,
+        borderColor: '#d9e9ff',
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 10,
+        backgroundColor: '#f8fbff'
+    },
+    selectedSlotOption: {
+        backgroundColor: COLORS.primary,
+        borderColor: COLORS.primary
+    },
+    slotTitle: { fontSize: 15, fontWeight: '900', color: '#222' },
+    slotTime: { fontSize: 12, color: '#555', marginTop: 3, lineHeight: 17 },
+    slotMeta: { fontSize: 12, color: '#666', marginTop: 3, lineHeight: 17 },
+    slotCapacity: { color: COLORS.primary, fontSize: 12, fontWeight: '900' },
+    selectedSlotText: { color: '#fff' },
     ticketContainer: {
         alignItems: 'center',
         padding: 20,
@@ -640,6 +778,13 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
         color: COLORS.primary
+    },
+    ticketSlot: {
+        marginTop: 8,
+        fontSize: 13,
+        color: '#555',
+        textAlign: 'center',
+        lineHeight: 18
     },
     paymentCard: {
         padding: 20,
