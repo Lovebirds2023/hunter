@@ -49,6 +49,9 @@ class UserResponse(UserBase):
     last_seen: Optional[datetime.datetime] = None
     karma_points: int = 0
     available_karma: int = 0
+    suspended_at: Optional[datetime.datetime] = None
+    suspension_ends_at: Optional[datetime.datetime] = None
+    suspension_reason: Optional[str] = None
 
     class Config:
         from_attributes = True

@@ -14,6 +14,7 @@ export const AdminApprovalsTab = ({ onBack }) => {
     const [activeSection, setActiveSection] = useState('services'); // 'services' or 'reports'
     const [rejectionReason, setRejectionReason] = useState('');
     const [actioningId, setActioningId] = useState(null);
+    const [deleteReasons, setDeleteReasons] = useState({});
 
     const fetchPending = useCallback(async (silent = false) => {
         if (!silent) setLoading(true);
@@ -34,7 +35,8 @@ export const AdminApprovalsTab = ({ onBack }) => {
     useEffect(() => { fetchPending(); }, [fetchPending]);
 
     const handleAction = async (itemType, itemId, isApproved) => {
-        if (!isApproved && !rejectionReason.trim()) {
+        const reason = (rejectionReason || deleteReasons[itemId] || '').trim();
+        if (!isApproved && !reason) {
             Alert.alert('Required', 'Please provide a reason for rejection.');
             return;
         }
@@ -43,7 +45,7 @@ export const AdminApprovalsTab = ({ onBack }) => {
         try {
             await client.post(`/admin/approve/${itemType}/${itemId}`, {
                 is_approved: isApproved,
-                rejection_reason: isApproved ? null : rejectionReason
+                rejection_reason: isApproved ? null : reason
             });
             Alert.alert('Success', `Item ${isApproved ? 'Approved' : 'Rejected'} successfully.`);
             setRejectionReason('');
@@ -53,6 +55,41 @@ export const AdminApprovalsTab = ({ onBack }) => {
         } finally {
             setActioningId(null);
         }
+    };
+
+    const updateDeleteReason = (id, reason) => {
+        setDeleteReasons(prev => ({ ...prev, [id]: reason }));
+    };
+
+    const handleDelete = (itemType, item) => {
+        const reason = (deleteReasons[item.id] || '').trim();
+        if (!reason) {
+            Alert.alert('Reason required', 'Add a short reason before deleting this item.');
+            return;
+        }
+        const path = itemType === 'service'
+            ? `/admin/services/${item.id}`
+            : `/admin/cases/${item.id}`;
+        Alert.alert('Delete Item', `Delete "${item.title}"? The user will be notified with your reason.`, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Delete', style: 'destructive', onPress: async () => {
+                    setActioningId(item.id);
+                    try {
+                        await client.delete(path, { data: { reason } });
+                        setPending(prev => ({
+                            services: itemType === 'service' ? prev.services.filter(row => row.id !== item.id) : prev.services,
+                            reports: itemType === 'report' ? prev.reports.filter(row => row.id !== item.id) : prev.reports,
+                        }));
+                        Alert.alert('Deleted', 'Item removed and user notified.');
+                    } catch (e) {
+                        Alert.alert('Error', e.response?.data?.detail || 'Failed to delete item.');
+                    } finally {
+                        setActioningId(null);
+                    }
+                }
+            }
+        ]);
     };
 
     const renderServiceItem = ({ item }) => (
@@ -81,6 +118,21 @@ export const AdminApprovalsTab = ({ onBack }) => {
                     onFocus={() => setActioningId(item.id)}
                 />
             </View>
+            <TextInput
+                style={[s.textInput, {
+                    height: 40,
+                    marginTop: 10,
+                    borderWidth: 1,
+                    borderColor: ADMIN_COLORS.surfaceBorder,
+                    borderRadius: 10,
+                    paddingHorizontal: 12,
+                    backgroundColor: ADMIN_COLORS.surfaceLight,
+                }]}
+                placeholder="Reason if deleting..."
+                placeholderTextColor={ADMIN_COLORS.textMuted}
+                value={deleteReasons[item.id] || ''}
+                onChangeText={(reason) => updateDeleteReason(item.id, reason)}
+            />
 
             <View style={[s.actionRow, { marginTop: 12 }]}>
                 <TouchableOpacity 
@@ -98,6 +150,13 @@ export const AdminApprovalsTab = ({ onBack }) => {
                     <Ionicons name="close-circle-outline" size={16} color={ADMIN_COLORS.danger} />
                     <Text style={[s.actionBtnText, { color: ADMIN_COLORS.danger }]}>Reject</Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                    style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.dangerBg, flex: 1 }]}
+                    onPress={() => handleDelete('service', item)}
+                >
+                    <Ionicons name="trash-outline" size={16} color={ADMIN_COLORS.danger} />
+                    <Text style={[s.actionBtnText, { color: ADMIN_COLORS.danger }]}>Delete</Text>
+                </TouchableOpacity>
             </View>
         </View>
     );
@@ -112,6 +171,21 @@ export const AdminApprovalsTab = ({ onBack }) => {
                 </View>
             </View>
             <Text style={{ color: ADMIN_COLORS.textSecondary, marginTop: 10, fontSize: 13 }}>{item.description}</Text>
+            <TextInput
+                style={[s.textInput, {
+                    height: 40,
+                    marginTop: 12,
+                    borderWidth: 1,
+                    borderColor: ADMIN_COLORS.surfaceBorder,
+                    borderRadius: 10,
+                    paddingHorizontal: 12,
+                    backgroundColor: ADMIN_COLORS.surfaceLight,
+                }]}
+                placeholder="Reason if deleting..."
+                placeholderTextColor={ADMIN_COLORS.textMuted}
+                value={deleteReasons[item.id] || ''}
+                onChangeText={(reason) => updateDeleteReason(item.id, reason)}
+            />
             
             <View style={[s.actionRow, { marginTop: 12 }]}>
                 <TouchableOpacity 
@@ -127,6 +201,13 @@ export const AdminApprovalsTab = ({ onBack }) => {
                 >
                     <Ionicons name="trash-outline" size={16} color={ADMIN_COLORS.danger} />
                     <Text style={[s.actionBtnText, { color: ADMIN_COLORS.danger }]}>Discard</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.dangerBg, flex: 1 }]}
+                    onPress={() => handleDelete('report', item)}
+                >
+                    <Ionicons name="trash-outline" size={16} color={ADMIN_COLORS.danger} />
+                    <Text style={[s.actionBtnText, { color: ADMIN_COLORS.danger }]}>Delete</Text>
                 </TouchableOpacity>
             </View>
         </View>

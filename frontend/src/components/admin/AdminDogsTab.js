@@ -14,6 +14,7 @@ export const AdminDogsTab = ({ onBack }) => {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [search, setSearch] = useState('');
+    const [deleteReasons, setDeleteReasons] = useState({});
 
     const fetchDogs = useCallback(async (silent = false) => {
         if (!silent) setLoading(true);
@@ -43,6 +44,33 @@ export const AdminDogsTab = ({ onBack }) => {
             setFiltered(dogs);
         }
     }, [dogs, search]);
+
+    const updateDeleteReason = (id, reason) => {
+        setDeleteReasons(prev => ({ ...prev, [id]: reason }));
+    };
+
+    const handleDelete = (item) => {
+        const reason = (deleteReasons[item.id] || '').trim();
+        if (!reason) {
+            Alert.alert('Reason required', 'Add a short reason before deleting this registry entry.');
+            return;
+        }
+
+        Alert.alert('Delete Registry Entry', `Delete "${item.name}" from the registry?`, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Delete', style: 'destructive', onPress: async () => {
+                    try {
+                        await client.delete(`/admin/dogs/${item.id}`, { data: { reason } });
+                        setDogs(prev => prev.filter(d => d.id !== item.id));
+                        Alert.alert('Deleted', 'Registry entry removed and owner notified.');
+                    } catch (e) {
+                        Alert.alert('Error', e.response?.data?.detail || 'Failed to delete registry entry.');
+                    }
+                }
+            }
+        ]);
+    };
 
     const topBreeds = Object.entries(breedDist)
         .sort((a, b) => b[1] - a[1])
@@ -142,6 +170,30 @@ export const AdminDogsTab = ({ onBack }) => {
                                         </Text>
                                     </View>
                                 )}
+                            </View>
+                            <TextInput
+                                style={[s.textInput, {
+                                    height: 42,
+                                    marginTop: 12,
+                                    borderWidth: 1,
+                                    borderColor: ADMIN_COLORS.surfaceBorder,
+                                    borderRadius: 10,
+                                    paddingHorizontal: 12,
+                                    backgroundColor: ADMIN_COLORS.surfaceLight,
+                                }]}
+                                placeholder="Reason if deleting..."
+                                placeholderTextColor={ADMIN_COLORS.textMuted}
+                                value={deleteReasons[item.id] || ''}
+                                onChangeText={(reason) => updateDeleteReason(item.id, reason)}
+                            />
+                            <View style={s.actionRow}>
+                                <TouchableOpacity
+                                    style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.dangerBg }]}
+                                    onPress={() => handleDelete(item)}
+                                >
+                                    <Ionicons name="trash-outline" size={14} color={ADMIN_COLORS.danger} />
+                                    <Text style={[s.actionBtnText, { color: ADMIN_COLORS.danger }]}>Delete</Text>
+                                </TouchableOpacity>
                             </View>
                         </View>
                     )}

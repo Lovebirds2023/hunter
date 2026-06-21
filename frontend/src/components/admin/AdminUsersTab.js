@@ -15,6 +15,13 @@ const ROLE_COLORS = {
     super_admin: ADMIN_COLORS.accent,
     suspended: ADMIN_COLORS.textMuted,
 };
+const SUSPENSION_OPTIONS = [
+    { label: '24h', value: 24, unit: 'hours' },
+    { label: '7d', value: 7, unit: 'days' },
+    { label: '30d', value: 30, unit: 'days' },
+    { label: '12w', value: 12, unit: 'weeks' },
+];
+const DEFAULT_SUSPENSION = { duration_value: 7, duration_unit: 'days', reason: '' };
 
 export const AdminUsersTab = ({ onBack }) => {
     const [users, setUsers] = useState([]);
@@ -23,6 +30,7 @@ export const AdminUsersTab = ({ onBack }) => {
     const [refreshing, setRefreshing] = useState(false);
     const [search, setSearch] = useState('');
     const [roleFilter, setRoleFilter] = useState('All');
+    const [suspendForms, setSuspendForms] = useState({});
 
     const fetchUsers = useCallback(async (silent = false) => {
         if (!silent) setLoading(true);
@@ -54,17 +62,54 @@ export const AdminUsersTab = ({ onBack }) => {
         setFiltered(result);
     }, [users, search, roleFilter]);
 
-    const handleSuspend = (userId, name) => {
-        Alert.alert('Suspend User', `Suspend "${name}"? They will not be able to access the platform.`, [
+    const getSuspendForm = (userId) => suspendForms[userId] || DEFAULT_SUSPENSION;
+
+    const updateSuspendForm = (userId, patch) => {
+        setSuspendForms(prev => ({
+            ...prev,
+            [userId]: { ...DEFAULT_SUSPENSION, ...(prev[userId] || {}), ...patch },
+        }));
+    };
+
+    const handleSuspend = (user) => {
+        const form = getSuspendForm(user.id);
+        const reason = (form.reason || '').trim();
+        if (!reason) {
+            Alert.alert('Reason required', 'Add a short reason before suspending this user.');
+            return;
+        }
+
+        Alert.alert('Suspend User', `Suspend "${user.full_name || user.email}" for ${form.duration_value} ${form.duration_unit}? They will not be able to access the platform during this period.`, [
             { text: 'Cancel', style: 'cancel' },
             {
                 text: 'Suspend', style: 'destructive', onPress: async () => {
                     try {
-                        await client.post(`/admin/users/${userId}/suspend`);
-                        Alert.alert('Done', `${name} has been suspended.`);
+                        const res = await client.post(`/admin/users/${user.id}/suspend`, {
+                            duration_value: form.duration_value,
+                            duration_unit: form.duration_unit,
+                            reason,
+                        });
+                        Alert.alert('Done', res.data?.message || `${user.full_name || user.email} has been suspended.`);
                         fetchUsers(true);
                     } catch (e) {
-                        Alert.alert('Error', 'Failed to suspend user');
+                        Alert.alert('Error', e.response?.data?.detail || 'Failed to suspend user');
+                    }
+                }
+            }
+        ]);
+    };
+
+    const handleUnsuspend = (user) => {
+        Alert.alert('Restore User', `Lift the suspension for "${user.full_name || user.email}" now?`, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Restore', onPress: async () => {
+                    try {
+                        const res = await client.post(`/admin/users/${user.id}/unsuspend`);
+                        Alert.alert('Done', res.data?.message || 'User restored.');
+                        fetchUsers(true);
+                    } catch (e) {
+                        Alert.alert('Error', e.response?.data?.detail || 'Failed to restore user');
                     }
                 }
             }
@@ -168,15 +213,76 @@ export const AdminUsersTab = ({ onBack }) => {
                                     Joined {new Date(item.created_at).toLocaleDateString()}
                                 </Text>
                             )}
+                            {item.is_suspended && (
+                                <View style={{ marginTop: 10, padding: 10, borderRadius: 10, backgroundColor: ADMIN_COLORS.dangerBg }}>
+                                    <Text style={{ fontSize: 12, color: ADMIN_COLORS.danger, fontWeight: '700' }}>
+                                        Suspended until {item.suspension_ends_at ? new Date(item.suspension_ends_at).toLocaleString() : 'admin review'}
+                                    </Text>
+                                    {!!item.suspension_reason && (
+                                        <Text style={{ fontSize: 12, color: ADMIN_COLORS.textSecondary, marginTop: 4 }}>
+                                            Reason: {item.suspension_reason}
+                                        </Text>
+                                    )}
+                                </View>
+                            )}
                             {!['admin', 'super_admin', 'suspended'].includes(item.role) && (
+                                <View style={{ marginTop: 12 }}>
+                                    <Text style={{ fontSize: 12, color: ADMIN_COLORS.textMuted, fontWeight: '700', marginBottom: 8 }}>
+                                        Suspension length
+                                    </Text>
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                                        {SUSPENSION_OPTIONS.map(option => {
+                                            const form = getSuspendForm(item.id);
+                                            const active = form.duration_value === option.value && form.duration_unit === option.unit;
+                                            return (
+                                                <TouchableOpacity
+                                                    key={`${option.value}-${option.unit}`}
+                                                    style={[s.filterChip, active && s.filterChipActive, { paddingVertical: 6 }]}
+                                                    onPress={() => updateSuspendForm(item.id, {
+                                                        duration_value: option.value,
+                                                        duration_unit: option.unit,
+                                                    })}
+                                                >
+                                                    <Text style={[s.filterChipText, active && s.filterChipTextActive]}>{option.label}</Text>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </View>
+                                    <TextInput
+                                        style={[s.textInput, {
+                                            height: 42,
+                                            borderWidth: 1,
+                                            borderColor: ADMIN_COLORS.surfaceBorder,
+                                            borderRadius: 10,
+                                            paddingHorizontal: 12,
+                                            backgroundColor: ADMIN_COLORS.surfaceLight,
+                                        }]}
+                                        placeholder="Reason for suspension..."
+                                        placeholderTextColor={ADMIN_COLORS.textMuted}
+                                        value={getSuspendForm(item.id).reason}
+                                        onChangeText={(reason) => updateSuspendForm(item.id, { reason })}
+                                    />
+                                </View>
+                            )}
+                            {!['admin', 'super_admin'].includes(item.role) && (
                                 <View style={s.actionRow}>
+                                    {item.role === 'suspended' ? (
+                                        <TouchableOpacity
+                                            style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.successBg }]}
+                                            onPress={() => handleUnsuspend(item)}
+                                        >
+                                            <Ionicons name="checkmark-circle-outline" size={14} color={ADMIN_COLORS.success} />
+                                            <Text style={[s.actionBtnText, { color: ADMIN_COLORS.success }]}>Restore</Text>
+                                        </TouchableOpacity>
+                                    ) : (
                                     <TouchableOpacity 
                                         style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.dangerBg }]}
-                                        onPress={() => handleSuspend(item.id, item.full_name)}
+                                        onPress={() => handleSuspend(item)}
                                     >
                                         <Ionicons name="ban-outline" size={14} color={ADMIN_COLORS.danger} />
                                         <Text style={[s.actionBtnText, { color: ADMIN_COLORS.danger }]}>Suspend</Text>
                                     </TouchableOpacity>
+                                    )}
                                 </View>
                             )}
                         </View>

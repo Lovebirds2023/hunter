@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-    View, Text, ScrollView, TouchableOpacity,
+    View, Text, ScrollView, TouchableOpacity, TextInput,
     ActivityIndicator, RefreshControl, Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +20,7 @@ export const AdminPinsTab = ({ onBack }) => {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [actioningId, setActioningId] = useState(null);
+    const [deleteReasons, setDeleteReasons] = useState({});
 
     const fetchContent = useCallback(async (silent = false) => {
         if (!silent) setLoading(true);
@@ -61,6 +62,47 @@ export const AdminPinsTab = ({ onBack }) => {
         } finally {
             setActioningId(null);
         }
+    };
+
+    const updateDeleteReason = (id, reason) => {
+        setDeleteReasons(prev => ({ ...prev, [id]: reason }));
+    };
+
+    const getDeletePath = (item) => {
+        switch (section.targetType) {
+            case 'event': return `/admin/events/${item.id}`;
+            case 'service': return `/admin/services/${item.id}`;
+            case 'case': return `/admin/cases/${item.id}`;
+            case 'community': return `/admin/community/${item.id}`;
+            default: return null;
+        }
+    };
+
+    const deleteContent = async (item) => {
+        const reason = (deleteReasons[item.id] || '').trim();
+        const path = getDeletePath(item);
+        if (!path) return;
+        if (!reason) {
+            Alert.alert('Reason required', 'Add a short reason before deleting this content.');
+            return;
+        }
+        Alert.alert('Delete Content', `Delete "${item.title}"? The owner will be notified with your reason.`, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Delete', style: 'destructive', onPress: async () => {
+                    setActioningId(`delete-${item.id}`);
+                    try {
+                        await client.delete(path, { data: { reason } });
+                        await fetchContent(true);
+                        Alert.alert('Deleted', 'Content removed and owner notified.');
+                    } catch (error) {
+                        Alert.alert('Error', error.response?.data?.detail || 'Could not delete content.');
+                    } finally {
+                        setActioningId(null);
+                    }
+                }
+            }
+        ]);
     };
 
     return (
@@ -123,6 +165,21 @@ export const AdminPinsTab = ({ onBack }) => {
                                     {item.description}
                                 </Text>
                             ) : null}
+                            <TextInput
+                                style={[s.textInput, {
+                                    height: 42,
+                                    marginTop: 12,
+                                    borderWidth: 1,
+                                    borderColor: ADMIN_COLORS.surfaceBorder,
+                                    borderRadius: 10,
+                                    paddingHorizontal: 12,
+                                    backgroundColor: ADMIN_COLORS.surfaceLight,
+                                }]}
+                                placeholder="Reason if deleting..."
+                                placeholderTextColor={ADMIN_COLORS.textMuted}
+                                value={deleteReasons[item.id] || ''}
+                                onChangeText={(reason) => updateDeleteReason(item.id, reason)}
+                            />
                             <View style={s.actionRow}>
                                 <TouchableOpacity
                                     style={[s.actionBtn, { backgroundColor: item.is_pinned ? ADMIN_COLORS.dangerBg : ADMIN_COLORS.successBg }]}
@@ -137,6 +194,18 @@ export const AdminPinsTab = ({ onBack }) => {
                                     <Text style={[s.actionBtnText, { color: item.is_pinned ? ADMIN_COLORS.danger : ADMIN_COLORS.success }]}>
                                         {item.is_pinned ? 'Unpin' : 'Pin to top'}
                                     </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.dangerBg }]}
+                                    onPress={() => deleteContent(item)}
+                                    disabled={actioningId === `delete-${item.id}`}
+                                >
+                                    {actioningId === `delete-${item.id}` ? (
+                                        <ActivityIndicator size="small" color={ADMIN_COLORS.danger} />
+                                    ) : (
+                                        <Ionicons name="trash-outline" size={14} color={ADMIN_COLORS.danger} />
+                                    )}
+                                    <Text style={[s.actionBtnText, { color: ADMIN_COLORS.danger }]}>Delete</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>

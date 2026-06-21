@@ -9,6 +9,7 @@ class UserRole(str, enum.Enum):
     PROVIDER = "provider"
     ADMIN = "admin"
     SUPER_ADMIN = "super_admin"
+    SUSPENDED = "suspended"
 
 class OrderStatus(str, enum.Enum):
     PENDING = "pending"
@@ -44,6 +45,11 @@ class User(Base):
     mpesa_phone_number = Column(String, nullable=True)
     average_rating = Column(Float, default=0.0)
     total_ratings = Column(Integer, default=0)
+    pre_suspension_role = Column(String, nullable=True)
+    suspended_at = Column(DateTime, nullable=True)
+    suspension_ends_at = Column(DateTime, nullable=True)
+    suspension_reason = Column(String, nullable=True)
+    suspended_by_id = Column(String, ForeignKey("users.id"), nullable=True)
     
     # Community Hub Fields
     is_online = Column(Boolean, default=False)

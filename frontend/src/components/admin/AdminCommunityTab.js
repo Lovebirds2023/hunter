@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-    View, Text, FlatList, TouchableOpacity,
+    View, Text, FlatList, TouchableOpacity, TextInput,
     ActivityIndicator, RefreshControl, Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ export const AdminCommunityTab = ({ onBack }) => {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [pinningId, setPinningId] = useState(null);
+    const [deleteReasons, setDeleteReasons] = useState({});
 
     const fetchPosts = useCallback(async (silent = false) => {
         if (!silent) setLoading(true);
@@ -37,14 +38,23 @@ export const AdminCommunityTab = ({ onBack }) => {
         }
     };
 
-    const handleDelete = (id) => {
+    const updateDeleteReason = (id, reason) => {
+        setDeleteReasons(prev => ({ ...prev, [id]: reason }));
+    };
+
+    const handleDelete = (item) => {
+        const reason = (deleteReasons[item.id] || '').trim();
+        if (!reason) {
+            Alert.alert('Reason required', 'Add a short reason before deleting this post.');
+            return;
+        }
         Alert.alert('Delete Post', 'Are you sure you want to permanently delete this post?', [
             { text: 'Cancel', style: 'cancel' },
             {
                 text: 'Delete', style: 'destructive', onPress: async () => {
                     try {
-                        await client.delete(`/admin/community/${id}`);
-                        setPosts(prev => prev.filter(p => p.id !== id));
+                        await client.delete(`/admin/community/${item.id}`, { data: { reason } });
+                        setPosts(prev => prev.filter(p => p.id !== item.id));
                     } catch (e) {
                         Alert.alert('Error', 'Failed to delete post');
                     }
@@ -133,6 +143,22 @@ export const AdminCommunityTab = ({ onBack }) => {
                                 {item.content}
                             </Text>
 
+                            <TextInput
+                                style={[s.textInput, {
+                                    height: 42,
+                                    marginTop: 12,
+                                    borderWidth: 1,
+                                    borderColor: ADMIN_COLORS.surfaceBorder,
+                                    borderRadius: 10,
+                                    paddingHorizontal: 12,
+                                    backgroundColor: ADMIN_COLORS.surfaceLight,
+                                }]}
+                                placeholder="Reason if deleting..."
+                                placeholderTextColor={ADMIN_COLORS.textMuted}
+                                value={deleteReasons[item.id] || ''}
+                                onChangeText={(reason) => updateDeleteReason(item.id, reason)}
+                            />
+
                             <View style={s.actionRow}>
                                 <TouchableOpacity
                                     style={[s.actionBtn, { backgroundColor: item.is_pinned ? ADMIN_COLORS.dangerBg : ADMIN_COLORS.successBg }]}
@@ -157,7 +183,7 @@ export const AdminCommunityTab = ({ onBack }) => {
                                 </TouchableOpacity>
                                 <TouchableOpacity 
                                     style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.dangerBg }]}
-                                    onPress={() => handleDelete(item.id)}
+                                    onPress={() => handleDelete(item)}
                                 >
                                     <Ionicons name="trash-outline" size={14} color={ADMIN_COLORS.danger} />
                                     <Text style={[s.actionBtnText, { color: ADMIN_COLORS.danger }]}>Delete</Text>

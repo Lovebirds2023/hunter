@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Body
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -272,7 +272,23 @@ FALLBACK_EXCHANGE_RATES = {
 }
 
 ADMIN_ROLE_VALUES = {models.UserRole.ADMIN.value, models.UserRole.SUPER_ADMIN.value}
+SUSPENDED_ROLE = models.UserRole.SUSPENDED.value
 PINNABLE_TARGET_TYPES = {"event", "service", "case", "community"}
+SUSPENSION_DURATION_LIMITS = {
+    "hours": 24 * 365,
+    "days": 365,
+    "weeks": 52,
+}
+
+
+class SuspensionRequest(BaseModel):
+    duration_value: int = 7
+    duration_unit: str = "days"
+    reason: Optional[str] = None
+
+
+class AdminDeleteReasonRequest(BaseModel):
+    reason: Optional[str] = None
 
 LOST_FOUND_CASE_TYPES = {"lost_dog", "found_dog"}
 OPPOSITE_LOST_FOUND_TYPE = {
@@ -744,6 +760,112 @@ DEFAULT_REPORTING_FIELDS = {
 
 def is_admin_user(user: models.User) -> bool:
     return user.role in ADMIN_ROLE_VALUES
+
+
+def clean_admin_reason(reason: Optional[str], fallback: str = "Platform policy enforcement") -> str:
+    cleaned = " ".join(str(reason or "").split())
+    return (cleaned or fallback)[:500]
+
+
+def get_suspension_end(request: SuspensionRequest) -> datetime:
+    unit = (request.duration_unit or "days").strip().lower()
+    if unit.endswith("s") is False:
+        unit = f"{unit}s"
+    if unit not in SUSPENSION_DURATION_LIMITS:
+        raise HTTPException(status_code=400, detail="Suspension duration must use hours, days, or weeks")
+
+    try:
+        value = int(request.duration_value)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Suspension duration must be a whole number")
+
+    if value <= 0:
+        raise HTTPException(status_code=400, detail="Suspension duration must be greater than zero")
+    if value > SUSPENSION_DURATION_LIMITS[unit]:
+        raise HTTPException(status_code=400, detail=f"Suspension duration is too long for {unit}")
+
+    if unit == "hours":
+        return datetime.utcnow() + timedelta(hours=value)
+    if unit == "weeks":
+        return datetime.utcnow() + timedelta(weeks=value)
+    return datetime.utcnow() + timedelta(days=value)
+
+
+def format_suspension_until(value: Optional[datetime]) -> str:
+    if not value:
+        return "further admin review"
+    return value.strftime("%Y-%m-%d %H:%M UTC")
+
+
+def clear_suspension(user: models.User):
+    restore_role = user.pre_suspension_role or models.UserRole.BUYER.value
+    if restore_role == SUSPENDED_ROLE:
+        restore_role = models.UserRole.BUYER.value
+    user.role = restore_role
+    user.pre_suspension_role = None
+    user.suspended_at = None
+    user.suspension_ends_at = None
+    user.suspension_reason = None
+    user.suspended_by_id = None
+
+
+def restore_expired_suspension(db: Session, user: models.User) -> bool:
+    if user.role != SUSPENDED_ROLE:
+        return False
+    if not user.suspension_ends_at or user.suspension_ends_at > datetime.utcnow():
+        return False
+    clear_suspension(user)
+    db.commit()
+    db.refresh(user)
+    return True
+
+
+def ensure_user_not_suspended(db: Session, user: models.User):
+    if restore_expired_suspension(db, user):
+        return
+    if user.role == SUSPENDED_ROLE:
+        detail = f"Account suspended until {format_suspension_until(user.suspension_ends_at)}."
+        if user.suspension_reason:
+            detail += f" Reason: {user.suspension_reason}"
+        raise HTTPException(status_code=403, detail=detail)
+
+
+def add_admin_audit_log(
+    db: Session,
+    admin: models.User,
+    action: str,
+    target_type: str,
+    target_id: str,
+    details: str,
+):
+    db.add(models.AuditLog(
+        id=str(uuid.uuid4()),
+        user_id=admin.id if admin else None,
+        action=action,
+        target_type=target_type,
+        target_id=target_id,
+        details=details[:1000],
+    ))
+
+
+def notify_admin_deleted_content(
+    db: Session,
+    user_id: Optional[str],
+    content_type: str,
+    title: Optional[str],
+    reason: str,
+):
+    if not user_id:
+        return
+    item_title = (title or content_type).strip()
+    add_notification(
+        db,
+        user_id,
+        "Content deleted by admin",
+        f"Your {content_type} '{item_title}' was deleted by an admin. Reason: {reason}",
+        "moderation",
+        commit=False,
+    )
 
 
 def parse_datetime_value(value):
@@ -1309,6 +1431,16 @@ try:
             """ALTER TABLE users
                ADD COLUMN IF NOT EXISTS location_accuracy_meters DOUBLE PRECISION;""",
             """ALTER TABLE users
+               ADD COLUMN IF NOT EXISTS pre_suspension_role VARCHAR;""",
+            """ALTER TABLE users
+               ADD COLUMN IF NOT EXISTS suspended_at TIMESTAMP;""",
+            """ALTER TABLE users
+               ADD COLUMN IF NOT EXISTS suspension_ends_at TIMESTAMP;""",
+            """ALTER TABLE users
+               ADD COLUMN IF NOT EXISTS suspension_reason VARCHAR;""",
+            """ALTER TABLE users
+               ADD COLUMN IF NOT EXISTS suspended_by_id VARCHAR REFERENCES users(id);""",
+            """ALTER TABLE users
                ALTER COLUMN hashed_password DROP NOT NULL;""",
             """ALTER TABLE users
                ALTER COLUMN full_name DROP NOT NULL;""",
@@ -1468,6 +1600,7 @@ try:
             """CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);""",
             """CREATE INDEX IF NOT EXISTS idx_users_auth_provider ON users(auth_provider);""",
             """CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);""",
+            """CREATE INDEX IF NOT EXISTS idx_users_suspension ON users(role, suspension_ends_at);""",
             """CREATE INDEX IF NOT EXISTS idx_services_marketplace ON services(item_type, is_published, admin_approved);""",
             """CREATE INDEX IF NOT EXISTS idx_direct_messages_users ON direct_messages(sender_id, receiver_id, created_at);""",
             """CREATE INDEX IF NOT EXISTS idx_content_pins_target ON content_pins(target_type, target_id, is_active);""",
@@ -1652,6 +1785,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    ensure_user_not_suspended(db, user)
     access_token = auth.create_access_token(data={"sub": user.email, "role": user.role})
     return {"access_token": access_token, "token_type": "bearer"}
 
@@ -1707,6 +1841,8 @@ async def google_auth(request: schemas.GoogleLoginRequest, db: Session = Depends
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=409, detail="This Google account is already linked to another user")
+
+    ensure_user_not_suspended(db, user)
     
     access_token = auth.create_access_token(data={"sub": user.email, "role": user.role})
     
@@ -1732,8 +1868,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     user = db.query(models.User).filter(models.User.email == email).first()
     if user is None:
         raise credentials_exception
-    if user is None:
-        raise credentials_exception
+    ensure_user_not_suspended(db, user)
     return user
 
 def require_admin(current_user: models.User = Depends(get_current_user)):
@@ -4627,7 +4762,9 @@ def admin_stats(db: Session = Depends(database.get_db), admin: models.User = Dep
 def admin_list_users(db: Session = Depends(database.get_db), admin: models.User = Depends(require_admin)):
     users = db.query(models.User).order_by(models.User.created_at.desc()).all()
     result = []
+    restored_any = False
     for u in users:
+        restored_any = restore_expired_suspension(db, u) or restored_any
         dog_count = db.query(models.Dog).filter(models.Dog.owner_id == u.id).count()
         listing_count = db.query(models.Service).filter(models.Service.provider_id == u.id).count()
         order_count = db.query(models.Order).filter(models.Order.buyer_id == u.id).count()
@@ -4646,12 +4783,19 @@ def admin_list_users(db: Session = Depends(database.get_db), admin: models.User 
             "preferred_currency": u.preferred_currency,
             "average_rating": u.average_rating or 0,
             "total_ratings": u.total_ratings or 0,
+            "is_suspended": u.role == SUSPENDED_ROLE,
+            "pre_suspension_role": u.pre_suspension_role,
+            "suspended_at": str(u.suspended_at) if u.suspended_at else None,
+            "suspension_ends_at": str(u.suspension_ends_at) if u.suspension_ends_at else None,
+            "suspension_reason": u.suspension_reason,
             "dog_count": dog_count,
             "listing_count": listing_count,
             "order_count": order_count,
             "paid_order_count": paid_order_count,
             "created_at": str(u.created_at) if u.created_at else None,
         })
+    if restored_any:
+        db.commit()
     return result
 
 @app.get("/admin/orders")
@@ -4866,6 +5010,62 @@ def admin_list_services(db: Session = Depends(database.get_db), admin: models.Us
     return result
 
 
+@app.delete("/admin/services/{service_id}")
+def admin_delete_service(
+    service_id: str,
+    req: Optional[AdminDeleteReasonRequest] = Body(default=None),
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin),
+):
+    service = db.query(models.Service).filter(models.Service.id == service_id).first()
+    if not service:
+        raise HTTPException(status_code=404, detail="Service not found")
+
+    reason = clean_admin_reason(req.reason if req else None, "Marketplace listing removed by admin")
+    order_count = db.query(models.Order).filter(models.Order.service_id == service_id).count()
+    service_title = service.title or "Marketplace listing"
+    provider_id = service.provider_id
+
+    db.query(models.ContentPin).filter(
+        models.ContentPin.target_type == "service",
+        models.ContentPin.target_id == service_id,
+    ).delete()
+
+    if order_count > 0:
+        service.is_published = False
+        service.admin_approved = False
+        service.rejection_reason = f"Deleted by admin: {reason}"
+        notify_admin_deleted_content(db, provider_id, "marketplace listing", service_title, reason)
+        add_admin_audit_log(
+            db,
+            admin,
+            "remove_service_listing",
+            "service",
+            service_id,
+            f"title={service_title} provider_id={provider_id} orders_retained={order_count} reason={reason}",
+        )
+        db.commit()
+        return {
+            "message": "Listing removed from public view. Order history was retained.",
+            "archived": True,
+            "order_count": order_count,
+        }
+
+    db.query(models.ServiceFormField).filter(models.ServiceFormField.service_id == service_id).delete()
+    db.delete(service)
+    notify_admin_deleted_content(db, provider_id, "marketplace listing", service_title, reason)
+    add_admin_audit_log(
+        db,
+        admin,
+        "delete_service_listing",
+        "service",
+        service_id,
+        f"title={service_title} provider_id={provider_id} reason={reason}",
+    )
+    db.commit()
+    return {"message": "Marketplace listing deleted", "archived": False}
+
+
 class ApprovalRequest(BaseModel):
     is_approved: bool
     rejection_reason: Optional[str] = None
@@ -4957,6 +5157,46 @@ def admin_approve_item(
     create_notification(db, recipient_id, title, msg, notif_type)
 
     return {"message": "Success", "is_approved": req.is_approved}
+
+
+@app.delete("/admin/cases/{report_id}")
+def admin_delete_case_report(
+    report_id: str,
+    req: Optional[AdminDeleteReasonRequest] = Body(default=None),
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin),
+):
+    report = db.query(models.CaseReport).filter(models.CaseReport.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Case report not found")
+
+    reason = clean_admin_reason(req.reason if req else None, "Case report removed by admin")
+    report_title = report.title or "Case report"
+    author_id = report.author_id
+
+    db.query(models.ContentPin).filter(
+        models.ContentPin.target_type == "case",
+        models.ContentPin.target_id == report_id,
+    ).delete()
+    db.query(models.CaseLike).filter(models.CaseLike.report_id == report_id).delete()
+    db.query(models.CaseComment).filter(models.CaseComment.report_id == report_id).delete()
+    db.query(models.PetMatchCandidate).filter(
+        (models.PetMatchCandidate.case_report_id == report_id)
+        | (models.PetMatchCandidate.matched_case_report_id == report_id)
+    ).delete(synchronize_session=False)
+    db.delete(report)
+    notify_admin_deleted_content(db, author_id, "case report", report_title, reason)
+    add_admin_audit_log(
+        db,
+        admin,
+        "delete_case_report",
+        "case",
+        report_id,
+        f"title={report_title} author_id={author_id} reason={reason}",
+    )
+    db.commit()
+    return {"message": "Case report deleted"}
+
 
 @app.get("/spotlight", response_model=List[schemas.SpotlightResponse])
 def get_spotlight(db: Session = Depends(database.get_db)):
@@ -5352,10 +5592,24 @@ def admin_list_events(db: Session = Depends(database.get_db), admin: models.User
 
 
 @app.delete("/admin/events/{event_id}")
-def admin_delete_event(event_id: str, db: Session = Depends(database.get_db), admin: models.User = Depends(require_admin)):
+def admin_delete_event(
+    event_id: str,
+    req: Optional[AdminDeleteReasonRequest] = Body(default=None),
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin),
+):
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+    reason = clean_admin_reason(req.reason if req else None, "Event removed by admin")
+    event_title = event.title or "Event"
+    organizer_id = event.organizer_id
+    registrant_ids = [
+        row[0] for row in db.query(models.Registration.user_id)
+        .filter(models.Registration.event_id == event_id)
+        .distinct()
+        .all()
+    ]
     # Delete related registrations first
     db.query(models.ContentPin).filter(models.ContentPin.target_type == "event", models.ContentPin.target_id == event_id).delete()
     db.query(models.ScorecardEvidence).filter(models.ScorecardEvidence.event_id == event_id).delete()
@@ -5370,6 +5624,25 @@ def admin_delete_event(event_id: str, db: Session = Depends(database.get_db), ad
     db.query(models.Registration).filter(models.Registration.event_id == event_id).delete()
     db.query(models.EventFormField).filter(models.EventFormField.event_id == event_id).delete()
     db.delete(event)
+    notify_admin_deleted_content(db, organizer_id, "event", event_title, reason)
+    for registrant_id in registrant_ids:
+        if registrant_id and registrant_id != organizer_id:
+            add_notification(
+                db,
+                registrant_id,
+                "Event removed",
+                f"The event '{event_title}' was removed by an admin. Reason: {reason}",
+                "moderation",
+                commit=False,
+            )
+    add_admin_audit_log(
+        db,
+        admin,
+        "delete_event",
+        "event",
+        event_id,
+        f"title={event_title} organizer_id={organizer_id} notified_registrants={len(registrant_ids)} reason={reason}",
+    )
     db.commit()
     return {"message": "Event deleted"}
 
@@ -5491,14 +5764,31 @@ def admin_hide_post(post_id: str, db: Session = Depends(database.get_db), admin:
 
 
 @app.delete("/admin/community/{post_id}")
-def admin_delete_post(post_id: str, db: Session = Depends(database.get_db), admin: models.User = Depends(require_admin)):
+def admin_delete_post(
+    post_id: str,
+    req: Optional[AdminDeleteReasonRequest] = Body(default=None),
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin),
+):
     post = db.query(models.CommunityMessage).filter(models.CommunityMessage.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
+    reason = clean_admin_reason(req.reason if req else None, "Community post removed by admin")
+    post_title = (post.content or "Community post")[:80]
+    author_id = post.author_id
     db.query(models.ContentPin).filter(models.ContentPin.target_type == "community", models.ContentPin.target_id == post_id).delete()
     db.query(models.ChatReaction).filter(models.ChatReaction.message_id == post_id).delete()
     db.query(models.CommunityPollVote).filter(models.CommunityPollVote.message_id == post_id).delete()
     db.delete(post)
+    notify_admin_deleted_content(db, author_id, "community post", post_title, reason)
+    add_admin_audit_log(
+        db,
+        admin,
+        "delete_community_post",
+        "community",
+        post_id,
+        f"author_id={author_id} reason={reason}",
+    )
     db.commit()
     return {"message": "Post deleted"}
 
@@ -5680,6 +5970,8 @@ def admin_list_dogs(db: Session = Depends(database.get_db), admin: models.User =
             "id": d.id, "name": d.name, "breed": d.breed, "color": d.color,
             "age": d.age, "weight": d.weight, "pet_type": d.pet_type,
             "owner_name": owner.full_name if owner else "Unknown",
+            "owner_id": d.owner_id,
+            "owner_email": owner.email if owner else None,
             "health_records": health_count,
             "has_nose_print": d.nose_print_descriptor is not None
         })
@@ -5688,6 +5980,41 @@ def admin_list_dogs(db: Session = Depends(database.get_db), admin: models.User =
         "breed_distribution": {breed: count for breed, count in breed_counts},
         "total": len(dogs)
     }
+
+
+@app.delete("/admin/dogs/{dog_id}")
+def admin_delete_dog(
+    dog_id: str,
+    req: Optional[AdminDeleteReasonRequest] = Body(default=None),
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin),
+):
+    dog = db.query(models.Dog).filter(models.Dog.id == dog_id).first()
+    if not dog:
+        raise HTTPException(status_code=404, detail="Pet not found")
+
+    reason = clean_admin_reason(req.reason if req else None, "Pet registry entry removed by admin")
+    pet_name = dog.name or "Pet"
+    owner_id = dog.owner_id
+
+    db.query(models.HealthRecord).filter(models.HealthRecord.dog_id == dog_id).delete()
+    db.query(models.Registration).filter(models.Registration.dog_id == dog_id).update({"dog_id": None}, synchronize_session=False)
+    db.query(models.ProgramJourney).filter(models.ProgramJourney.dog_id == dog_id).update({"dog_id": None}, synchronize_session=False)
+    db.query(models.CheckInData).filter(models.CheckInData.dog_id == dog_id).update({"dog_id": None}, synchronize_session=False)
+    db.query(models.LiveObservation).filter(models.LiveObservation.dog_id == dog_id).update({"dog_id": None}, synchronize_session=False)
+    db.query(models.PetMatchCandidate).filter(models.PetMatchCandidate.matched_dog_id == dog_id).update({"matched_dog_id": None}, synchronize_session=False)
+    db.delete(dog)
+    notify_admin_deleted_content(db, owner_id, "pet registry entry", pet_name, reason)
+    add_admin_audit_log(
+        db,
+        admin,
+        "delete_pet_registry_entry",
+        "dog",
+        dog_id,
+        f"name={pet_name} owner_id={owner_id} reason={reason}",
+    )
+    db.commit()
+    return {"message": "Pet registry entry deleted"}
 
 # =====================================================
 # Case Reporting API — Social Dog Case Reporting
@@ -6651,16 +6978,87 @@ def admin_create_user(
 @app.post("/admin/users/{user_id}/suspend")
 def admin_suspend_user(
     user_id: str,
+    req: Optional[SuspensionRequest] = Body(default=None),
     db: Session = Depends(database.get_db),
     admin: models.User = Depends(require_admin)
 ):
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-        
-    user.role = "suspended"
+    if user.id == admin.id:
+        raise HTTPException(status_code=400, detail="Admins cannot suspend their own account")
+    if user.role in ADMIN_ROLE_VALUES:
+        raise HTTPException(status_code=400, detail="Admin accounts cannot be suspended from this panel")
+
+    request_data = req or SuspensionRequest()
+    ends_at = get_suspension_end(request_data)
+    reason = clean_admin_reason(request_data.reason, "Account suspended by admin")
+    original_role = user.pre_suspension_role or user.role or models.UserRole.BUYER.value
+    if original_role == SUSPENDED_ROLE:
+        original_role = models.UserRole.BUYER.value
+
+    user.pre_suspension_role = original_role
+    user.role = SUSPENDED_ROLE
+    user.suspended_at = datetime.utcnow()
+    user.suspension_ends_at = ends_at
+    user.suspension_reason = reason
+    user.suspended_by_id = admin.id
+
+    add_notification(
+        db,
+        user.id,
+        "Account suspended",
+        f"Your account has been suspended until {format_suspension_until(ends_at)}. Reason: {reason}",
+        "moderation",
+        commit=False,
+    )
+    add_admin_audit_log(
+        db,
+        admin,
+        "suspend_user",
+        "user",
+        user.id,
+        f"suspended_user={user.email} until={format_suspension_until(ends_at)} reason={reason}",
+    )
     db.commit()
-    return {"message": f"User {user.email} suspended"}
+    return {
+        "message": f"User {user.email} suspended until {format_suspension_until(ends_at)}",
+        "suspension_ends_at": str(ends_at),
+        "reason": reason,
+    }
+
+
+@app.post("/admin/users/{user_id}/unsuspend")
+def admin_unsuspend_user(
+    user_id: str,
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin)
+):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.role != SUSPENDED_ROLE:
+        return {"message": f"User {user.email} is not suspended", "role": user.role}
+
+    clear_suspension(user)
+    add_notification(
+        db,
+        user.id,
+        "Account restored",
+        "Your account suspension has been lifted by an admin. You can use the platform again.",
+        "moderation",
+        commit=False,
+    )
+    add_admin_audit_log(
+        db,
+        admin,
+        "unsuspend_user",
+        "user",
+        user.id,
+        f"unsuspended_user={user.email}",
+    )
+    db.commit()
+    return {"message": f"User {user.email} restored", "role": user.role}
 
 # --- Support Tickets API ---
 

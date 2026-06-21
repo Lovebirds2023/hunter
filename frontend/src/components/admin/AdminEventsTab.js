@@ -152,6 +152,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
     const [scheduleEvent, setScheduleEvent] = useState(null);
     const [savingSchedule, setSavingSchedule] = useState(false);
     const [scheduleSlots, setScheduleSlots] = useState([]);
+    const [deleteReasons, setDeleteReasons] = useState({});
 
     const uploadPosterIfNeeded = async (uri) => {
         if (!uri || /^https?:\/\//i.test(uri)) return uri;
@@ -511,16 +512,26 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
         }
     };
 
-    const handleDelete = (id, title) => {
+    const updateDeleteReason = (id, reason) => {
+        setDeleteReasons(prev => ({ ...prev, [id]: reason }));
+    };
+
+    const handleDelete = (item) => {
+        const reason = (deleteReasons[item.id] || '').trim();
+        if (!reason) {
+            Alert.alert('Reason required', 'Add a short reason before deleting this event.');
+            return;
+        }
+        const title = item.title || 'this event';
         Alert.alert('Delete Event', `Delete "${title}"? This will remove all registrations.`, [
             { text: 'Cancel', style: 'cancel' },
             {
                 text: 'Delete', style: 'destructive', onPress: async () => {
                     try {
-                        await client.delete(`/admin/events/${id}`);
-                        setEvents(prev => prev.filter(e => e.id !== id));
+                        await client.delete(`/admin/events/${item.id}`, { data: { reason } });
+                        setEvents(prev => prev.filter(e => e.id !== item.id));
                         Alert.alert('Deleted', 'Event and registrations removed.');
-                    } catch (e) { Alert.alert('Error', 'Failed to delete event'); }
+                    } catch (e) { Alert.alert('Error', e.response?.data?.detail || 'Failed to delete event'); }
                 }
             }
         ]);
@@ -1218,6 +1229,22 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                                     />
                                 </View>
 
+                                <TextInput
+                                    style={[s.textInput, {
+                                        height: 42,
+                                        marginTop: 12,
+                                        borderWidth: 1,
+                                        borderColor: ADMIN_COLORS.surfaceBorder,
+                                        borderRadius: 10,
+                                        paddingHorizontal: 12,
+                                        backgroundColor: ADMIN_COLORS.surfaceLight,
+                                    }]}
+                                    placeholder="Reason if deleting..."
+                                    placeholderTextColor={ADMIN_COLORS.textMuted}
+                                    value={deleteReasons[item.id] || ''}
+                                    onChangeText={(reason) => updateDeleteReason(item.id, reason)}
+                                />
+
                                 <View style={s.actionRow}>
                                     <TouchableOpacity
                                         style={[s.actionBtn, { backgroundColor: item.is_pinned ? ADMIN_COLORS.dangerBg : ADMIN_COLORS.successBg, marginRight: 10 }]}
@@ -1284,7 +1311,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
 
                                     <TouchableOpacity
                                         style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.dangerBg }]}
-                                        onPress={() => handleDelete(item.id, item.title)}
+                                        onPress={() => handleDelete(item)}
                                     >
                                         <Ionicons name="trash-outline" size={14} color={ADMIN_COLORS.danger} />
                                         <Text style={[s.actionBtnText, { color: ADMIN_COLORS.danger }]}>Delete</Text>
