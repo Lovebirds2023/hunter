@@ -50,6 +50,7 @@ class User(Base):
     suspension_ends_at = Column(DateTime, nullable=True)
     suspension_reason = Column(String, nullable=True)
     suspended_by_id = Column(String, ForeignKey("users.id"), nullable=True)
+    deleted_at = Column(DateTime, nullable=True)
     
     # Community Hub Fields
     is_online = Column(Boolean, default=False)

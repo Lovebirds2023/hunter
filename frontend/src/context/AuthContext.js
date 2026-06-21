@@ -234,6 +234,26 @@ export const AuthProvider = ({ children }) => {
         clearStoredSession().finally(() => setIsLoading(false));
     };
 
+    const deleteAccount = async () => {
+        setIsLoading(true);
+        clearAuthNotice();
+        try {
+            const response = await client.delete('/users/me');
+            await clearStoredSession();
+            return {
+                success: true,
+                message: response.data?.message || 'Your account has been deleted.',
+            };
+        } catch (e) {
+            if (__DEV__) console.log('Delete account error', e);
+            const message = getFriendlyAuthError(e, 'Could not delete account. Please try again or contact support.');
+            setAuthNotice({ type: 'error', message });
+            return { success: false, message };
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
 
 
     const isLoggedIn = async () => {
@@ -298,6 +318,7 @@ export const AuthProvider = ({ children }) => {
         <AuthContext.Provider value={{
             login,
             logout,
+            deleteAccount,
             register,
             updateUser,
             googleLogin,

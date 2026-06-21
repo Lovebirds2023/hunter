@@ -699,7 +699,20 @@
         "phone_secure": "Your phone number is stored securely.",
         "years_old": "{{count}} years old",
         "card_paid_pesapal": "Card - Paid via Pesapal",
-        "card_bank": "Card / Bank"
+        "card_bank": "Card / Bank",
+        "account_settings": "Account Settings",
+        "delete_account": "Delete Account",
+        "deleting_account": "Deleting...",
+        "delete_account_desc": "Permanently remove your login, profile details, pet records, private messages, and support tickets. Some transaction or safety records may remain without your personal identity.",
+        "delete_account_title": "Delete your account?",
+        "delete_account_warning": "This will permanently delete your Lovedogs 360 account, sign you out, and remove your personal profile data. This action cannot be undone.",
+        "delete_account_continue": "Continue",
+        "delete_account_final_title": "Final confirmation",
+        "delete_account_final_warning": "Are you absolutely sure? You will lose access to this account and cannot recover it later.",
+        "delete_account_confirm": "Delete Forever",
+        "delete_account_error": "Could not delete account. Please try again or contact support.",
+        "account_deleted_title": "Account Deleted",
+        "account_deleted_msg": "Your account has been deleted and you have been signed out."
     },
     "app_update": {
         "critical_required": "Critical Update Required",

@@ -821,6 +821,8 @@ def restore_expired_suspension(db: Session, user: models.User) -> bool:
 
 
 def ensure_user_not_suspended(db: Session, user: models.User):
+    if getattr(user, "deleted_at", None):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Account deleted")
     if restore_expired_suspension(db, user):
         return
     if user.role == SUSPENDED_ROLE:
@@ -1441,6 +1443,8 @@ try:
             """ALTER TABLE users
                ADD COLUMN IF NOT EXISTS suspended_by_id VARCHAR REFERENCES users(id);""",
             """ALTER TABLE users
+               ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;""",
+            """ALTER TABLE users
                ALTER COLUMN hashed_password DROP NOT NULL;""",
             """ALTER TABLE users
                ALTER COLUMN full_name DROP NOT NULL;""",
@@ -1921,6 +1925,290 @@ async def update_user_me(
     db.commit()
     db.refresh(user)
     return user
+
+
+@app.delete("/users/me")
+async def delete_user_me(
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if current_user.role in ADMIN_ROLE_VALUES:
+        raise HTTPException(
+            status_code=400,
+            detail="Admin accounts cannot be deleted from the mobile app. Transfer admin access first."
+        )
+
+    user_id = current_user.id
+    deleted_email = f"deleted-{user_id}@deleted.lovedogs360.com"
+    deleted_at = datetime.utcnow()
+
+    try:
+        notification_ids = [
+            row[0] for row in db.query(models.Notification.id)
+            .filter(models.Notification.user_id == user_id)
+            .all()
+        ]
+        if notification_ids:
+            db.query(models.NotificationCampaignRecipient).filter(
+                models.NotificationCampaignRecipient.notification_id.in_(notification_ids)
+            ).delete(synchronize_session=False)
+        db.query(models.NotificationCampaignRecipient).filter(
+            models.NotificationCampaignRecipient.user_id == user_id
+        ).delete(synchronize_session=False)
+        db.query(models.Notification).filter(models.Notification.user_id == user_id).delete(synchronize_session=False)
+        db.query(models.PasswordResetToken).filter(models.PasswordResetToken.user_id == user_id).delete(synchronize_session=False)
+
+        dog_ids = [
+            row[0] for row in db.query(models.Dog.id)
+            .filter(models.Dog.owner_id == user_id)
+            .all()
+        ]
+        if dog_ids:
+            db.query(models.Registration).filter(models.Registration.dog_id.in_(dog_ids)).update(
+                {"dog_id": None},
+                synchronize_session=False,
+            )
+            db.query(models.ProgramJourney).filter(models.ProgramJourney.dog_id.in_(dog_ids)).update(
+                {"dog_id": None},
+                synchronize_session=False,
+            )
+            db.query(models.CheckInData).filter(models.CheckInData.dog_id.in_(dog_ids)).update(
+                {"dog_id": None},
+                synchronize_session=False,
+            )
+            db.query(models.LiveObservation).filter(models.LiveObservation.dog_id.in_(dog_ids)).update(
+                {"dog_id": None},
+                synchronize_session=False,
+            )
+            db.query(models.PetMatchCandidate).filter(models.PetMatchCandidate.matched_dog_id.in_(dog_ids)).delete(
+                synchronize_session=False
+            )
+            db.query(models.HealthRecord).filter(models.HealthRecord.dog_id.in_(dog_ids)).delete(synchronize_session=False)
+            db.query(models.Dog).filter(models.Dog.id.in_(dog_ids)).delete(synchronize_session=False)
+
+        registration_ids = [
+            row[0] for row in db.query(models.Registration.id)
+            .filter(models.Registration.user_id == user_id)
+            .all()
+        ]
+        if registration_ids:
+            db.query(models.RegistrationResponse).filter(
+                models.RegistrationResponse.registration_id.in_(registration_ids)
+            ).delete(synchronize_session=False)
+            db.query(models.Registration).filter(models.Registration.id.in_(registration_ids)).update(
+                {
+                    "dog_id": None,
+                    "share_phone": False,
+                    "ticket_token": None,
+                    "attendee_type_justification": None,
+                },
+                synchronize_session=False,
+            )
+
+        db.query(models.SavedEvent).filter(models.SavedEvent.user_id == user_id).delete(synchronize_session=False)
+        db.query(models.ProgramJourney).filter(models.ProgramJourney.user_id == user_id).delete(synchronize_session=False)
+        db.query(models.CheckInData).filter(models.CheckInData.user_id == user_id).delete(synchronize_session=False)
+        db.query(models.LiveObservation).filter(
+            (models.LiveObservation.observer_id == user_id) |
+            (models.LiveObservation.participant_id == user_id)
+        ).delete(synchronize_session=False)
+
+        order_ids = [
+            row[0] for row in db.query(models.Order.id)
+            .filter(models.Order.buyer_id == user_id)
+            .all()
+        ]
+        if order_ids:
+            db.query(models.OrderFormResponse).filter(models.OrderFormResponse.order_id.in_(order_ids)).delete(
+                synchronize_session=False
+            )
+            db.query(models.Order).filter(models.Order.id.in_(order_ids)).update(
+                {"share_phone": False},
+                synchronize_session=False,
+            )
+        db.query(models.Transaction).filter(models.Transaction.user_id == user_id).update(
+            {"payout_method": None, "destination": None},
+            synchronize_session=False,
+        )
+        db.query(models.Rating).filter(
+            (models.Rating.rater_id == user_id) | (models.Rating.rated_id == user_id)
+        ).delete(synchronize_session=False)
+        db.query(models.KarmaTransaction).filter(models.KarmaTransaction.user_id == user_id).delete(synchronize_session=False)
+
+        service_ids = [
+            row[0] for row in db.query(models.Service.id)
+            .filter(models.Service.provider_id == user_id)
+            .all()
+        ]
+        if service_ids:
+            db.query(models.ContentPin).filter(
+                models.ContentPin.target_type == "service",
+                models.ContentPin.target_id.in_(service_ids),
+            ).delete(synchronize_session=False)
+            db.query(models.Service).filter(models.Service.id.in_(service_ids)).update(
+                {
+                    "title": "Deleted listing",
+                    "description": "This listing is no longer available.",
+                    "image_url": None,
+                    "images": None,
+                    "latitude": None,
+                    "longitude": None,
+                    "location_accuracy_meters": None,
+                    "address": None,
+                    "location_landmark": None,
+                    "is_published": False,
+                    "admin_approved": False,
+                    "is_busy": True,
+                },
+                synchronize_session=False,
+            )
+
+        event_ids = [
+            row[0] for row in db.query(models.Event.id)
+            .filter(models.Event.organizer_id == user_id)
+            .all()
+        ]
+        if event_ids:
+            db.query(models.ContentPin).filter(
+                models.ContentPin.target_type == "event",
+                models.ContentPin.target_id.in_(event_ids),
+            ).delete(synchronize_session=False)
+            db.query(models.Event).filter(models.Event.id.in_(event_ids)).update(
+                {
+                    "title": "Deleted event",
+                    "description": "This event is no longer available.",
+                    "location": None,
+                    "poster_url": None,
+                    "images": None,
+                    "is_public": 0,
+                    "capacity": 0,
+                },
+                synchronize_session=False,
+            )
+
+        case_ids = [
+            row[0] for row in db.query(models.CaseReport.id)
+            .filter(models.CaseReport.author_id == user_id)
+            .all()
+        ]
+        if case_ids:
+            db.query(models.ContentPin).filter(
+                models.ContentPin.target_type == "case",
+                models.ContentPin.target_id.in_(case_ids),
+            ).delete(synchronize_session=False)
+            db.query(models.PetMatchCandidate).filter(
+                (models.PetMatchCandidate.case_report_id.in_(case_ids)) |
+                (models.PetMatchCandidate.matched_case_report_id.in_(case_ids))
+            ).delete(synchronize_session=False)
+            db.query(models.CaseLike).filter(models.CaseLike.report_id.in_(case_ids)).delete(synchronize_session=False)
+            db.query(models.CaseComment).filter(models.CaseComment.report_id.in_(case_ids)).delete(synchronize_session=False)
+            db.query(models.CaseReport).filter(models.CaseReport.id.in_(case_ids)).delete(synchronize_session=False)
+        db.query(models.CaseLike).filter(models.CaseLike.user_id == user_id).delete(synchronize_session=False)
+        db.query(models.CaseComment).filter(models.CaseComment.author_id == user_id).delete(synchronize_session=False)
+
+        message_ids = [
+            row[0] for row in db.query(models.CommunityMessage.id)
+            .filter(models.CommunityMessage.author_id == user_id)
+            .all()
+        ]
+        if message_ids:
+            db.query(models.CommunityMessage).filter(models.CommunityMessage.reshare_id.in_(message_ids)).update(
+                {"reshare_id": None},
+                synchronize_session=False,
+            )
+            db.query(models.ContentPin).filter(
+                models.ContentPin.target_type == "community",
+                models.ContentPin.target_id.in_(message_ids),
+            ).delete(synchronize_session=False)
+            db.query(models.ChatReaction).filter(models.ChatReaction.message_id.in_(message_ids)).delete(
+                synchronize_session=False
+            )
+            db.query(models.CommunityPollVote).filter(models.CommunityPollVote.message_id.in_(message_ids)).delete(
+                synchronize_session=False
+            )
+            db.query(models.CommunityMessage).filter(models.CommunityMessage.id.in_(message_ids)).delete(
+                synchronize_session=False
+            )
+        db.query(models.ChatReaction).filter(models.ChatReaction.user_id == user_id).delete(synchronize_session=False)
+        db.query(models.CommunityPollVote).filter(models.CommunityPollVote.user_id == user_id).delete(synchronize_session=False)
+        db.query(models.DirectMessage).filter(
+            (models.DirectMessage.sender_id == user_id) |
+            (models.DirectMessage.receiver_id == user_id)
+        ).delete(synchronize_session=False)
+
+        db.query(models.SupportTicket).filter(models.SupportTicket.user_id == user_id).delete(synchronize_session=False)
+        db.query(models.ContentPin).filter(models.ContentPin.created_by_id == user_id).update(
+            {"created_by_id": None},
+            synchronize_session=False,
+        )
+        db.query(models.ScorecardEvidence).filter(models.ScorecardEvidence.created_by_id == user_id).update(
+            {"created_by_id": None},
+            synchronize_session=False,
+        )
+        db.query(models.ScorecardReportingExport).filter(
+            models.ScorecardReportingExport.created_by_id == user_id
+        ).update(
+            {"created_by_id": None},
+            synchronize_session=False,
+        )
+        db.query(models.AuditLog).filter(
+            (models.AuditLog.user_id == user_id) |
+            ((models.AuditLog.target_type == "user") & (models.AuditLog.target_id == user_id))
+        ).update(
+            {
+                "user_id": None,
+                "details": "Account deleted by user; personal details removed.",
+            },
+            synchronize_session=False,
+        )
+
+        user = db.query(models.User).filter(models.User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        user.email = deleted_email
+        user.hashed_password = None
+        user.full_name = "Deleted User"
+        user.role = SUSPENDED_ROLE
+        user.pre_suspension_role = None
+        user.suspended_at = deleted_at
+        user.suspension_ends_at = None
+        user.suspension_reason = "Account deleted by user request"
+        user.suspended_by_id = None
+        user.deleted_at = deleted_at
+        user.auth_provider = "deleted"
+        user.google_id = None
+        user.phone_number = None
+        user.country = None
+        user.language = "en"
+        user.profile_image = None
+        user.bio = None
+        user.latitude = None
+        user.longitude = None
+        user.location_accuracy_meters = None
+        user.address = None
+        user.expo_push_token = None
+        user.timezone = None
+        user.preferred_currency = None
+        user.payment_method = None
+        user.mpesa_phone_number = None
+        user.is_online = False
+        user.last_seen = deleted_at
+        user.karma_points = 0
+        user.available_karma = 0
+
+        db.commit()
+        return {
+            "deleted": True,
+            "message": "Your Lovedogs 360 account has been deleted and your personal profile data has been removed."
+        }
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        logger.error("Account deletion failed for user %s: %s", user_id, exc)
+        raise HTTPException(status_code=500, detail="Could not delete account. Please contact support.")
 
 @app.get("/dogs/{dog_id}", response_model=schemas.DogResponse)
 async def get_dog(

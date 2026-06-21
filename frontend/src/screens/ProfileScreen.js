@@ -40,13 +40,14 @@ const toRatingNumber = (value) => {
 
 export const ProfileScreen = ({ navigation }) => {
     const { t } = useTranslation();
-    const { userInfo, logout, updateUser } = useContext(AuthContext);
+    const { userInfo, logout, updateUser, deleteAccount } = useContext(AuthContext);
     const initialCountryCode = userInfo?.country || '+254';
     const initialCountryCodeSelection = getCountryCodeSelection(initialCountryCode);
     const [dogs, setDogs] = useState([]);
     const [dashboardStats, setDashboardStats] = useState({ dogs: null, activities: null, deals: null });
     const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
+    const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
     // Edit State (initialized from userInfo)
     const [editName, setEditName] = useState(userInfo?.full_name || '');
@@ -222,6 +223,46 @@ export const ProfileScreen = ({ navigation }) => {
         setEditLanguage(language);
         await setAppLanguage(language);
         await updateUser({ language }, { silent: true });
+    };
+
+    const confirmDeleteAccount = async () => {
+        if (isDeletingAccount) return;
+        setIsDeletingAccount(true);
+        const result = await deleteAccount();
+
+        if (result.success) {
+            Alert.alert(t('profile_screen.account_deleted_title'), t('profile_screen.account_deleted_msg'));
+            return;
+        }
+
+        setIsDeletingAccount(false);
+        Alert.alert(t('common.error'), result.message || t('profile_screen.delete_account_error'));
+    };
+
+    const handleDeleteAccount = () => {
+        Alert.alert(
+            t('profile_screen.delete_account_title'),
+            t('profile_screen.delete_account_warning'),
+            [
+                { text: t('common.cancel'), style: 'cancel' },
+                {
+                    text: t('profile_screen.delete_account_continue'),
+                    style: 'destructive',
+                    onPress: () => Alert.alert(
+                        t('profile_screen.delete_account_final_title'),
+                        t('profile_screen.delete_account_final_warning'),
+                        [
+                            { text: t('common.cancel'), style: 'cancel' },
+                            {
+                                text: t('profile_screen.delete_account_confirm'),
+                                style: 'destructive',
+                                onPress: confirmDeleteAccount,
+                            },
+                        ],
+                    ),
+                },
+            ],
+        );
     };
 
     const renderPetItem = ({ item }) => (
@@ -464,6 +505,28 @@ export const ProfileScreen = ({ navigation }) => {
                             selectedLanguage={editLanguage}
                             onLanguageChange={handleLanguageChange}
                         />
+                    </View>
+
+                    <View style={styles.sectionTitleRow}>
+                        <Text style={styles.dashboardSectionTitle}>{t('profile_screen.account_settings')}</Text>
+                    </View>
+                    <View style={styles.dangerCard}>
+                        <View style={styles.dangerIconCircle}>
+                            <Ionicons name="warning-outline" size={22} color={COLORS.error} />
+                        </View>
+                        <View style={styles.dangerTextGroup}>
+                            <Text style={styles.dangerTitle}>{t('profile_screen.delete_account')}</Text>
+                            <Text style={styles.dangerDescription}>{t('profile_screen.delete_account_desc')}</Text>
+                        </View>
+                        <TouchableOpacity
+                            style={[styles.deleteAccountBtn, isDeletingAccount && styles.disabledAction]}
+                            onPress={handleDeleteAccount}
+                            disabled={isDeletingAccount}
+                        >
+                            <Text style={styles.deleteAccountText}>
+                                {isDeletingAccount ? t('profile_screen.deleting_account') : t('profile_screen.delete_account')}
+                            </Text>
+                        </TouchableOpacity>
                     </View>
 
                 </View>
@@ -743,6 +806,14 @@ const styles = StyleSheet.create({
     payOptActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
     payOptLabel: { fontSize: 13, fontWeight: 'bold', color: COLORS.primaryDark, marginTop: 8 },
     payOptActiveLabel: { color: COLORS.primaryDark },
+    dangerCard: { backgroundColor: '#fff5f5', borderRadius: 20, padding: 18, borderWidth: 1, borderColor: '#ffd6d6', flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 18 },
+    dangerIconCircle: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#ffe8e8', justifyContent: 'center', alignItems: 'center' },
+    dangerTextGroup: { flex: 1, minWidth: 190 },
+    dangerTitle: { fontSize: 15, fontWeight: 'bold', color: COLORS.error },
+    dangerDescription: { fontSize: 12, color: COLORS.gray, lineHeight: 18, marginTop: 4 },
+    deleteAccountBtn: { backgroundColor: COLORS.error, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14 },
+    deleteAccountText: { color: COLORS.white, fontSize: 12, fontWeight: 'bold' },
+    disabledAction: { opacity: 0.55 },
     // Pet card styles
     petCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, borderRadius: 16, padding: 14, marginBottom: 12, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, borderWidth: 1, borderColor: '#f0f0f0' },
     petCardImg: { width: 65, height: 65, borderRadius: 14, backgroundColor: '#eee' },
