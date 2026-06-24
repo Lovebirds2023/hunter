@@ -65,9 +65,27 @@ const EventStack = createNativeStackNavigator();
 const AdminStack = createNativeStackNavigator();
 const CaseStack = createNativeStackNavigator();
 
+const getCurrentWebOrigin = () => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return null;
+    return window.location.origin;
+};
+
+const getLinkingPrefixes = () => {
+    const prefixes = [
+        getCurrentWebOrigin(),
+        'https://hunter-k9lr.vercel.app',
+        'https://lovedogs360.com',
+        'https://www.lovedogs360.com',
+        'http://localhost:19006',
+        'lovedogs360://',
+    ];
+
+    return Array.from(new Set(prefixes.filter(Boolean)));
+};
+
 // Web URL → Screen linking configuration
 const linking = {
-    prefixes: ['https://hunter-k9lr.vercel.app', 'https://lovedogs360.com', 'https://www.lovedogs360.com', 'http://localhost:19006', 'lovedogs360://'],
+    prefixes: getLinkingPrefixes(),
     config: {
         screens: {
             Login: 'login',
