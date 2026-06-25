@@ -23,6 +23,7 @@ env/
 ENV/
 *.sqlite3
 .DS_Store
+*.aab
 .agents/
 scratch/
 firebase-service-account.json
