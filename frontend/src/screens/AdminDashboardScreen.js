@@ -43,6 +43,7 @@ export default function AdminDashboardScreen({ route }) {
     const navigation = useNavigation();
     const { userInfo, logout } = useAuth();
     const [activeTab, setActiveTab] = useState('home'); // 'home', 'overview', 'users', etc.
+    const [impactEventId, setImpactEventId] = useState(null);
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
 
@@ -187,7 +188,10 @@ export default function AdminDashboardScreen({ route }) {
                     <TouchableOpacity 
                         key={item.id} 
                         style={g.gridCard}
-                        onPress={() => setActiveTab(item.id)}
+                        onPress={() => {
+                            if (item.id === 'scorecard') setImpactEventId(null);
+                            setActiveTab(item.id);
+                        }}
                     >
                         <View style={[g.gridIconBg, { backgroundColor: `${item.color}20` }]}>
                             <Ionicons name={item.icon} size={28} color={item.color} />
@@ -214,8 +218,8 @@ export default function AdminDashboardScreen({ route }) {
             case 'home': return renderHome();
             case 'overview': return <AdminOverviewTab onNavigate={setActiveTab} onBack={() => setActiveTab('home')} />;
             case 'users': return <AdminUsersTab onBack={() => setActiveTab('home')} />;
-            case 'events': return <AdminEventsTab onBack={() => setActiveTab('home')} navigation={navigation} onOpenScorecard={() => setActiveTab('scorecard')} />;
-            case 'scorecard': return <AdminScorecardTab onBack={() => setActiveTab('home')} />;
+            case 'events': return <AdminEventsTab onBack={() => setActiveTab('home')} navigation={navigation} onOpenScorecard={(eventId) => { setImpactEventId(eventId || null); setActiveTab('scorecard'); }} />;
+            case 'scorecard': return <AdminScorecardTab onBack={() => setActiveTab('home')} initialEventId={impactEventId} />;
             case 'pins': return <AdminPinsTab onBack={() => setActiveTab('home')} />;
             case 'orders': return <AdminOrdersTab onBack={() => setActiveTab('home')} />;
             case 'community': return <AdminCommunityTab onBack={() => setActiveTab('home')} />;

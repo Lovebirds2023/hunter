@@ -4251,6 +4251,9 @@ def admin_prompt_scorecard_followup(event_id: str, db: Session = Depends(databas
                 f"Please complete the follow-up assessment for {event.title}.",
                 "info",
                 commit=False,
+                target_type="event",
+                target_id=event_id,
+                target_route="EventDetail",
             )
             notified += 1
 

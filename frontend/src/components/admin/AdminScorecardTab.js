@@ -75,9 +75,9 @@ const Breakdown = ({ title, data }) => {
     );
 };
 
-export const AdminScorecardTab = ({ onBack }) => {
+export const AdminScorecardTab = ({ onBack, initialEventId = null }) => {
     const [events, setEvents] = useState([]);
-    const [selectedEventId, setSelectedEventId] = useState(null);
+    const [selectedEventId, setSelectedEventId] = useState(initialEventId);
     const [dashboard, setDashboard] = useState(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -120,6 +120,12 @@ export const AdminScorecardTab = ({ onBack }) => {
     }, [fetchDashboard, fetchEvents, selectedEventId]);
 
     useEffect(() => { refreshAll(); }, []);
+
+    useEffect(() => {
+        if (initialEventId && initialEventId !== selectedEventId) {
+            setSelectedEventId(initialEventId);
+        }
+    }, [initialEventId, selectedEventId]);
 
     useEffect(() => {
         if (selectedEventId) fetchDashboard(selectedEventId).catch(() => {});

@@ -1303,7 +1303,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
 
                                     <TouchableOpacity
                                         style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg, marginRight: 10 }]}
-                                        onPress={onOpenScorecard}
+                                        onPress={() => onOpenScorecard?.(item.id)}
                                     >
                                         <Ionicons name="analytics-outline" size={14} color={ADMIN_COLORS.info} />
                                         <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>Impact</Text>
