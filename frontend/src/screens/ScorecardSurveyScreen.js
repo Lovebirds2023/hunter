@@ -21,6 +21,13 @@ const USER_TYPES = [
 ];
 
 const PARTICIPATION_TYPES = [
+    'mbwa rafiki show',
+    'vaccination campaign',
+    'school visit',
+    'veterinary outreach',
+    'partner project',
+    'community outreach',
+    'training session',
     'story lab',
     'listening circle',
     'podcast listener',
@@ -43,14 +50,14 @@ const emptyProfile = {
     county: '',
     community_location: '',
     user_type: 'dog owner',
-    participation_type: 'story lab',
+    participation_type: 'community outreach',
     consent: false,
 };
 
 export const ScorecardSurveyScreen = ({ route, navigation }) => {
     const { eventId, eventTitle, surveyType = 'baseline', scorecardTitle } = route.params || {};
     const normalizedType = surveyType === 'followup' ? 'followup' : 'baseline';
-    const displayTitle = scorecardTitle || 'Impact Scorecard';
+    const displayTitle = scorecardTitle || 'Community Impact Assessment';
     const [questions, setQuestions] = useState([]);
     const [profile, setProfile] = useState(emptyProfile);
     const [answers, setAnswers] = useState({});
@@ -63,7 +70,7 @@ export const ScorecardSurveyScreen = ({ route, navigation }) => {
                 const res = await client.get('/scorecard/questions', { params: { survey_type: normalizedType } });
                 setQuestions(res.data || []);
             } catch (error) {
-                Alert.alert('Error', 'Could not load Scorecard questions.');
+                Alert.alert('Error', 'Could not load impact questions.');
             } finally {
                 setLoading(false);
             }
@@ -126,12 +133,12 @@ export const ScorecardSurveyScreen = ({ route, navigation }) => {
 
             const result = res.data;
             Alert.alert(
-                'Scorecard submitted',
+                'Impact assessment submitted',
                 `Coexistence Index: ${result.coexistence_index}%${result.percentage_change !== null && result.percentage_change !== undefined ? `\nChange: ${result.percentage_change} pts` : ''}`,
                 [{ text: 'OK', onPress: () => navigation.goBack() }]
             );
         } catch (error) {
-            Alert.alert('Error', error.response?.data?.detail || 'Could not submit the Scorecard.');
+            Alert.alert('Error', error.response?.data?.detail || 'Could not submit the impact assessment.');
         } finally {
             setSubmitting(false);
         }
@@ -141,7 +148,7 @@ export const ScorecardSurveyScreen = ({ route, navigation }) => {
         return (
             <View style={styles.center}>
                 <ActivityIndicator size="large" color={COLORS.primary} />
-                <Text style={styles.loadingText}>Loading Scorecard...</Text>
+                <Text style={styles.loadingText}>Loading assessment...</Text>
             </View>
         );
     }
@@ -154,7 +161,7 @@ export const ScorecardSurveyScreen = ({ route, navigation }) => {
                 </TouchableOpacity>
                 <View style={{ flex: 1 }}>
                     <Text style={styles.headerTitle}>{displayTitle}</Text>
-                    <Text style={styles.headerSub}>{eventTitle || 'Event'} | {normalizedType === 'baseline' ? 'Baseline Survey' : 'Follow-up Survey'}</Text>
+                    <Text style={styles.headerSub}>{eventTitle || 'Event'} | {normalizedType === 'baseline' ? 'Baseline Assessment' : 'Follow-up Assessment'}</Text>
                 </View>
             </View>
 
@@ -208,13 +215,13 @@ export const ScorecardSurveyScreen = ({ route, navigation }) => {
                     </View>
 
                     <View style={styles.consentRow}>
-                        <Text style={styles.consentText}>I agree for anonymized data to be used for learning and reporting.</Text>
+                        <Text style={styles.consentText}>I agree for anonymized data to be used for learning, M&E, and partner reporting.</Text>
                         <Switch value={profile.consent} onValueChange={(value) => setProfileValue('consent', value)} />
                     </View>
                 </View>
 
                 <View style={styles.card}>
-                    <Text style={styles.sectionTitle}>{normalizedType === 'baseline' ? 'Baseline questions' : 'Follow-up questions'}</Text>
+                    <Text style={styles.sectionTitle}>{normalizedType === 'baseline' ? 'Baseline assessment' : 'Follow-up assessment'}</Text>
                     <Text style={styles.helpText}>
                         1 = Strongly Disagree, 2 = Disagree, 3 = Not Sure, 4 = Agree, 5 = Strongly Agree
                     </Text>
@@ -252,7 +259,7 @@ export const ScorecardSurveyScreen = ({ route, navigation }) => {
                 </View>
 
                 <TouchableOpacity style={[styles.submitBtn, submitting && { opacity: 0.7 }]} onPress={submit} disabled={submitting}>
-                    {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Submit Scorecard</Text>}
+                    {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Submit assessment</Text>}
                 </TouchableOpacity>
             </ScrollView>
         </View>

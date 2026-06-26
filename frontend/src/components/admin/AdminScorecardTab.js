@@ -21,7 +21,7 @@ const EVIDENCE_TYPES = [
 
 const REPORTING_LABELS = {
     community_members_engaged: 'Community members engaged',
-    trainings_story_labs_conducted: 'Trainings/story labs conducted',
+    trainings_story_labs_conducted: 'Programme sessions conducted',
     animals_indirectly_benefiting: 'Animals indirectly benefiting',
     materials_tools_produced: 'Materials/tools produced',
     human_wellbeing_outcome_notes: 'Human wellbeing outcome notes',
@@ -38,12 +38,12 @@ const numberFields = new Set([
 ]);
 
 const safeExportSlug = (value) => {
-    const slug = String(value || 'scorecard')
+    const slug = String(value || 'impact')
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '_')
         .replace(/^_+|_+$/g, '')
         .slice(0, 60);
-    return slug || 'scorecard';
+    return slug || 'impact';
 };
 
 const MetricCard = ({ label, value, color = ADMIN_COLORS.info }) => (
@@ -111,8 +111,8 @@ export const AdminScorecardTab = ({ onBack }) => {
             const eventId = selectedEventId || eventRows[0]?.id;
             if (eventId) await fetchDashboard(eventId);
         } catch (error) {
-            console.error('Scorecard fetch error:', error);
-            Alert.alert('Error', 'Could not load Scorecard data.');
+            console.error('Impact fetch error:', error);
+            Alert.alert('Error', 'Could not load impact data.');
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -185,8 +185,8 @@ export const AdminScorecardTab = ({ onBack }) => {
                 params: { type: 'scorecard', event_id: selectedEventId },
                 responseType: 'arraybuffer',
             });
-            const exportName = safeExportSlug(selectedEvent?.scorecard_title || selectedEvent?.title || 'scorecard');
-            const fileName = `${exportName}_scorecard_${new Date().toISOString().split('T')[0]}.xlsx`;
+            const exportName = safeExportSlug(selectedEvent?.scorecard_title || selectedEvent?.title || 'impact');
+            const fileName = `${exportName}_impact_${new Date().toISOString().split('T')[0]}.xlsx`;
 
             if (Platform.OS === 'web' && typeof window !== 'undefined') {
                 const blob = new Blob([response.data], {
@@ -214,7 +214,7 @@ export const AdminScorecardTab = ({ onBack }) => {
                 Alert.alert('Export ready', `File saved to ${fileUri}`);
             }
         } catch (error) {
-            Alert.alert('Export failed', 'Could not generate the Scorecard export.');
+            Alert.alert('Export failed', 'Could not generate the partner-ready impact export.');
         } finally {
             setExporting(false);
         }
@@ -228,8 +228,8 @@ export const AdminScorecardTab = ({ onBack }) => {
                         <Ionicons name="arrow-back" size={24} color={ADMIN_COLORS.textPrimary} />
                     </TouchableOpacity>
                     <View style={{ flex: 1 }}>
-                        <Text style={s.sectionTitle}>Impact Scorecards</Text>
-                        <Text style={{ fontSize: 12, color: ADMIN_COLORS.textMuted }}>Baseline, follow-up, evidence, and reporting</Text>
+                        <Text style={s.sectionTitle}>Community Impact Engine</Text>
+                        <Text style={{ fontSize: 12, color: ADMIN_COLORS.textMuted }}>M&E, outcomes, evidence, and partner reporting</Text>
                     </View>
                 </View>
             </View>
@@ -258,13 +258,13 @@ export const AdminScorecardTab = ({ onBack }) => {
                     {!selectedEvent || !dashboard ? (
                         <View style={s.emptyContainer}>
                             <Ionicons name="clipboard-outline" size={48} color={ADMIN_COLORS.textMuted} />
-                            <Text style={s.emptyText}>Create an event to start collecting Scorecard data.</Text>
+                            <Text style={s.emptyText}>Create an event to start collecting impact data.</Text>
                         </View>
                     ) : (
                         <>
                             <View style={[s.card, { marginTop: 4 }]}>
                                 <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800', fontSize: 16 }}>
-                                    {selectedEvent.scorecard_title || 'Impact Scorecard'}
+                                    {selectedEvent.scorecard_title || 'Community Impact Assessment'}
                                 </Text>
                                 <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 12, marginTop: 4 }}>
                                     {selectedEvent.title} | {selectedEvent.location || 'Location TBD'}
@@ -281,7 +281,7 @@ export const AdminScorecardTab = ({ onBack }) => {
                                     </TouchableOpacity>
                                     <TouchableOpacity style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.successBg }]} onPress={exportScorecard} disabled={exporting}>
                                         {exporting ? <ActivityIndicator size="small" color={ADMIN_COLORS.success} /> : <Ionicons name="download-outline" size={14} color={ADMIN_COLORS.success} />}
-                                        <Text style={[s.actionBtnText, { color: ADMIN_COLORS.success }]}>Export</Text>
+                                        <Text style={[s.actionBtnText, { color: ADMIN_COLORS.success }]}>Partner export</Text>
                                     </TouchableOpacity>
                                 </View>
                             </View>
@@ -293,15 +293,17 @@ export const AdminScorecardTab = ({ onBack }) => {
                             </View>
                             <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
                                 <MetricCard label="Avg Index" value={`${dashboard.average_coexistence_index || 0}%`} color={ADMIN_COLORS.accent} />
-                                <MetricCard label="Avg Change" value={`${dashboard.average_change_from_baseline_to_followup || 0} pts`} color={ADMIN_COLORS.success} />
+                                <MetricCard label="Outcome Change" value={`${dashboard.average_change_from_baseline_to_followup || 0} pts`} color={ADMIN_COLORS.success} />
                             </View>
 
-                            <Breakdown title="Participants by county" data={dashboard.participants_by_county} />
-                            <Breakdown title="Participants by user type" data={dashboard.participants_by_user_type} />
-                            <Breakdown title="Category averages" data={dashboard.category_averages} />
+                            <Breakdown title="County reach" data={dashboard.participants_by_county} />
+                            <Breakdown title="Community reach" data={dashboard.participants_by_community} />
+                            <Breakdown title="Participant groups" data={dashboard.participants_by_user_type} />
+                            <Breakdown title="Programme types" data={dashboard.participation_type_counts} />
+                            <Breakdown title="Outcome category averages" data={dashboard.category_averages} />
 
                             <View style={[s.card, { marginTop: 12 }]}>
-                                <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800', marginBottom: 10 }}>Evidence</Text>
+                                <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800', marginBottom: 10 }}>Evidence bank</Text>
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginBottom: 10 }}>
                                     {EVIDENCE_TYPES.map(type => (
                                         <TouchableOpacity
@@ -340,7 +342,7 @@ export const AdminScorecardTab = ({ onBack }) => {
                             </View>
 
                             <View style={[s.card, { marginTop: 12 }]}>
-                                <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800', marginBottom: 4 }}>Reporting alignment</Text>
+                                <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800', marginBottom: 4 }}>Partner reporting</Text>
                                 {Object.entries(REPORTING_LABELS).map(([key, label]) => (
                                     <View key={key}>
                                         <Text style={s.inputLabel}>{label}</Text>
@@ -361,7 +363,7 @@ export const AdminScorecardTab = ({ onBack }) => {
                                 ))}
                                 <TouchableOpacity style={s.primaryButton} onPress={saveReporting} disabled={saving}>
                                     <Ionicons name="save-outline" size={18} color={ADMIN_COLORS.bg} />
-                                    <Text style={s.primaryButtonText}>Save reporting fields</Text>
+                                    <Text style={s.primaryButtonText}>Save partner report fields</Text>
                                 </TouchableOpacity>
                             </View>
                         </>

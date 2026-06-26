@@ -1093,13 +1093,13 @@ def content_pin_to_spotlight(pin: models.ContentPin):
 def get_event_scorecard_title(event: Optional[models.Event]) -> str:
     if event and getattr(event, "scorecard_title", None):
         return event.scorecard_title.strip()
-    return "Impact Scorecard"
+    return "Community Impact Assessment"
 
 
 def get_event_scorecard_description(event: Optional[models.Event]) -> str:
     if event and getattr(event, "scorecard_description", None):
         return event.scorecard_description.strip()
-    return "Collect baseline and follow-up data for learning, reporting, and program improvement."
+    return "Collect baseline and follow-up data for M&E, outcome tracking, and partner reporting."
 
 
 def calculate_scorecard_scores(question_map: Dict[str, models.ScorecardQuestion], responses: List[schemas.ScorecardResponseInput]):
@@ -1130,7 +1130,7 @@ def calculate_scorecard_scores(question_map: Dict[str, models.ScorecardQuestion]
 
 def find_or_create_scorecard_participant(db: Session, event_id: str, profile: schemas.ScorecardParticipantProfile):
     if not profile.consent:
-        raise HTTPException(status_code=400, detail="Consent is required before submitting the scorecard")
+        raise HTTPException(status_code=400, detail="Consent is required before submitting the impact assessment")
     if not ((profile.full_name or "").strip() or (profile.anonymous_code or "").strip()):
         raise HTTPException(status_code=400, detail="Provide a full name or anonymous participant code")
 
@@ -1255,6 +1255,7 @@ def scorecard_dashboard_payload(db: Session, event_id: str):
         "average_coexistence_index": avg_index,
         "average_change_from_baseline_to_followup": avg_change,
         "participants_by_county": count_by("county"),
+        "participants_by_community": count_by("community_location"),
         "participants_by_user_type": count_by("user_type"),
         "participation_type_counts": participation_counts,
         "story_labs_attended": participation_counts.get("story lab", 0),
@@ -4104,7 +4105,7 @@ def submit_scorecard_survey(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
     if event.scorecard_enabled is False:
-        raise HTTPException(status_code=400, detail="Scorecard is not enabled for this event")
+        raise HTTPException(status_code=400, detail="Impact tracking is not enabled for this event")
 
     questions = db.query(models.ScorecardQuestion).filter(
         models.ScorecardQuestion.survey_type == survey_type,
@@ -4247,7 +4248,7 @@ def admin_prompt_scorecard_followup(event_id: str, db: Session = Depends(databas
                 db,
                 registration.user_id,
                 f"{scorecard_title} follow-up",
-                f"Please complete the follow-up survey for {event.title}.",
+                f"Please complete the follow-up assessment for {event.title}.",
                 "info",
                 commit=False,
             )
@@ -4585,7 +4586,7 @@ def export_data(
     if type not in valid_export_types:
         raise HTTPException(status_code=400, detail=f"Unsupported export type: {type}")
     if type == "scorecard" and not is_admin_user(current_user):
-        raise HTTPException(status_code=403, detail="Only admins can export raw scorecard data")
+        raise HTTPException(status_code=403, detail="Only admins can export raw impact data")
         
     # Create Workbook
     wb = openpyxl.Workbook()
@@ -7532,4 +7533,3 @@ async def block_user(
 
     logger.info(f"User {current_user.id} blocked user {user_id}")
     return {"message": f"User has been blocked successfully", "blocked": True}
-

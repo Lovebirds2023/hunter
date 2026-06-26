@@ -30,7 +30,7 @@ const MANAGEMENT_GRID = [
     { id: 'orders', label: 'Order Tracking', icon: 'cart', sub: 'Revenue & Payouts', color: ADMIN_COLORS.chart2, badge: 'pending_orders' },
     { id: 'approvals', label: 'Approvals', icon: 'checkbox', sub: 'Pending Action', color: ADMIN_COLORS.warning, badge: 'total_pending' },
     { id: 'events', label: 'Events Tracker', icon: 'calendar', sub: 'Check-ins & Regs', color: ADMIN_COLORS.chart3 },
-    { id: 'scorecard', label: 'Impact Data', icon: 'clipboard', sub: 'Scorecards & Reporting', color: ADMIN_COLORS.success, badge: 'scorecard_participants' },
+    { id: 'scorecard', label: 'Community Impact', icon: 'analytics', sub: 'M&E & Outcomes', color: ADMIN_COLORS.success, badge: 'scorecard_participants' },
     { id: 'pins', label: 'Priority Pins', icon: 'pin', sub: 'Top-of-feed Content', color: ADMIN_COLORS.accent },
     { id: 'dogs', label: 'Dog/Cat Registry', icon: 'paw', sub: 'Breed Distribution', color: ADMIN_COLORS.accent },
     { id: 'community', label: 'Moderation', icon: 'chatbubbles', sub: 'Social Monitor', color: ADMIN_COLORS.chart1, badge: 'flagged_posts' },

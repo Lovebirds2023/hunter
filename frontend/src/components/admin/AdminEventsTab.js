@@ -45,8 +45,8 @@ const newEventForm = () => {
         attendee_type_question: 'Briefly explain why this registration category applies to you.',
         schedule_enabled: false,
         available_slots: [],
-        scorecard_title: 'Impact Scorecard',
-        scorecard_description: 'Collect baseline and follow-up data for learning, reporting, and program improvement.',
+        scorecard_title: 'Community Impact Assessment',
+        scorecard_description: 'Collect baseline and follow-up data for M&E, outcome tracking, and partner reporting.',
         is_public: true,
         scorecard_enabled: true,
     };
@@ -57,8 +57,8 @@ const defaultFreeTierLabel = 'Community Access';
 const defaultFreeTierDescription = 'Free registration for participants the program is designed to support.';
 const defaultPaidTierLabel = 'Paid Access';
 const defaultPaidTierDescription = 'Paid registration for organizations, teams, companies, or sponsored participants.';
-const defaultScorecardTitle = 'Impact Scorecard';
-const defaultScorecardDescription = 'Collect baseline and follow-up data for learning, reporting, and program improvement.';
+const defaultScorecardTitle = 'Community Impact Assessment';
+const defaultScorecardDescription = 'Collect baseline and follow-up data for M&E, outcome tracking, and partner reporting.';
 
 const toDatetimeLocal = (value) => {
     if (!value) return '';
@@ -392,7 +392,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
     const handleSaveScorecardSettings = async () => {
         if (!scorecardEvent) return;
         if (scorecardForm.enabled && !scorecardForm.title.trim()) {
-            Alert.alert('Scorecard name required', 'Name this scorecard/template.');
+            Alert.alert('Impact template name required', 'Name this impact assessment/template.');
             return;
         }
 
@@ -405,9 +405,9 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
             });
             setScorecardEvent(null);
             await fetchEvents(true);
-            Alert.alert('Saved', 'Scorecard settings updated.');
+            Alert.alert('Saved', 'Impact tracking settings updated.');
         } catch (e) {
-            Alert.alert('Error', e.response?.data?.detail || 'Failed to update scorecard settings.');
+            Alert.alert('Error', e.response?.data?.detail || 'Failed to update impact tracking settings.');
         } finally {
             setSavingScorecard(false);
         }
@@ -552,7 +552,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                         <View style={{ flex: 1 }}>
                             <Text style={{ fontSize: 16, fontWeight: '800', color: ADMIN_COLORS.textPrimary }}>Create admin event</Text>
                             <Text style={{ fontSize: 12, color: ADMIN_COLORS.textMuted, marginTop: 4 }}>
-                                Posters, paid tickets, forms, pins, and Scorecard are all available here.
+                                Posters, paid tickets, forms, pins, and impact tracking are available here.
                             </Text>
                         </View>
                         <TouchableOpacity onPress={() => setShowCreate(false)} style={{ padding: 8 }}>
@@ -793,20 +793,20 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                         </View>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
                             <View>
-                                <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800' }}>Enable Scorecard</Text>
-                                <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 11 }}>Collect baseline and follow-up data for this program</Text>
+                                <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800' }}>Enable impact tracking</Text>
+                                <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 11 }}>Collect M&E baseline and follow-up data for this program</Text>
                             </View>
                             <Switch value={form.scorecard_enabled} onValueChange={(value) => setForm(prev => ({ ...prev, scorecard_enabled: value }))} />
                         </View>
                         {form.scorecard_enabled && (
                             <View style={{ marginTop: 12 }}>
-                                <Text style={s.inputLabel}>Scorecard/template name</Text>
+                                <Text style={s.inputLabel}>Impact assessment/template name</Text>
                                 <TextInput
                                     style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
                                     value={form.scorecard_title}
                                     onChangeText={(value) => setForm(prev => ({ ...prev, scorecard_title: value }))}
                                 />
-                                <Text style={s.inputLabel}>Scorecard purpose/description</Text>
+                                <Text style={s.inputLabel}>M&E purpose/description</Text>
                                 <TextInput
                                     style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12, minHeight: 72, textAlignVertical: 'top' }]}
                                     multiline
@@ -923,9 +923,9 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                 <View style={[s.card, { marginTop: 10, marginBottom: 12, backgroundColor: ADMIN_COLORS.surfaceLight }]}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                         <View style={{ flex: 1 }}>
-                            <Text style={{ fontSize: 16, fontWeight: '800', color: ADMIN_COLORS.textPrimary }}>Scorecard: {scorecardEvent.title}</Text>
+                            <Text style={{ fontSize: 16, fontWeight: '800', color: ADMIN_COLORS.textPrimary }}>Impact tracking: {scorecardEvent.title}</Text>
                             <Text style={{ fontSize: 12, color: ADMIN_COLORS.textMuted, marginTop: 4 }}>
-                                Name the scorecard template shown to participants for this event.
+                                Name the impact assessment shown to participants for this event.
                             </Text>
                         </View>
                         <TouchableOpacity onPress={() => setScorecardEvent(null)} style={{ padding: 8 }}>
@@ -936,9 +936,9 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                     <View style={{ backgroundColor: ADMIN_COLORS.surface, borderRadius: 12, padding: 12, marginTop: 12 }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                             <View style={{ flex: 1, paddingRight: 10 }}>
-                                <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800' }}>Enable scorecard tracking</Text>
+                                <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800' }}>Enable impact tracking</Text>
                                 <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 11, marginTop: 3 }}>
-                                    Participants can submit baseline and follow-up surveys when this is on.
+                                    Participants can submit baseline and follow-up assessments when this is on.
                                 </Text>
                             </View>
                             <Switch value={scorecardForm.enabled} onValueChange={(value) => setScorecardForm(prev => ({ ...prev, enabled: value }))} />
@@ -946,7 +946,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
 
                         {scorecardForm.enabled && (
                             <View style={{ marginTop: 12 }}>
-                                <Text style={s.inputLabel}>Scorecard/template name</Text>
+                                <Text style={s.inputLabel}>Impact assessment/template name</Text>
                                 <TextInput
                                     style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
                                     value={scorecardForm.title}
@@ -965,7 +965,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
 
                     <TouchableOpacity style={s.primaryButton} onPress={handleSaveScorecardSettings} disabled={savingScorecard}>
                         {savingScorecard ? <ActivityIndicator color={ADMIN_COLORS.bg} /> : <Ionicons name="save-outline" size={18} color={ADMIN_COLORS.bg} />}
-                        <Text style={s.primaryButtonText}>{savingScorecard ? 'Saving...' : 'Save scorecard settings'}</Text>
+                        <Text style={s.primaryButtonText}>{savingScorecard ? 'Saving...' : 'Save impact settings'}</Text>
                     </TouchableOpacity>
                 </View>
             )}
@@ -1154,7 +1154,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                                             </View>
                                             {item.scorecard_enabled && (
                                                 <View style={[s.badge, { backgroundColor: ADMIN_COLORS.infoBg }]}>
-                                                    <Text style={[s.badgeText, { color: ADMIN_COLORS.info }]}>SCORECARD</Text>
+                                                    <Text style={[s.badgeText, { color: ADMIN_COLORS.info }]}>IMPACT</Text>
                                                 </View>
                                             )}
                                             {slotCount > 0 && (
@@ -1306,7 +1306,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                                         onPress={onOpenScorecard}
                                     >
                                         <Ionicons name="analytics-outline" size={14} color={ADMIN_COLORS.info} />
-                                        <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>Data</Text>
+                                        <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>Impact</Text>
                                     </TouchableOpacity>
 
                                     <TouchableOpacity

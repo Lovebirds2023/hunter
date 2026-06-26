@@ -18,7 +18,7 @@ const EXPORT_TYPES = [
     { id: 'cases', label: 'Case Reports', icon: 'alert-circle', description: 'Community support and incident reports' },
     { id: 'community', label: 'Community Posts', icon: 'chatbubbles', description: 'All social feed content and engagement metrics' },
     { id: 'support', label: 'Support Tickets', icon: 'headset', description: 'Platform support history and status logs' },
-    { id: 'scorecard', label: 'Scorecard Data', icon: 'clipboard', description: 'Baseline, follow-up, evidence, scores, and reporting fields' },
+    { id: 'scorecard', label: 'Impact Data', icon: 'analytics', description: 'Baseline, follow-up, evidence, outcome scores, and partner reporting fields' },
 ];
 
 export const AdminExportTab = ({ onBack }) => {

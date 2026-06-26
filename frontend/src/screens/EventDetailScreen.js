@@ -250,8 +250,8 @@ export const EventDetailScreen = ({ route, navigation }) => {
         String(myRegistration.payment_status || '').toLowerCase() === 'pending' ||
         myRegistration.status === 'pending_payment'
     );
-    const scorecardTitle = event.scorecard_title || 'Impact Scorecard';
-    const scorecardDescription = event.scorecard_description || 'Share baseline or follow-up data for learning, reporting, and program improvement.';
+    const scorecardTitle = event.scorecard_title || 'Community Impact Assessment';
+    const scorecardDescription = event.scorecard_description || 'Share baseline or follow-up feedback for M&E, outcome tracking, and partner reporting.';
 
     return (
         <View style={{ flex: 1, backgroundColor: 'white' }}>
@@ -329,7 +329,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
                                     scorecardDescription,
                                 })}
                             >
-                                <Text style={styles.scorecardBtnText}>Baseline Survey</Text>
+                                <Text style={styles.scorecardBtnText}>Baseline Assessment</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={[styles.scorecardBtn, { backgroundColor: '#4a90e2' }]}
@@ -341,7 +341,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
                                     scorecardDescription,
                                 })}
                             >
-                                <Text style={styles.scorecardBtnText}>Follow-up Survey</Text>
+                                <Text style={styles.scorecardBtnText}>Follow-up Assessment</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
