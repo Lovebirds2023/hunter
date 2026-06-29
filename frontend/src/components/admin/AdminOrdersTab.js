@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     View, Text, FlatList, TouchableOpacity, TextInput,
     ActivityIndicator, RefreshControl, Alert, ScrollView, Platform
@@ -19,7 +19,6 @@ const STATUS_COLORS = {
 export const AdminOrdersTab = ({ onBack }) => {
     const [orders, setOrders] = useState([]);
     const [withdrawals, setWithdrawals] = useState([]);
-    const [filtered, setFiltered] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [search, setSearch] = useState('');
@@ -45,7 +44,7 @@ export const AdminOrdersTab = ({ onBack }) => {
 
     useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
-    useEffect(() => {
+    const filtered = useMemo(() => {
         let result = orders;
         if (statusFilter !== 'All') {
             result = result.filter(o =>
@@ -63,7 +62,7 @@ export const AdminOrdersTab = ({ onBack }) => {
                 o.service_id?.toLowerCase().includes(q)
             );
         }
-        setFiltered(result);
+        return result;
     }, [orders, search, statusFilter]);
 
     const paidRevenue = filtered.reduce((sum, o) => sum + (o.paid_amount || 0), 0);
@@ -374,6 +373,8 @@ export const AdminOrdersTab = ({ onBack }) => {
                     data={filtered}
                     keyExtractor={item => item.id}
                     contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 30 }}
+                    keyboardShouldPersistTaps="handled"
+                    removeClippedSubviews={false}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchOrders(true); }} tintColor={ADMIN_COLORS.accent} />}
                     ListEmptyComponent={
                         <View style={s.emptyContainer}>

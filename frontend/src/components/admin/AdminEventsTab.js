@@ -544,7 +544,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
     const totalRevenue = events.reduce((sum, e) => sum + (Number(e.event_revenue) || 0), 0);
     const upcoming = events.filter(e => new Date(e.start_time) > new Date()).length;
 
-    const renderListHeader = () => (
+    const listHeader = (
         <View>
             {showCreate && (
                 <View style={[s.card, { marginTop: 10, marginBottom: 12, backgroundColor: ADMIN_COLORS.surfaceLight }]}>
@@ -1118,8 +1118,10 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                     data={events}
                     keyExtractor={item => item.id}
                     contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 30 }}
+                    keyboardShouldPersistTaps="handled"
+                    removeClippedSubviews={false}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchEvents(true); }} tintColor={ADMIN_COLORS.accent} />}
-                    ListHeaderComponent={renderListHeader}
+                    ListHeaderComponent={listHeader}
                     ListEmptyComponent={
                         <View style={s.emptyContainer}>
                             <Ionicons name="calendar-outline" size={48} color={ADMIN_COLORS.textMuted} />

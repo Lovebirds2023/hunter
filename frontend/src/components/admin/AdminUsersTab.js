@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     View, Text, FlatList, TouchableOpacity, TextInput,
     ActivityIndicator, RefreshControl, Alert, ScrollView
@@ -25,7 +25,6 @@ const DEFAULT_SUSPENSION = { duration_value: 7, duration_unit: 'days', reason: '
 
 export const AdminUsersTab = ({ onBack }) => {
     const [users, setUsers] = useState([]);
-    const [filtered, setFiltered] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [search, setSearch] = useState('');
@@ -47,7 +46,7 @@ export const AdminUsersTab = ({ onBack }) => {
 
     useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
-    useEffect(() => {
+    const filtered = useMemo(() => {
         let result = users;
         if (roleFilter !== 'All') result = result.filter(u => u.role === roleFilter);
         if (search.trim()) {
@@ -59,7 +58,7 @@ export const AdminUsersTab = ({ onBack }) => {
                 u.phone_number?.includes(q)
             );
         }
-        setFiltered(result);
+        return result;
     }, [users, search, roleFilter]);
 
     const getSuspendForm = (userId) => suspendForms[userId] || DEFAULT_SUSPENSION;
@@ -175,6 +174,8 @@ export const AdminUsersTab = ({ onBack }) => {
                     data={filtered}
                     keyExtractor={item => item.id}
                     contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 30 }}
+                    keyboardShouldPersistTaps="handled"
+                    removeClippedSubviews={false}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchUsers(true); }} tintColor={ADMIN_COLORS.accent} />}
                     ListEmptyComponent={
                         <View style={s.emptyContainer}>

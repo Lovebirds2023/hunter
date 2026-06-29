@@ -245,6 +245,7 @@ export const AdminScorecardTab = ({ onBack, initialEventId = null }) => {
             ) : (
                 <ScrollView
                     contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
+                    keyboardShouldPersistTaps="handled"
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); refreshAll(true); }} />}
                 >
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 10 }}>

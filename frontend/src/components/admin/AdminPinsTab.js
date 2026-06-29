@@ -140,6 +140,7 @@ export const AdminPinsTab = ({ onBack }) => {
             ) : (
                 <ScrollView
                     contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
+                    keyboardShouldPersistTaps="handled"
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchContent(true); }} />}
                 >
                     {rows.length === 0 ? (

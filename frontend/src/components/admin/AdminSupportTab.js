@@ -131,6 +131,8 @@ export const AdminSupportTab = ({ onBack }) => {
                     data={filtered}
                     keyExtractor={item => item.id}
                     contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 30 }}
+                    keyboardShouldPersistTaps="handled"
+                    removeClippedSubviews={false}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchTickets(true); }} tintColor={ADMIN_COLORS.accent} />}
                     ListEmptyComponent={
                         <View style={s.emptyContainer}>

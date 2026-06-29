@@ -292,7 +292,7 @@ export const AdminAnnouncementsTab = ({ onBack, initialEventId = '', initialTarg
         return null;
     };
 
-    const renderHeader = () => (
+    const listHeader = (
         <View>
             <View style={[s.card, { marginBottom: 16, padding: 16 }]}>
                 <Text style={[s.sectionTitle, { fontSize: 16 }]}>Targeted Inbox Broadcast</Text>
@@ -418,8 +418,10 @@ export const AdminAnnouncementsTab = ({ onBack, initialEventId = '', initialTarg
                 data={campaigns}
                 keyExtractor={item => item.id}
                 contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 30 }}
+                keyboardShouldPersistTaps="handled"
+                removeClippedSubviews={false}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchData(true); }} tintColor={ADMIN_COLORS.accent} />}
-                ListHeaderComponent={renderHeader}
+                ListHeaderComponent={listHeader}
                 ListEmptyComponent={
                     <View style={s.emptyContainer}>
                         <Ionicons name="notifications-outline" size={48} color={ADMIN_COLORS.textMuted} />

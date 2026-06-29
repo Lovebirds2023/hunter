@@ -256,6 +256,8 @@ export const AdminApprovalsTab = ({ onBack }) => {
                     data={activeSection === 'services' ? pending.services : pending.reports}
                     keyExtractor={item => item.id}
                     contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 30 }}
+                    keyboardShouldPersistTaps="handled"
+                    removeClippedSubviews={false}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchPending(true); }} tintColor={ADMIN_COLORS.accent} />}
                     ListEmptyComponent={
                         <View style={s.emptyContainer}>

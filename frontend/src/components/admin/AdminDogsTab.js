@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     View, Text, FlatList, TouchableOpacity, TextInput,
     ActivityIndicator, RefreshControl, Alert, ScrollView
@@ -10,7 +10,6 @@ import { adminStyles as s, ADMIN_COLORS } from './AdminStyles';
 export const AdminDogsTab = ({ onBack }) => {
     const [dogs, setDogs] = useState([]);
     const [breedDist, setBreedDist] = useState({});
-    const [filtered, setFiltered] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [search, setSearch] = useState('');
@@ -32,17 +31,16 @@ export const AdminDogsTab = ({ onBack }) => {
 
     useEffect(() => { fetchDogs(); }, [fetchDogs]);
 
-    useEffect(() => {
+    const filtered = useMemo(() => {
         if (search.trim()) {
             const q = search.toLowerCase();
-            setFiltered(dogs.filter(d => 
+            return dogs.filter(d =>
                 d.name?.toLowerCase().includes(q) || 
                 d.breed?.toLowerCase().includes(q) ||
                 d.owner_name?.toLowerCase().includes(q)
-            ));
-        } else {
-            setFiltered(dogs);
+            );
         }
+        return dogs;
     }, [dogs, search]);
 
     const updateDeleteReason = (id, reason) => {
@@ -109,6 +107,8 @@ export const AdminDogsTab = ({ onBack }) => {
                     data={filtered}
                     keyExtractor={item => item.id}
                     contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 30 }}
+                    keyboardShouldPersistTaps="handled"
+                    removeClippedSubviews={false}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchDogs(true); }} tintColor={ADMIN_COLORS.accent} />}
                     ListHeaderComponent={
                         <View style={[s.card, { marginBottom: 20 }]}>
