@@ -1,8 +1,10 @@
 import { Platform } from 'react-native';
 import { makeRedirectUri } from 'expo-auth-session';
+import appConfig from '../../app.json';
 
 export const GOOGLE_REDIRECT_PATH = process.env.EXPO_PUBLIC_GOOGLE_REDIRECT_PATH || 'auth/google';
 export const GOOGLE_REDIRECT_URI = process.env.EXPO_PUBLIC_GOOGLE_REDIRECT_URI?.trim();
+const ANDROID_PACKAGE_NAME = appConfig?.expo?.android?.package || 'your Android package';
 
 export const googleClientIds = {
     web: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim(),
@@ -49,7 +51,7 @@ export const getGoogleAuthStatus = () => {
     if (Platform.OS === 'android') {
         return {
             isAvailable: isUsableGoogleClientId(googleClientIds.android),
-            reason: 'Google Android Client ID is missing. Create one for package com.lovedogs360.app with the app SHA-1 fingerprint.',
+            reason: `Google Android Client ID is missing. Create one for package ${ANDROID_PACKAGE_NAME} with the app SHA-1 fingerprint.`,
         };
     }
 

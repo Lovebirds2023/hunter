@@ -57,6 +57,7 @@ Then open app and click "Continue with Google" ✨
 # Set these environment variables on Railway:
 GOOGLE_CLIENT_ID=616203224372-756q5k5ujlqnaaekeo9pgb2pqai3ussf.apps.googleusercontent.com
 GOOGLE_IOS_CLIENT_ID=616203224372-o8137t06ph20itjsfqvec0envtllto8j.apps.googleusercontent.com
+GOOGLE_ANDROID_CLIENT_ID=<your_android_client_id_for_lovedogs360.co.ke>
 JWT_SECRET=<your-secure-key>
 
 # Then deploy:
@@ -150,6 +151,7 @@ Can use either auth method from now on
 ```
 GOOGLE_CLIENT_ID=616203224372-756q5k5ujlqnaaekeo9pgb2pqai3ussf.apps.googleusercontent.com
 GOOGLE_IOS_CLIENT_ID=616203224372-o8137t06ph20itjsfqvec0envtllto8j.apps.googleusercontent.com
+GOOGLE_ANDROID_CLIENT_ID=<your_android_client_id_for_lovedogs360.co.ke>
 JWT_SECRET=<generate-strong-key>
 POSTGRES_DB=lovedogs
 ```
@@ -159,6 +161,7 @@ POSTGRES_DB=lovedogs
 EXPO_PUBLIC_API_URL=http://localhost:8000
 EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=616203224372-756q5k5ujlqnaaekeo9pgb2pqai3ussf.apps.googleusercontent.com
 EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=616203224372-o8137t06ph20itjsfqvec0envtllto8j.apps.googleusercontent.com
+EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=<your_android_client_id_for_lovedogs360.co.ke>
 ```
 
 ---

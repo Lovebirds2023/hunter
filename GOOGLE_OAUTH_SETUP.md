@@ -44,6 +44,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES=11520
 # https://console.cloud.google.com/ > APIs & Services > Credentials
 GOOGLE_CLIENT_ID=616203224372-756q5k5ujlqnaaekeo9pgb2pqai3ussf.apps.googleusercontent.com
 GOOGLE_IOS_CLIENT_ID=616203224372-o8137t06ph20itjsfqvec0envtllto8j.apps.googleusercontent.com
+GOOGLE_ANDROID_CLIENT_ID=<your_android_client_id_for_lovedogs360.co.ke>
 ```
 
 ### For Frontend
@@ -53,8 +54,27 @@ Your `.env` file (frontend/) should already have Google Client IDs from your .en
 ```
 EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=616203224372-756q5k5ujlqnaaekeo9pgb2pqai3ussf.apps.googleusercontent.com
 EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=616203224372-o8137t06ph20itjsfqvec0envtllto8j.apps.googleusercontent.com
+EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=<your_android_client_id_for_lovedogs360.co.ke>
 EXPO_PUBLIC_GOOGLE_REDIRECT_PATH=auth/google
 ```
+
+### Android Play/Internal Testing Client
+
+For Android builds distributed through Google Play internal testing, create an OAuth **Android** client in Google Cloud with:
+
+```text
+Package name: lovedogs360.co.ke
+SHA-1: Play Console > Setup > App integrity > App signing key certificate > SHA-1
+```
+
+Then set the generated client ID in both places:
+
+```text
+Railway/backend: GOOGLE_ANDROID_CLIENT_ID
+EAS/frontend build env: EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID
+```
+
+Changing EAS environment variables does not update an already-installed APK/AAB; rebuild and upload a new internal test release after setting this value.
 
 ### Google Cloud Console Redirect URIs
 
@@ -235,7 +255,7 @@ curl -X GET http://localhost:8000/users/me \
 
 ### ❌ "Invalid Google token"
 - **Cause:** Google Client ID mismatch or token expired
-- **Solution:** Verify `GOOGLE_CLIENT_ID` and `GOOGLE_IOS_CLIENT_ID` in `.env`
+- **Solution:** Verify `GOOGLE_CLIENT_ID`, `GOOGLE_IOS_CLIENT_ID`, and `GOOGLE_ANDROID_CLIENT_ID` in `.env`
 - **Check:** Ensure tokens expire within 1 hour
 
 ### ❌ "This email already exists"
