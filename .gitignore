@@ -27,3 +27,4 @@ ENV/
 .agents/
 scratch/
 firebase-service-account.json
+*.pem
