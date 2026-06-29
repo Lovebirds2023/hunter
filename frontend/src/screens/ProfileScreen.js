@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useState, useMemo } from 'react';
-import { View, Text, StyleSheet, Image, FlatList, TouchableOpacity, Alert, Modal, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, Image, FlatList, TouchableOpacity, Alert, Modal, TextInput, ScrollView, KeyboardAvoidingView, Platform, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '../context/AuthContext';
 import { COLORS, SPACING, SIZES } from '../constants/theme';
@@ -19,6 +19,7 @@ import {
     getCountryCodeSelection,
     isValidCountryCode,
 } from '../constants/countryCodes';
+import { PRIVACY_POLICY_URL } from '../constants/legal';
 
 const LANGUAGES = [
     { label: "English", value: "en" },
@@ -223,6 +224,12 @@ export const ProfileScreen = ({ navigation }) => {
         setEditLanguage(language);
         await setAppLanguage(language);
         await updateUser({ language }, { silent: true });
+    };
+
+    const openPrivacyPolicy = () => {
+        Linking.openURL(PRIVACY_POLICY_URL).catch(() => {
+            Alert.alert('Privacy Policy', PRIVACY_POLICY_URL);
+        });
     };
 
     const confirmDeleteAccount = async () => {
@@ -510,6 +517,16 @@ export const ProfileScreen = ({ navigation }) => {
                     <View style={styles.sectionTitleRow}>
                         <Text style={styles.dashboardSectionTitle}>{t('profile_screen.account_settings')}</Text>
                     </View>
+                    <TouchableOpacity style={styles.legalCard} onPress={openPrivacyPolicy}>
+                        <View style={styles.legalIconCircle}>
+                            <Ionicons name="shield-checkmark-outline" size={22} color={COLORS.primary} />
+                        </View>
+                        <View style={styles.legalTextGroup}>
+                            <Text style={styles.legalTitle}>Privacy Policy</Text>
+                            <Text style={styles.legalDescription}>How Lovedogs 360 handles user, pet, location, payment, and device data.</Text>
+                        </View>
+                        <Ionicons name="open-outline" size={20} color={COLORS.gray} />
+                    </TouchableOpacity>
                     <View style={styles.dangerCard}>
                         <View style={styles.dangerIconCircle}>
                             <Ionicons name="warning-outline" size={22} color={COLORS.error} />
@@ -806,6 +823,11 @@ const styles = StyleSheet.create({
     payOptActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
     payOptLabel: { fontSize: 13, fontWeight: 'bold', color: COLORS.primaryDark, marginTop: 8 },
     payOptActiveLabel: { color: COLORS.primaryDark },
+    legalCard: { backgroundColor: COLORS.white, borderRadius: 20, padding: 18, borderWidth: 1, borderColor: '#edf0f2', flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 5 },
+    legalIconCircle: { width: 42, height: 42, borderRadius: 21, backgroundColor: COLORS.primary + '12', justifyContent: 'center', alignItems: 'center' },
+    legalTextGroup: { flex: 1, minWidth: 190 },
+    legalTitle: { fontSize: 15, fontWeight: 'bold', color: COLORS.primaryDark },
+    legalDescription: { fontSize: 12, color: COLORS.gray, lineHeight: 18, marginTop: 4 },
     dangerCard: { backgroundColor: '#fff5f5', borderRadius: 20, padding: 18, borderWidth: 1, borderColor: '#ffd6d6', flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 18 },
     dangerIconCircle: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#ffe8e8', justifyContent: 'center', alignItems: 'center' },
     dangerTextGroup: { flex: 1, minWidth: 190 },

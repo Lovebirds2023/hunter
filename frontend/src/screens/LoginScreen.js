@@ -1,5 +1,5 @@
 import React, { useContext, useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Image, KeyboardAvoidingView, ScrollView, Platform } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Image, KeyboardAvoidingView, ScrollView, Platform, Linking } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Button } from '../components/Button';
 import { AuthContext } from '../context/AuthContext';
@@ -12,6 +12,7 @@ import {
     getGoogleAuthStatus,
     getGoogleIdTokenFromResponse,
 } from '../api/googleAuthConfig';
+import { PRIVACY_POLICY_URL } from '../constants/legal';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -103,6 +104,12 @@ const LoginScreen = ({ navigation }) => {
     const showUnavailableNotice = (message) => {
         clearAuthNotice();
         setLocalNotice({ type: 'info', message });
+    };
+
+    const openPrivacyPolicy = () => {
+        Linking.openURL(PRIVACY_POLICY_URL).catch(() => {
+            showUnavailableNotice(`Privacy Policy: ${PRIVACY_POLICY_URL}`);
+        });
     };
 
     const showGoogleError = React.useCallback((message) => {
@@ -200,6 +207,9 @@ const LoginScreen = ({ navigation }) => {
                         <Text style={styles.link}>{t('login.no_account')}<Text style={styles.linkBold}>{t('login.register')}</Text></Text>
                     </TouchableOpacity>
 
+                    <TouchableOpacity onPress={openPrivacyPolicy} style={styles.policyLink}>
+                        <Text style={styles.policyText}>Privacy Policy</Text>
+                    </TouchableOpacity>
 
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -264,6 +274,16 @@ const styles = StyleSheet.create({
     linkBold: {
         color: COLORS.accent,
         fontWeight: 'bold',
+    },
+    policyLink: {
+        marginTop: 12,
+        paddingVertical: 8,
+    },
+    policyText: {
+        color: COLORS.accent,
+        fontSize: 13,
+        fontWeight: '700',
+        textDecorationLine: 'underline',
     },
     skipBtn: {
         marginTop: SPACING.md,

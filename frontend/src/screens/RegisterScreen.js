@@ -1,5 +1,5 @@
 import React, { useContext, useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Image } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Image, Linking } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Button } from '../components/Button';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,6 +29,7 @@ import {
     getReliableCurrentLocation,
     hasValidCoordinatePair,
 } from '../utils/locationAccuracy';
+import { PRIVACY_POLICY_URL } from '../constants/legal';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -105,6 +106,12 @@ const RegisterScreen = ({ navigation }) => {
         const formattedCode = formatCountryCode(value);
         setCustomCountryCode(formattedCode);
         setCountryCode(formattedCode);
+    };
+
+    const openPrivacyPolicy = () => {
+        Linking.openURL(PRIVACY_POLICY_URL).catch(() => {
+            Alert.alert('Privacy Policy', PRIVACY_POLICY_URL);
+        });
     };
 
     // Google Sign-Up setup
@@ -504,6 +511,9 @@ const RegisterScreen = ({ navigation }) => {
                         <Text style={styles.link}>{t('register.already_account')}<Text style={styles.linkBold}>{t('register.login')}</Text></Text>
                     </TouchableOpacity>
 
+                    <TouchableOpacity onPress={openPrivacyPolicy} style={styles.policyLink}>
+                        <Text style={styles.policyText}>Privacy Policy</Text>
+                    </TouchableOpacity>
 
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -668,6 +678,17 @@ const styles = StyleSheet.create({
     linkBold: {
         color: COLORS.accent,
         fontWeight: 'bold',
+    },
+    policyLink: {
+        alignSelf: 'center',
+        marginTop: 12,
+        paddingVertical: 8,
+    },
+    policyText: {
+        color: COLORS.accent,
+        fontSize: 13,
+        fontWeight: '700',
+        textDecorationLine: 'underline',
     },
     roleContainer: {
         marginBottom: 15,
