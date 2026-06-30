@@ -1,15 +1,45 @@
 import { Platform } from 'react-native';
 import { makeRedirectUri } from 'expo-auth-session';
+import Constants from 'expo-constants';
 import appConfig from '../../app.json';
 
-export const GOOGLE_REDIRECT_PATH = process.env.EXPO_PUBLIC_GOOGLE_REDIRECT_PATH || 'auth/google';
-export const GOOGLE_REDIRECT_URI = process.env.EXPO_PUBLIC_GOOGLE_REDIRECT_URI?.trim();
-const ANDROID_PACKAGE_NAME = appConfig?.expo?.android?.package || 'your Android package';
+const embeddedExtra =
+    Constants?.expoConfig?.extra
+    || Constants?.manifest?.extra
+    || Constants?.manifest2?.extra?.expoClient?.extra
+    || appConfig?.expo?.extra
+    || {};
+const embeddedGoogleClientIds = embeddedExtra.googleClientIds || {};
+
+const ENV_GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+const ENV_GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+const ENV_GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
+const ENV_GOOGLE_REDIRECT_PATH = process.env.EXPO_PUBLIC_GOOGLE_REDIRECT_PATH;
+const ENV_GOOGLE_REDIRECT_URI = process.env.EXPO_PUBLIC_GOOGLE_REDIRECT_URI;
+
+const cleanConfigValue = (value) => (typeof value === 'string' ? value.trim() : '');
+const readConfigValue = (envValue, embeddedValue, fallback = '') => (
+    cleanConfigValue(envValue) || cleanConfigValue(embeddedValue) || fallback
+);
+
+export const GOOGLE_REDIRECT_PATH = readConfigValue(
+    ENV_GOOGLE_REDIRECT_PATH,
+    embeddedExtra.googleRedirectPath,
+    'auth/google'
+);
+export const GOOGLE_REDIRECT_URI = readConfigValue(
+    ENV_GOOGLE_REDIRECT_URI,
+    embeddedExtra.googleRedirectUri
+);
+const ANDROID_PACKAGE_NAME =
+    embeddedExtra.androidPackage
+    || appConfig?.expo?.android?.package
+    || 'your Android package';
 
 export const googleClientIds = {
-    web: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim(),
-    ios: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?.trim(),
-    android: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID?.trim(),
+    web: readConfigValue(ENV_GOOGLE_WEB_CLIENT_ID, embeddedGoogleClientIds.web),
+    ios: readConfigValue(ENV_GOOGLE_IOS_CLIENT_ID, embeddedGoogleClientIds.ios),
+    android: readConfigValue(ENV_GOOGLE_ANDROID_CLIENT_ID, embeddedGoogleClientIds.android),
 };
 
 export const isUsableGoogleClientId = (clientId) => {

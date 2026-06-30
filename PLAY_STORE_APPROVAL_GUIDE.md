@@ -25,6 +25,10 @@ This release keeps the app functionally complete:
 
 Do not use a Personal developer account strategy unless you are willing to remove or fully disable the human impact/research features from the submitted app.
 
+## Store Listing Identity
+
+The app binary should use `Lovedogs 360` as the visible app name and the square Lovedogs 360 launcher icon. In Play Console, also check **Store presence > Main store listing** and **App content > Store settings** so the public/internal-test listing title and icon are set to `Lovedogs 360`, not the Android package name `lovedogs360.co.ke`.
+
 ## Recommended Approval Path
 
 1. Create or verify a legal Organization developer account in Play Console.

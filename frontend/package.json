@@ -1,6 +1,6 @@
 {
   "name": "lovedogs360",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "npx expo start",
@@ -25,6 +25,7 @@
     "expo": "~54.0.0",
     "expo-auth-session": "~7.0.10",
     "expo-camera": "~17.0.10",
+    "expo-constants": "~18.0.13",
     "expo-crypto": "~15.0.8",
     "expo-file-system": "~19.0.21",
     "expo-image-picker": "~17.0.10",
