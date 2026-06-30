@@ -4,6 +4,13 @@
     "scripts": {
         "dev": "cd frontend && npm run dev",
         "backend": "cd backend && ..\\.venv\\Scripts\\python -m uvicorn main:app --reload --host 0.0.0.0",
-        "docker-up": "docker-compose up --build"
+        "docker-up": "docker-compose up --build",
+        "supabase": "supabase",
+        "supabase:link": "supabase link --project-ref dnuwenqsyurjgmyurttj",
+        "supabase:db:push": "supabase db push",
+        "supabase:functions:deploy": "supabase functions deploy api --no-verify-jwt"
+    },
+    "devDependencies": {
+        "supabase": "^2.109.0"
     }
 }

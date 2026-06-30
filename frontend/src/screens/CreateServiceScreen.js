@@ -8,6 +8,8 @@ import { COLORS, SPACING } from '../constants/theme';
 import client from '../api/client';
 import { Button } from '../components/Button';
 import { useCurrency } from '../context/CurrencyContext';
+import { runtimeConfig } from '../config/runtimeConfig';
+import { uploadImagesToSupabase } from '../utils/uploadImages';
 import {
     formatCoordinatePair,
     formatLocationAccuracy,
@@ -188,14 +190,17 @@ const CreateServiceScreen = ({ route, navigation }) => {
 
         setLoading(true);
         try {
+            const uploadedImages = images.length > 0
+                ? await uploadImagesToSupabase(images, 'services', runtimeConfig.storageBuckets.serviceImages)
+                : [];
             const data = {
                 title,
                 description,
                 price: numericPrice, // Send base price directly to backend
                 item_type: itemType,
                 category,
-                image_url: images.length > 0 ? images[0] : null,
-                images,
+                image_url: uploadedImages.length > 0 ? uploadedImages[0] : null,
+                images: uploadedImages,
                 currency,
                 stock_count: itemType === 'products' ? parseOptionalCount(stockCount) : null,
                 slots_available: itemType === 'services' ? parseOptionalCount(slotsAvailable) : null,

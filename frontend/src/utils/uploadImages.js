@@ -2,10 +2,11 @@ import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import { decode } from 'base64-arraybuffer';
 import { supabase } from '../../supabase';
+import { runtimeConfig } from '../config/runtimeConfig';
 
 const isRemoteUrl = (uri) => /^https?:\/\//i.test(String(uri || ''));
 
-export const uploadImagesToSupabase = async (images = [], folder = 'uploads') => {
+export const uploadImagesToSupabase = async (images = [], folder = 'uploads', bucket = runtimeConfig.storageBuckets.serviceImages) => {
     const uploadedUrls = [];
 
     for (const uri of images) {
@@ -30,7 +31,7 @@ export const uploadImagesToSupabase = async (images = [], folder = 'uploads') =>
         }
 
         const { error } = await supabase.storage
-            .from('support_images')
+            .from(bucket)
             .upload(filePath, body, {
                 contentType: 'image/jpeg',
                 upsert: true,
@@ -39,7 +40,7 @@ export const uploadImagesToSupabase = async (images = [], folder = 'uploads') =>
         if (error) throw error;
 
         const { data: { publicUrl } } = supabase.storage
-            .from('support_images')
+            .from(bucket)
             .getPublicUrl(filePath);
 
         uploadedUrls.push(publicUrl);

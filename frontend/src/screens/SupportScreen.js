@@ -8,6 +8,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { decode } from 'base64-arraybuffer';
 import { supabase } from '../../supabase';
+import { runtimeConfig } from '../config/runtimeConfig';
 import { Image } from 'react-native';
 
 export const SupportScreen = ({ navigation }) => {
@@ -90,7 +91,7 @@ export const SupportScreen = ({ navigation }) => {
 
                 const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
                 const { data, error } = await supabase.storage
-                    .from('support_images')
+                    .from(runtimeConfig.storageBuckets.supportAttachments)
                     .upload(filePath, decode(base64), {
                         contentType: 'image/jpeg',
                         upsert: true
@@ -99,7 +100,7 @@ export const SupportScreen = ({ navigation }) => {
                 if (error) throw error;
 
                 const { data: { publicUrl } } = supabase.storage
-                    .from('support_images')
+                    .from(runtimeConfig.storageBuckets.supportAttachments)
                     .getPublicUrl(filePath);
 
                 uploadedUrls.push(publicUrl);

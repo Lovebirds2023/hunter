@@ -9,6 +9,7 @@ import { decode } from 'base64-arraybuffer';
 import { Ionicons } from '@expo/vector-icons';
 import client from '../../api/client';
 import { supabase } from '../../../supabase';
+import { runtimeConfig } from '../../config/runtimeConfig';
 import { adminStyles as s, ADMIN_COLORS } from './AdminStyles';
 import { DistributionBar } from './ChartComponents';
 
@@ -164,7 +165,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
         const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
 
         const { error } = await supabase.storage
-            .from('support_images')
+            .from(runtimeConfig.storageBuckets.eventImages)
             .upload(filePath, decode(base64), {
                 contentType: `image/${safeExtension === 'jpg' ? 'jpeg' : safeExtension}`,
                 upsert: true,
@@ -173,7 +174,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
         if (error) throw error;
 
         const { data: { publicUrl } } = supabase.storage
-            .from('support_images')
+            .from(runtimeConfig.storageBuckets.eventImages)
             .getPublicUrl(filePath);
 
         return publicUrl;

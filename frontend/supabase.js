@@ -1,11 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
+import { hasSupabaseConfig, runtimeConfig } from './src/config/runtimeConfig';
 
-// Use environment variables for URL and Key
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://zqfmaotviiqcekgzrdqe.supabase.co';
-const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_P3_vCRDsTIEhXRB7gYwKgQ_TGV7BlEc';
+const missingSupabaseMessage = 'Supabase is not configured. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY.';
 
-if (!supabaseUrl || !supabaseKey) {
-  console.warn("Supabase credentials missing! Check your .env file.");
-}
+export const isSupabaseConfigured = hasSupabaseConfig;
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export const supabase = hasSupabaseConfig
+  ? createClient(runtimeConfig.supabaseUrl, runtimeConfig.supabaseAnonKey)
+  : new Proxy({}, {
+      get() {
+        throw new Error(missingSupabaseMessage);
+      },
+    });

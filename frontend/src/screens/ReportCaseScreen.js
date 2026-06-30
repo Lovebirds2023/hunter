@@ -13,6 +13,7 @@ import { Button } from '../components/Button';
 import client from '../api/client';
 import { getBreedsForPetType, getColorsForPetType } from '../constants/data';
 import { uploadImagesToSupabase } from '../utils/uploadImages';
+import { runtimeConfig } from '../config/runtimeConfig';
 import {
     formatCoordinatePair,
     formatLocationAccuracy,
@@ -173,7 +174,7 @@ const ReportCaseScreen = ({ navigation, route }) => {
         setSubmitting(true);
         try {
             const uploadedImages = images.length > 0
-                ? await uploadImagesToSupabase(images, 'cases')
+                ? await uploadImagesToSupabase(images, 'cases', runtimeConfig.storageBuckets.caseEvidence)
                 : [];
 
             const res = await client.post('/cases', {

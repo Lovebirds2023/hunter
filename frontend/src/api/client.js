@@ -1,24 +1,25 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
-
-const PRODUCTION_API_URL = 'https://hunter-production-0341.up.railway.app';
+import { runtimeConfig } from '../config/runtimeConfig';
 
 const normalizeUrl = (url) => {
     const normalizedUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;
     return normalizedUrl.replace(/\/+$/, '');
 };
 
-// EXPO_PUBLIC_API_URL wins when set; production falls back to the live API.
+const missingApiMessage = 'API URL is not configured. Set EXPO_PUBLIC_API_URL to the Supabase-backed API endpoint before building the app.';
+
 const getBaseUrl = () => {
-    const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+    const envUrl = runtimeConfig.apiUrl;
 
     if (envUrl) {
         return normalizeUrl(envUrl);
     }
 
     if (!__DEV__) {
-        return PRODUCTION_API_URL;
+        console.error(missingApiMessage);
+        return '';
     }
 
     if (Platform.OS === 'android') {
@@ -30,6 +31,7 @@ const getBaseUrl = () => {
 
 export const BASE_URL = getBaseUrl();
 export const API_URL = BASE_URL;
+export const API_CONFIGURATION_ERROR = BASE_URL ? null : missingApiMessage;
 export const AUTH_SESSION_EXPIRED_EVENT = 'lovedogs360:auth-session-expired';
 const sessionExpiredListeners = new Set();
 
@@ -65,6 +67,10 @@ const client = axios.create({
 
 client.interceptors.request.use(
     async (config) => {
+        if (API_CONFIGURATION_ERROR) {
+            return Promise.reject(new Error(API_CONFIGURATION_ERROR));
+        }
+
         let token = null;
         try {
             // On web, Platform.OS may be 'web' or undefined, so check both

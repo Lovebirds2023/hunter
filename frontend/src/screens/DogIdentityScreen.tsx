@@ -9,6 +9,7 @@ import { Button } from '../components/Button';
 import client from '../api/client';
 import { getBreedsForPetType, getColorsForPetType } from '../constants/data';
 import { uploadImagesToSupabase } from '../utils/uploadImages';
+import { runtimeConfig } from '../config/runtimeConfig';
 
 // Only import CameraView for native platforms
 let CameraView: any = null;
@@ -137,7 +138,7 @@ export const DogIdentityScreen = ({ navigation }: any) => {
     const finishIdentity = async (images: string[]) => {
         setIsSubmitting(true);
         try {
-            const uploadedImages = await uploadImagesToSupabase(images, 'pet-identity');
+            const uploadedImages = await uploadImagesToSupabase(images, 'pet-identity', runtimeConfig.storageBuckets.petIdentity);
             const payload = {
                 name: dogName,
                 breed: breed === 'Other' ? customBreed : breed,
