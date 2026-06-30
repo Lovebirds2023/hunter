@@ -8,6 +8,7 @@ import client from '../api/client';
 import { useFocusEffect } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export const WellnessHubScreen = ({ navigation }: any) => {
     const { t } = useTranslation();
@@ -15,7 +16,7 @@ export const WellnessHubScreen = ({ navigation }: any) => {
     const [dogs, setDogs] = useState<any[]>([]);
     const [activeDogIndex, setActiveDogIndex] = useState(0);
     
-    const [healthStats, setHealthStats] = useState({ vaccinations: 0, appointments: 0, records: [] });
+    const [healthStats, setHealthStats] = useState<{ vaccinations: number; appointments: number; records: any[] }>({ vaccinations: 0, appointments: 0, records: [] });
     const [wellnessScore, setWellnessScore] = useState<any>(null);
     const [advisorInsights, setAdvisorInsights] = useState<any>(null);
     
@@ -122,6 +123,134 @@ export const WellnessHubScreen = ({ navigation }: any) => {
     }
 
     const activeDog = dogs[activeDogIndex];
+
+    const getValidDate = (value: unknown) => {
+        if (!value) return null;
+        const date = new Date(String(value));
+        return Number.isNaN(date.getTime()) ? null : date;
+    };
+
+    const startOfToday = () => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return today;
+    };
+
+    const daysUntil = (date: Date) => Math.ceil((date.getTime() - startOfToday().getTime()) / MS_PER_DAY);
+
+    const getRecordTypeLabel = (recordType: unknown) => {
+        const key = String(recordType || '').trim();
+        if (!key) return t('health.types.checkup');
+        const fallback = key
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, (char) => char.toUpperCase());
+        return t(`health.types.${key}`, { defaultValue: fallback });
+    };
+
+    const buildWellnessTip = () => {
+        const advisorTip = typeof advisorInsights?.pro_tip === 'string' ? advisorInsights.pro_tip.trim() : '';
+        if (advisorTip) return advisorTip;
+
+        const firstAdvisorInsight = advisorInsights?.insights?.find((insight: unknown) => (
+            typeof insight === 'string' && insight.trim().length > 0
+        ));
+        if (firstAdvisorInsight) {
+            return t('wellness.pro_tips.advisor_key_takeaway', {
+                insight: firstAdvisorInsight.trim(),
+            });
+        }
+
+        if (!activeDog) {
+            return t('wellness.pro_tips.no_pet');
+        }
+
+        const records = healthStats.records || [];
+        const petName = activeDog.name || t('health_passport.unknown');
+        const dueRecords = records
+            .reduce((items: { record: any; dueDate: Date }[], record: any) => {
+                const dueDate = getValidDate(record.next_due_date);
+                if (dueDate) items.push({ record, dueDate });
+                return items;
+            }, [])
+            .sort((a: any, b: any) => a.dueDate.getTime() - b.dueDate.getTime());
+
+        const overdue = dueRecords.find(({ dueDate }: any) => daysUntil(dueDate) < 0);
+        if (overdue) {
+            return t('wellness.pro_tips.overdue', {
+                name: petName,
+                type: getRecordTypeLabel(overdue.record.record_type),
+            });
+        }
+
+        const dueToday = dueRecords.find(({ dueDate }: any) => daysUntil(dueDate) === 0);
+        if (dueToday) {
+            return t('wellness.pro_tips.due_today', {
+                name: petName,
+                type: getRecordTypeLabel(dueToday.record.record_type),
+            });
+        }
+
+        const dueSoon = dueRecords.find(({ dueDate }: any) => {
+            const days = daysUntil(dueDate);
+            return days > 0 && days <= 14;
+        });
+        if (dueSoon) {
+            return t('wellness.pro_tips.due_soon', {
+                name: petName,
+                type: getRecordTypeLabel(dueSoon.record.record_type),
+                count: daysUntil(dueSoon.dueDate),
+            });
+        }
+
+        if (records.length === 0) {
+            return t('wellness.pro_tips.no_records', { name: petName });
+        }
+
+        if (!records.some((record: any) => record.record_type === 'vaccination')) {
+            return t('wellness.pro_tips.no_vaccination', { name: petName });
+        }
+
+        if (!records.some((record: any) => record.record_type === 'checkup')) {
+            return t('wellness.pro_tips.no_checkup', { name: petName });
+        }
+
+        if (records.some((record: any) => record.record_type === 'medication')) {
+            return t('wellness.pro_tips.medication', { name: petName });
+        }
+
+        if (records.some((record: any) => record.record_type === 'surgery')) {
+            return t('wellness.pro_tips.surgery', { name: petName });
+        }
+
+        const age = Number(activeDog.age);
+        if (Number.isFinite(age) && age > 0 && age < 1) {
+            return t('wellness.pro_tips.young_pet', { name: petName });
+        }
+        if (Number.isFinite(age) && age >= 7) {
+            return t('wellness.pro_tips.senior_pet', { name: petName });
+        }
+
+        const latestRecordDate = records
+            .map((record: any) => getValidDate(record.date))
+            .filter(Boolean)
+            .sort((a: any, b: any) => b.getTime() - a.getTime())[0];
+        if (latestRecordDate && Math.floor((Date.now() - latestRecordDate.getTime()) / MS_PER_DAY) <= 14) {
+            return t('wellness.pro_tips.recent_record', { name: petName });
+        }
+
+        const rotatingTipKeys = [
+            'rotate_hydration',
+            'rotate_body_condition',
+            'rotate_preventives',
+            'rotate_notes',
+        ];
+        const seedText = String(activeDog.id || activeDog.name || '');
+        const seed = seedText.split('').reduce((sum, char) => sum + char.charCodeAt(0), records.length);
+        const index = (Math.floor(Date.now() / MS_PER_DAY) + seed) % rotatingTipKeys.length;
+        return t(`wellness.pro_tips.${rotatingTipKeys[index]}`, { name: petName });
+    };
+
+    const proTipText = buildWellnessTip();
 
     return (
         <SafeAreaView style={styles.safeArea}>
@@ -299,7 +428,7 @@ export const WellnessHubScreen = ({ navigation }: any) => {
                         <Ionicons name="bulb" size={24} color={COLORS.accent} />
                         <View style={styles.proTipContent}>
                             <Text style={styles.proTipTitle}>{t('wellness.pro_tip')}</Text>
-                            <Text style={styles.proTipText}>{t('wellness.pro_tip_text')}</Text>
+                            <Text style={styles.proTipText}>{proTipText}</Text>
                         </View>
                     </LinearGradient>
                 </View>

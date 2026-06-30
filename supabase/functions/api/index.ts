@@ -1097,6 +1097,116 @@ const handleOnlineUsers = async () => {
   return jsonResponse((data ?? []).map((user) => serializeUser(user as JsonRecord)));
 };
 
+const HEALTH_MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+const getValidRecordDate = (value: unknown) => {
+  const text = cleanString(value);
+  if (!text) return null;
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const daysUntilRecordDate = (date: Date) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.ceil((date.getTime() - today.getTime()) / HEALTH_MS_PER_DAY);
+};
+
+const formatHealthRecordType = (value: unknown) => {
+  const text = cleanString(value).replace(/_/g, " ");
+  return text ? text.replace(/\b\w/g, (char) => char.toUpperCase()) : "Health Check";
+};
+
+const buildHealthAdvisorResponse = (dog: JsonRecord, records: JsonRecord[]) => {
+  const name = cleanString(dog.name) || "Your pet";
+  const breed = cleanString(dog.breed);
+  const petType = cleanString(dog.pet_type) || "pet";
+  const age = asNumber(dog.age);
+  const insights: string[] = [];
+
+  const dueRecords = records
+    .map((record) => ({ record, dueDate: getValidRecordDate(record.next_due_date) }))
+    .filter((item): item is { record: JsonRecord; dueDate: Date } => Boolean(item.dueDate))
+    .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+
+  const overdue = dueRecords.find((item) => daysUntilRecordDate(item.dueDate) < 0);
+  const dueToday = dueRecords.find((item) => daysUntilRecordDate(item.dueDate) === 0);
+  const dueSoon = dueRecords.find((item) => {
+    const days = daysUntilRecordDate(item.dueDate);
+    return days > 0 && days <= 14;
+  });
+
+  if (overdue) {
+    insights.push(`${name} has an overdue ${formatHealthRecordType(overdue.record.record_type)} date. Book time with a qualified vet or update the record after care is completed.`);
+  } else if (dueToday) {
+    insights.push(`${name}'s ${formatHealthRecordType(dueToday.record.record_type)} is due today. Keep the appointment or update the record if your vet has already handled it.`);
+  } else if (dueSoon) {
+    insights.push(`${name}'s ${formatHealthRecordType(dueSoon.record.record_type)} is due in ${daysUntilRecordDate(dueSoon.dueDate)} days. Set a reminder now so it does not slip.`);
+  }
+
+  if (records.length === 0) {
+    insights.push(`Start ${name}'s passport with the most recent vaccination, deworming, or vet visit record you already have.`);
+  }
+
+  if (!records.some((record) => cleanString(record.record_type) === "vaccination")) {
+    insights.push(`${name} has no vaccination record yet. Add the latest details or ask your vet what is due next.`);
+  }
+
+  if (!records.some((record) => cleanString(record.record_type) === "checkup")) {
+    insights.push(`${name} has no checkup record yet. A routine vet visit gives you a useful baseline even when everything looks normal.`);
+  }
+
+  const hasMedication = records.some((record) => cleanString(record.record_type) === "medication");
+  if (hasMedication) {
+    insights.push(`Keep ${name}'s medication notes clear: dose, timing, vet instructions, and any reaction you observe.`);
+  }
+
+  const hasSurgery = records.some((record) => cleanString(record.record_type) === "surgery");
+  if (hasSurgery) {
+    insights.push(`For ${name}'s surgery history, log recovery notes and follow-up dates so your vet has a clean timeline.`);
+  }
+
+  const symptomPattern = /\b(vomit|diarrhea|cough|bleed|seizure|letharg|not eating|limp|pain)\b/i;
+  if (records.some((record) => symptomPattern.test(cleanString(record.notes)))) {
+    insights.push(`Some notes mention possible symptoms. Contact a qualified veterinarian promptly if symptoms are ongoing, severe, or worsening.`);
+  }
+
+  if (age > 0 && age < 1) {
+    const youngLabel = petType === "cat" ? "kitten" : petType === "dog" ? "puppy" : "young pet";
+    insights.push(`${name} is still a ${youngLabel}. Track vaccines, deworming, weight, and feeding changes closely during rapid growth.`);
+  } else if (age >= 7) {
+    insights.push(`${name} is in the senior range. Ask your vet how often wellness checks, dental care, and weight reviews should happen.`);
+  }
+
+  if (breed) {
+    insights.push(`Because ${name}'s breed is recorded as ${breed}, ask your vet whether any breed-specific screening or prevention plan is recommended.`);
+  }
+
+  const uniqueInsights = [...new Set(insights)].slice(0, 4);
+  const proTip = uniqueInsights[0] || `Keep ${name}'s next due dates updated so reminders stay useful and the passport remains easy to trust.`;
+
+  return {
+    dog_name: name,
+    breed,
+    insights: uniqueInsights.length ? uniqueInsights : [proTip],
+    pro_tip: proTip,
+    engine: "Supabase Wellness Rules",
+  };
+};
+
+const handleHealthAdvisor = async (request: Request, dogId: string) => {
+  const { profile } = await requireProfile(request);
+  const dog = await ensureDogAccess(dogId, profile);
+  const { data, error } = await supabaseAdmin
+    .from("health_records")
+    .select("*")
+    .eq("dog_id", dogId)
+    .order("date", { ascending: false })
+    .limit(20);
+  if (error) throw error;
+  return jsonResponse(buildHealthAdvisorResponse(dog, (data ?? []) as JsonRecord[]));
+};
+
 const handleHealthSummary = async (request: Request) => {
   const { profile } = await requireProfile(request);
   const userId = cleanString(profile.id);
@@ -2606,7 +2716,7 @@ const routeRequest = async (request: Request) => {
 
   if (method === "GET" && path === "/health/summary") return handleHealthSummary(request);
   if (method === "GET" && path === "/health/wellness-score") return jsonResponse(null);
-  if (method === "GET" && /^\/health\/advisor\/[^/]+$/.test(path)) return jsonResponse(null);
+  if (method === "GET" && /^\/health\/advisor\/[^/]+$/.test(path)) return handleHealthAdvisor(request, firstPathMatch(path, /^\/health\/advisor\/([^/]+)$/));
   if (method === "GET" && path === "/scorecard/questions") return jsonResponse([]);
   if (method === "GET" && path === "/app/version/latest") return jsonResponse(null);
 

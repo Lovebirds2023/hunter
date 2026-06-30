@@ -35,7 +35,7 @@
         "sub_greeting": "How's your fur-friend today?",
         "my_dogs": "My Dogs/Cats",
         "local_alerts": "Local Alerts",
-        "health_wellness": "Pet Care",
+        "health_wellness": "Health & Wellness",
         "health_status": "Everything is looking great! No upcoming vaccinations this week.",
         "view_records": "View Records",
         "quick_actions": "Quick Actions",
@@ -180,7 +180,7 @@
         },
         "categories": {
             "all": "All",
-            "health": "Pet care",
+            "health": "Health & Wellness",
             "therapy": "Support",
             "training": "Training",
             "grooming": "Grooming",
@@ -383,7 +383,7 @@
         "i_lost_desc": "Report your missing dog/cat for community help."
     },
     "health": {
-        "title": "Add Pet care Record",
+        "title": "Add Health & Wellness Record",
         "labels": {
             "type": "Record Type",
             "date": "Date (YYYY-MM-DD)",
@@ -402,11 +402,11 @@
             "surgery": "Surgery"
         },
         "alerts": {
-            "success": "Pet care record added!",
-            "error": "Failed to add pet care record",
+            "success": "Health & Wellness record added!",
+            "error": "Failed to add health and wellness record",
             "date_required": "Date is required"
         },
-        "reminder": "Pet care Reminder: {{name}}",
+        "reminder": "Health & Wellness Reminder: {{name}}",
         "reminder_body": "Upcoming {{type}} due on {{date}}",
         "smart_reminders": "Care Reminders",
         "days_before": "{{count}} Days Before",
@@ -454,12 +454,12 @@
         "my_dogs": "My Registered Dogs/Cats"
     },
     "wellness": {
-        "title": "Pet Care Hub",
+        "title": "Health & Wellness Hub",
         "weight_growth": "Weight Growth (kg)",
-        "weight_advice": "Your dog has gained {{amount}}kg since {{start}}. Pet carey growth!",
+        "weight_advice": "Your dog has gained {{amount}}kg since {{start}}. Healthy growth!",
         "active_vaccinations": "Vaccination Records",
         "upcoming_vets": "Upcoming Vet Visits",
-        "track_wellness": "Track Pet Care",
+        "track_wellness": "Track Wellness",
         "sections": {
             "vaccination_title": "Vaccination Records",
             "vaccination_desc": "Manage your pet's boosters and shots",
@@ -469,24 +469,43 @@
             "vet_notes_desc": "Store vet visit notes and reports"
         },
         "pro_tip": "Pro Tip",
-        "pro_tip_text": "Regular pet care routines help you stay ahead of reminders.",
+        "pro_tip_text": "Regular wellness routines help you stay ahead of reminders.",
         "dog_required_title": "Dog Profile Required",
-        "dog_required_records": "Please add a pet to your profile before adding care records.",
-        "dog_required_passport": "Please add a pet to view their care passport.",
+        "dog_required_records": "Please add a pet to your profile before adding health and wellness records.",
+        "dog_required_passport": "Please add a pet to view their Health & Wellness passport.",
         "add_pet": "Add Dog",
         "setup_required": "Setup Required",
-        "setup_desc": "To start tracking pet care records and viewing digital passports, please register a pet to your profile first.",
+        "setup_desc": "To start tracking health and wellness records and viewing digital passports, please register a pet to your profile first.",
         "register_pet": "Register a Pet",
-        "health_advisor": "Pet care Advisor: {{name}}",
-        "no_insights": "No care notes available for {{name}} yet. Add pet care records.",
-        "view_passport": "View Digital Pet care Passport",
+        "health_advisor": "Health & Wellness Advisor: {{name}}",
+        "no_insights": "No wellness notes available for {{name}} yet. Add health and wellness records.",
+        "view_passport": "View Digital Health & Wellness Passport",
         "log_vaccines": "Log vaccines, deworming, etc.",
         "update_weight": "Update weight and feeding schedules.",
         "medication": "Medication",
         "log_medications": "Log medications and dosage notes from your vet.",
         "surgery": "Surgery",
         "log_surgeries": "Log operations and recoveries.",
-        "save_notes": "Save general observations and vet visit notes."
+        "save_notes": "Save general observations and vet visit notes.",
+        "pro_tips": {
+            "advisor_key_takeaway": "Key takeaway: {{insight}}",
+            "no_pet": "Add a pet profile to unlock wellness tips based on their records, age, and upcoming due dates.",
+            "overdue": "{{name}} has an overdue {{type}} date. Book time with a qualified vet or update the record after care is completed.",
+            "due_today": "{{name}} has {{type}} due today. Keep the appointment or update the due date if your vet has already handled it.",
+            "due_soon": "{{name}} has {{type}} due in {{count}} days. Set a reminder now so the appointment does not slip.",
+            "no_records": "Start {{name}}'s passport with the most recent vaccination, vet visit, or deworming record you already have.",
+            "no_vaccination": "{{name}} has no vaccination record yet. Add the latest vaccination details or ask your vet what is due next.",
+            "no_checkup": "{{name}} has no checkup record yet. A routine vet visit is a useful baseline even when everything looks normal.",
+            "medication": "Keep {{name}}'s medication notes clear: dose, timing, vet instructions, and any reaction you observe.",
+            "surgery": "For {{name}}'s surgery history, log recovery notes and follow-up dates so your vet has a clean timeline.",
+            "young_pet": "{{name}} is still young. Track vaccines, deworming, weight, and feeding changes closely during rapid growth.",
+            "senior_pet": "{{name}} is in the senior range. Ask your vet how often wellness checks, dental care, and weight reviews should happen.",
+            "recent_record": "Nice work keeping {{name}}'s records current. Add the next due date when you know it so reminders stay useful.",
+            "rotate_hydration": "Check water intake and appetite daily. Sudden changes are worth noting and sharing with a vet if they persist.",
+            "rotate_body_condition": "Use weight and body condition together. A stable weight can still hide gradual muscle or fat changes.",
+            "rotate_preventives": "Parasite prevention depends on location, lifestyle, and vet guidance. Keep the next dose date in the passport.",
+            "rotate_notes": "When you notice a new symptom, log when it started, how often it happens, and what changed around that time."
+        }
     },
     "onboarding": {
         "skip": "Skip",
@@ -498,8 +517,8 @@
                 "description": "The ultimate companion app for your dog's life. Swipe to learn how to navigate the platform."
             },
             {
-                "title": "🐾 Pet Care Hub",
-                "description": "Keep track of vaccinations, weight growth, and vet notes. Manage your pet's care passport here."
+                "title": "🐾 Health & Wellness Hub",
+                "description": "Keep track of vaccinations, weight growth, and vet notes. Manage your pet's wellness passport here."
             },
             {
                 "title": "🛒 Marketplace",
@@ -670,7 +689,7 @@
         "based_on": "Based on {{count}} completions",
         "my_pets": "My Registered Pets",
         "register_pet": "Register a Pet",
-        "register_pet_desc": "Tap here to visit Pet Care Hub and add your first pet!",
+        "register_pet_desc": "Tap here to visit Health & Wellness Hub and add your first pet!",
         "register_another": "Register Another Pet",
         "personal_info": "Personal Information",
         "update": "Update",
@@ -867,7 +886,7 @@
         "color": "Color",
         "size": "Size",
         "about_pet": "About {{name}}:",
-        "health_records": "Pet care Records",
+        "health_records": "Health & Wellness Records",
         "add_record": "+ Add Record",
         "no_records": "No health records found.",
         "next_due": "Next Due",
@@ -1004,28 +1023,28 @@
         }
     },
     "health_passport": {
-        "title": "Digital Pet care Passport",
-        "load_error": "Could not load pet care passport",
-        "unable_load": "Unable to load pet care passport.",
+        "title": "Digital Health & Wellness Passport",
+        "load_error": "Could not load health and wellness passport",
+        "unable_load": "Unable to load health and wellness passport.",
         "unknown": "Unknown",
         "unknown_breed": "Unknown Breed",
         "age": "AGE",
         "years": "Years",
         "weight": "WEIGHT",
         "gender": "GENDER",
-        "current_status": "Current Pet care Status",
+        "current_status": "Current Health & Wellness Status",
         "next_due_dates": "Next Due Dates",
         "all_records_current": "All records up to date",
         "all_up_to_date": "All up to date",
-        "info_text": "This passport is a digital verification of pet care records provided through the Lovedogs 360 platform.",
+        "info_text": "This passport is a digital verification of health and wellness records provided through the Lovedogs 360 platform.",
         "export_failed": "Export Failed",
         "export_failed_msg": "Could not generate shareable report.",
-        "share_title": "{{name}} Pet care Passport",
-        "share_message": "Lovedogs 360 Pet care Passport\n\nDog: {{name}}\nBreed: {{breed}}\nWeight: {{weight}}kg\nPet care Status: {{status}}\n\nNext Due:\n{{nextDue}}",
+        "share_title": "{{name}} Health & Wellness Passport",
+        "share_message": "Lovedogs 360 Health & Wellness Passport\n\nDog: {{name}}\nBreed: {{breed}}\nWeight: {{weight}}kg\nHealth & Wellness Status: {{status}}\n\nNext Due:\n{{nextDue}}",
         "status": {
             "unknown": "Unknown",
             "action_needed": "Action Needed",
-            "healthy": "Pet carey"
+            "healthy": "Healthy"
         }
     },
     "service_responses": {
