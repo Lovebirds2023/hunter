@@ -180,7 +180,7 @@
         },
         "categories": {
             "all": "全部",
-            "health": "健康",
+            "health": "健康与养生",
             "therapy": "疗法",
             "training": "训练",
             "grooming": "美容",
@@ -382,7 +382,7 @@
         "i_lost_desc": "Report your missing dog for community help."
     },
     "health": {
-        "title": "添加健康记录",
+        "title": "添加健康与养生记录",
         "labels": {
             "type": "记录类型",
             "date": "日期 (YYYY-MM-DD)",
@@ -401,11 +401,11 @@
             "surgery": "Surgery"
         },
         "alerts": {
-            "success": "健康记录已添加！",
-            "error": "添加健康记录失败",
+            "success": "健康与养生记录已添加！",
+            "error": "添加健康与养生记录失败",
             "date_required": "日期是必填项"
         },
-        "reminder": "健康提醒：{{name}}",
+        "reminder": "健康与养生提醒：{{name}}",
         "reminder_body": "即将到期的 {{type}}，日期：{{date}}",
         "smart_reminders": "Care Reminders",
         "days_before": "{{count}} Days Before",
@@ -453,12 +453,12 @@
         "my_dogs": "我注册的狗狗"
     },
     "wellness": {
-        "title": "健康中心",
+        "title": "健康与养生中心",
         "weight_growth": "体重增长 (kg)",
         "weight_advice": "自 {{start}} 以来，你的狗狗增长了 {{amount}}kg。健康的增长！",
         "active_vaccinations": "有效疫苗",
         "upcoming_vets": "即将进行的兽医检查",
-        "track_wellness": "追踪健康",
+        "track_wellness": "追踪养生",
         "sections": {
             "vaccination_title": "疫苗接种记录",
             "vaccination_desc": "管理宠物的加强针和疫苗",
@@ -470,22 +470,41 @@
         "pro_tip": "小贴士",
         "pro_tip_text": "定期检查可以延长你狗狗长达2年的寿命！",
         "dog_required_title": "Dog Profile Required",
-        "dog_required_records": "Please add a pet to your profile before adding care records.",
-        "dog_required_passport": "Please add a pet to view their Health & Wellness passport.",
+        "dog_required_records": "添加健康与养生记录前，请先在个人资料中添加宠物。",
+        "dog_required_passport": "请添加宠物以查看它的健康与养生护照。",
         "add_pet": "添加狗狗",
         "setup_required": "Setup Required",
-        "setup_desc": "To start tracking health and wellness records and viewing digital passports, please register a pet to your profile first.",
+        "setup_desc": "要开始追踪健康与养生记录并查看数字护照，请先在个人资料中注册宠物。",
         "register_pet": "注册宠物",
-        "health_advisor": "Health & Wellness Advisor: {{name}}",
-        "no_insights": "No care notes available for {{name}} yet. Add health and wellness records.",
-        "view_passport": "View Digital Health & Wellness Passport",
+        "health_advisor": "健康与养生顾问：{{name}}",
+        "no_insights": "{{name}} 还没有养生备注。请添加健康与养生记录。",
+        "view_passport": "查看数字健康与养生护照",
         "log_vaccines": "Log vaccines, deworming, etc.",
         "update_weight": "Update weight and feeding schedules.",
         "medication": "Medication",
         "log_medications": "Log medications and dosage notes from your vet.",
         "surgery": "Surgery",
         "log_surgeries": "Log operations and recoveries.",
-        "save_notes": "Save general observations and vet visit notes."
+        "save_notes": "Save general observations and vet visit notes.",
+        "pro_tips": {
+            "advisor_key_takeaway": "关键提示：{{insight}}",
+            "no_pet": "添加宠物资料后，可根据记录、年龄和即将到期的事项获得养生建议。",
+            "overdue": "{{name}} 的 {{type}} 已逾期。请预约合格兽医，或在护理完成后更新记录。",
+            "due_today": "{{name}} 的 {{type}} 今天到期。请按时就诊，若兽医已处理，请更新日期。",
+            "due_soon": "{{name}} 的 {{type}} 将在 {{count}} 天后到期。现在设置提醒，避免错过。",
+            "no_records": "用你已有的最新疫苗、兽医就诊或驱虫记录开始 {{name}} 的护照。",
+            "no_vaccination": "{{name}} 还没有疫苗记录。请添加最新详情，或咨询兽医下一步需要做什么。",
+            "no_checkup": "{{name}} 还没有体检记录。即使一切看起来正常，常规兽医检查也能提供有用基线。",
+            "medication": "请清楚记录 {{name}} 的用药信息：剂量、时间、兽医指示和观察到的反应。",
+            "surgery": "对于 {{name}} 的手术史，请记录恢复情况和复诊日期，方便兽医了解清晰时间线。",
+            "young_pet": "{{name}} 还很年幼。快速成长期间，请密切记录疫苗、驱虫、体重和饮食变化。",
+            "senior_pet": "{{name}} 已进入老年阶段。请咨询兽医多久进行一次养生检查、牙齿护理和体重评估。",
+            "recent_record": "你很好地保持了 {{name}} 的记录更新。知道下次到期日后请添加，以便提醒更有用。",
+            "rotate_hydration": "每天观察饮水量和食欲。若突然变化持续存在，请记录并与兽医沟通。",
+            "rotate_body_condition": "体重和体况要一起看。体重稳定也可能掩盖肌肉或脂肪的逐渐变化。",
+            "rotate_preventives": "寄生虫预防取决于地点、生活方式和兽医建议。请把下一次用药日期保存在护照中。",
+            "rotate_notes": "发现新症状时，记录开始时间、发生频率，以及当时周围有什么变化。"
+        }
     },
     "onboarding": {
         "skip": "Skip",
@@ -497,8 +516,8 @@
                 "description": "The ultimate companion app for your dog's life. Swipe to learn how to navigate the platform."
             },
             {
-                "title": "🐾 Health & Wellness Hub",
-                "description": "Keep track of vaccinations, weight growth, and vet notes. Manage your pet's Health & Wellness passport here."
+                "title": "🐾 健康与养生中心",
+                "description": "追踪疫苗、体重变化和兽医备注。在这里管理宠物的养生护照。"
             },
             {
                 "title": "🛒 Marketplace",
@@ -669,7 +688,7 @@
         "based_on": "基于 {{count}} 次完成",
         "my_pets": "我已注册的宠物",
         "register_pet": "注册宠物",
-        "register_pet_desc": "点这里访问健康中心并添加你的第一只宠物！",
+        "register_pet_desc": "点击这里进入健康与养生中心并添加你的第一只宠物！",
         "register_another": "注册另一只宠物",
         "personal_info": "个人信息",
         "update": "更新",
@@ -853,7 +872,7 @@
         "color": "颜色",
         "size": "体型",
         "about_pet": "About {{name}}:",
-        "health_records": "Health & Wellness Records",
+        "health_records": "健康与养生记录",
         "add_record": "+ Add Record",
         "no_records": "No health records found.",
         "next_due": "Next Due",
@@ -989,28 +1008,28 @@
         }
     },
     "health_passport": {
-        "title": "Digital Health & Wellness Passport",
-        "load_error": "Could not load health and wellness passport",
-        "unable_load": "Unable to load health and wellness passport.",
+        "title": "数字健康与养生护照",
+        "load_error": "无法加载健康与养生护照",
+        "unable_load": "无法加载健康与养生护照。",
         "unknown": "Unknown",
         "unknown_breed": "Unknown Breed",
         "age": "AGE",
         "years": "Years",
         "weight": "WEIGHT",
         "gender": "GENDER",
-        "current_status": "Current Health & Wellness Status",
+        "current_status": "当前健康与养生状态",
         "next_due_dates": "Next Due Dates",
         "all_records_current": "All records up to date",
         "all_up_to_date": "All up to date",
-        "info_text": "This passport is a digital verification of health and wellness records provided through the Lovedogs 360 platform.",
+        "info_text": "此护照是 Lovedogs 360 平台提供的健康与养生记录的数字验证。",
         "export_failed": "Export Failed",
         "export_failed_msg": "Could not generate shareable report.",
-        "share_title": "{{name}} Health & Wellness Passport",
-        "share_message": "Lovedogs 360 Health & Wellness Passport\n\nDog: {{name}}\nBreed: {{breed}}\nWeight: {{weight}}kg\nHealth & Wellness Status: {{status}}\n\nNext Due:\n{{nextDue}}",
+        "share_title": "{{name}} 的健康与养生护照",
+        "share_message": "Lovedogs 360 健康与养生护照\n\n宠物：{{name}}\n品种：{{breed}}\n体重：{{weight}}公斤\n健康与养生状态：{{status}}\n\n下次到期：\n{{nextDue}}",
         "status": {
             "unknown": "Unknown",
             "action_needed": "Action Needed",
-            "healthy": "Healthy"
+            "healthy": "健康"
         }
     },
     "service_responses": {

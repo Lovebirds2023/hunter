@@ -180,7 +180,7 @@
         },
         "categories": {
             "all": "Todo",
-            "health": "Salud",
+            "health": "Salud y bienestar",
             "therapy": "Terapia",
             "training": "Entrenamiento",
             "grooming": "Aseo",
@@ -382,7 +382,7 @@
         "i_lost_desc": "Report your missing dog for community help."
     },
     "health": {
-        "title": "Añadir registro de salud",
+        "title": "Añadir registro de salud y bienestar",
         "labels": {
             "type": "Tipo de registro",
             "date": "Fecha (AAAA-MM-DD)",
@@ -401,11 +401,11 @@
             "surgery": "Surgery"
         },
         "alerts": {
-            "success": "¡Registro de salud añadido!",
-            "error": "Error al añadir registro de salud",
+            "success": "¡Registro de salud y bienestar añadido!",
+            "error": "No se pudo añadir el registro de salud y bienestar",
             "date_required": "La fecha es obligatoria"
         },
-        "reminder": "Recordatorio de salud: {{name}}",
+        "reminder": "Recordatorio de salud y bienestar: {{name}}",
         "reminder_body": "Próxima {{type}} programada para el {{date}}",
         "smart_reminders": "Care Reminders",
         "days_before": "{{count}} Days Before",
@@ -453,7 +453,7 @@
         "my_dogs": "Mis perros registrados"
     },
     "wellness": {
-        "title": "Centro de bienestar",
+        "title": "Centro de salud y bienestar",
         "weight_growth": "Crecimiento de peso (kg)",
         "weight_advice": "Tu perro ha ganado {{amount}}kg desde {{start}}. ¡Crecimiento saludable!",
         "active_vaccinations": "Vacunaciones activas",
@@ -470,22 +470,41 @@
         "pro_tip": "Consejo experto",
         "pro_tip_text": "¡Los chequeos regulares pueden extender la vida de tu perro hasta 2 años!",
         "dog_required_title": "Dog Profile Required",
-        "dog_required_records": "Please add a pet to your profile before adding care records.",
-        "dog_required_passport": "Please add a pet to view their Health & Wellness passport.",
+        "dog_required_records": "Añade una mascota a tu perfil antes de añadir registros de salud y bienestar.",
+        "dog_required_passport": "Añade una mascota para ver su pasaporte de salud y bienestar.",
         "add_pet": "Añadir perro",
         "setup_required": "Setup Required",
-        "setup_desc": "To start tracking health and wellness records and viewing digital passports, please register a pet to your profile first.",
+        "setup_desc": "Para empezar a registrar datos de salud y bienestar y ver pasaportes digitales, registra primero una mascota en tu perfil.",
         "register_pet": "Registrar una mascota",
-        "health_advisor": "Health & Wellness Advisor: {{name}}",
-        "no_insights": "No care notes available for {{name}} yet. Add health and wellness records.",
-        "view_passport": "View Digital Health & Wellness Passport",
+        "health_advisor": "Asesor de salud y bienestar: {{name}}",
+        "no_insights": "Aún no hay notas de bienestar para {{name}}. Añade registros de salud y bienestar.",
+        "view_passport": "Ver pasaporte digital de salud y bienestar",
         "log_vaccines": "Log vaccines, deworming, etc.",
         "update_weight": "Update weight and feeding schedules.",
         "medication": "Medication",
         "log_medications": "Log medications and dosage notes from your vet.",
         "surgery": "Surgery",
         "log_surgeries": "Log operations and recoveries.",
-        "save_notes": "Save general observations and vet visit notes."
+        "save_notes": "Save general observations and vet visit notes.",
+        "pro_tips": {
+            "advisor_key_takeaway": "Conclusión clave: {{insight}}",
+            "no_pet": "Añade un perfil de mascota para recibir consejos de bienestar según sus registros, edad y próximas fechas.",
+            "overdue": "{{name}} tiene {{type}} vencido. Agenda con un veterinario calificado o actualiza el registro cuando la atención esté completada.",
+            "due_today": "{{name}} tiene {{type}} programado para hoy. Mantén la cita o actualiza la fecha si tu veterinario ya lo atendió.",
+            "due_soon": "{{name}} tiene {{type}} en {{count}} días. Crea un recordatorio ahora para que no se pase.",
+            "no_records": "Empieza el pasaporte de {{name}} con el registro más reciente de vacuna, visita veterinaria o desparasitación que tengas.",
+            "no_vaccination": "{{name}} aún no tiene registro de vacunas. Añade los datos más recientes o pregunta a tu veterinario qué sigue.",
+            "no_checkup": "{{name}} aún no tiene registro de chequeo. Una visita rutinaria al veterinario da una buena línea base aunque todo parezca normal.",
+            "medication": "Mantén claras las notas de medicación de {{name}}: dosis, horario, instrucciones del veterinario y cualquier reacción observada.",
+            "surgery": "Para el historial quirúrgico de {{name}}, registra notas de recuperación y fechas de seguimiento para dar al veterinario una línea de tiempo clara.",
+            "young_pet": "{{name}} todavía es joven. Registra vacunas, desparasitación, peso y cambios de alimentación durante el crecimiento rápido.",
+            "senior_pet": "{{name}} está en etapa senior. Pregunta al veterinario con qué frecuencia convienen chequeos, cuidado dental y revisión de peso.",
+            "recent_record": "Buen trabajo manteniendo actualizados los registros de {{name}}. Añade la próxima fecha de vencimiento cuando la sepas.",
+            "rotate_hydration": "Observa a diario el consumo de agua y el apetito. Los cambios repentinos conviene anotarlos y comentarlos con un veterinario si persisten.",
+            "rotate_body_condition": "Usa peso y condición corporal juntos. Un peso estable puede ocultar cambios graduales en músculo o grasa.",
+            "rotate_preventives": "La prevención de parásitos depende de ubicación, estilo de vida y orientación veterinaria. Guarda la próxima dosis en el pasaporte.",
+            "rotate_notes": "Cuando notes un síntoma nuevo, registra cuándo empezó, con qué frecuencia ocurre y qué cambió alrededor de ese momento."
+        }
     },
     "onboarding": {
         "skip": "Skip",
@@ -497,8 +516,8 @@
                 "description": "The ultimate companion app for your dog's life. Swipe to learn how to navigate the platform."
             },
             {
-                "title": "🐾 Health & Wellness Hub",
-                "description": "Keep track of vaccinations, weight growth, and vet notes. Manage your pet's Health & Wellness passport here."
+                "title": "🐾 Centro de salud y bienestar",
+                "description": "Lleva el control de vacunas, peso y notas veterinarias. Gestiona aquí el pasaporte de bienestar de tu mascota."
             },
             {
                 "title": "🛒 Marketplace",
@@ -669,7 +688,7 @@
         "based_on": "Basado en {{count}} finalizaciones",
         "my_pets": "Mis mascotas registradas",
         "register_pet": "Registrar una mascota",
-        "register_pet_desc": "Toca aquí para visitar el Centro de bienestar y añadir tu primera mascota.",
+        "register_pet_desc": "Toca aquí para ir al Centro de salud y bienestar y añadir tu primera mascota.",
         "register_another": "Registrar otra mascota",
         "personal_info": "Información personal",
         "update": "Actualizar",
@@ -853,7 +872,7 @@
         "color": "Color",
         "size": "Tamaño",
         "about_pet": "About {{name}}:",
-        "health_records": "Health & Wellness Records",
+        "health_records": "Registros de salud y bienestar",
         "add_record": "+ Add Record",
         "no_records": "No health records found.",
         "next_due": "Next Due",
@@ -989,28 +1008,28 @@
         }
     },
     "health_passport": {
-        "title": "Digital Health & Wellness Passport",
-        "load_error": "Could not load health and wellness passport",
-        "unable_load": "Unable to load health and wellness passport.",
+        "title": "Pasaporte digital de salud y bienestar",
+        "load_error": "No se pudo cargar el pasaporte de salud y bienestar",
+        "unable_load": "No se puede cargar el pasaporte de salud y bienestar.",
         "unknown": "Unknown",
         "unknown_breed": "Unknown Breed",
         "age": "AGE",
         "years": "Years",
         "weight": "WEIGHT",
         "gender": "GENDER",
-        "current_status": "Current Health & Wellness Status",
+        "current_status": "Estado actual de salud y bienestar",
         "next_due_dates": "Next Due Dates",
         "all_records_current": "All records up to date",
         "all_up_to_date": "All up to date",
-        "info_text": "This passport is a digital verification of health and wellness records provided through the Lovedogs 360 platform.",
+        "info_text": "Este pasaporte es una verificación digital de los registros de salud y bienestar proporcionados a través de Lovedogs 360.",
         "export_failed": "Export Failed",
         "export_failed_msg": "Could not generate shareable report.",
-        "share_title": "{{name}} Health & Wellness Passport",
-        "share_message": "Lovedogs 360 Health & Wellness Passport\n\nDog: {{name}}\nBreed: {{breed}}\nWeight: {{weight}}kg\nHealth & Wellness Status: {{status}}\n\nNext Due:\n{{nextDue}}",
+        "share_title": "Pasaporte de salud y bienestar de {{name}}",
+        "share_message": "Pasaporte de salud y bienestar de Lovedogs 360\n\nMascota: {{name}}\nRaza: {{breed}}\nPeso: {{weight}} kg\nEstado de salud y bienestar: {{status}}\n\nPróximo vencimiento:\n{{nextDue}}",
         "status": {
             "unknown": "Unknown",
             "action_needed": "Action Needed",
-            "healthy": "Healthy"
+            "healthy": "Saludable"
         }
     },
     "service_responses": {

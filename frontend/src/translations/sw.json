@@ -161,7 +161,7 @@
         },
         "categories": {
             "all": "Zote",
-            "health": "Afya",
+            "health": "Afya na Ustawi",
             "therapy": "Tiba",
             "training": "Mafunzo",
             "grooming": "Usafi",
@@ -382,7 +382,7 @@
         "i_lost_desc": "Report your missing dog for community help."
     },
     "health": {
-        "title": "Ongeza Rekodi ya Afya",
+        "title": "Ongeza rekodi ya afya na ustawi",
         "labels": {
             "type": "Aina ya Rekodi",
             "date": "Tarehe (YYYY-MM-DD)",
@@ -401,11 +401,11 @@
             "surgery": "Surgery"
         },
         "alerts": {
-            "success": "Rekodi ya afya imeongezwa!",
-            "error": "Imeshindwa kuongeza rekodi ya afya",
+            "success": "Rekodi ya afya na ustawi imeongezwa!",
+            "error": "Imeshindikana kuongeza rekodi ya afya na ustawi",
             "date_required": "Tarehe inahitajika"
         },
-        "reminder": "Kumbukumbu ya Afya: {{name}}",
+        "reminder": "Kikumbusho cha afya na ustawi: {{name}}",
         "reminder_body": "{{type}} inayokuja mnamo {{date}}",
         "smart_reminders": "Care Reminders",
         "days_before": "{{count}} Days Before",
@@ -453,12 +453,12 @@
         "my_dogs": "Mbwa Wangu Waliosajiliwa"
     },
     "wellness": {
-        "title": "Kituo cha Ustawi",
+        "title": "Kituo cha afya na ustawi",
         "weight_growth": "Ukuaji wa Uzito (kg)",
         "weight_advice": "Mbwa wako ameongezeka kilo {{amount}} tangu {{start}}. Ukuaji mzuri!",
         "active_vaccinations": "Chanjo Zinazofanya Kazi",
         "upcoming_vets": "Madaktari Wanaokuja",
-        "track_wellness": "Fuatilia Ustawi",
+        "track_wellness": "Fuatilia ustawi",
         "sections": {
             "vaccination_title": "Rekodi za Chanjo",
             "vaccination_desc": "Dhibiti chanjo na sindano za mnyama wako",
@@ -470,22 +470,41 @@
         "pro_tip": "Kidokezo cha Kitaalamu",
         "pro_tip_text": "Uchunguzi wa mara kwa mara unaweza kurefusha maisha ya mbwa wako kwa hadi miaka 2!",
         "dog_required_title": "Dog Profile Required",
-        "dog_required_records": "Please add a pet to your profile before adding care records.",
-        "dog_required_passport": "Please add a pet to view their Health & Wellness passport.",
+        "dog_required_records": "Tafadhali ongeza mnyama kipenzi kwenye wasifu wako kabla ya kuongeza rekodi za afya na ustawi.",
+        "dog_required_passport": "Tafadhali ongeza mnyama kipenzi ili kuona pasipoti yake ya afya na ustawi.",
         "add_pet": "Ongeza Mbwa",
         "setup_required": "Setup Required",
-        "setup_desc": "To start tracking health and wellness records and viewing digital passports, please register a pet to your profile first.",
+        "setup_desc": "Ili kuanza kufuatilia rekodi za afya na ustawi na kuona pasipoti za kidijitali, sajili kwanza mnyama kipenzi kwenye wasifu wako.",
         "register_pet": "Sajili Mnyama",
-        "health_advisor": "Health & Wellness Advisor: {{name}}",
-        "no_insights": "No care notes available for {{name}} yet. Add health and wellness records.",
-        "view_passport": "View Digital Health & Wellness Passport",
+        "health_advisor": "Mshauri wa afya na ustawi: {{name}}",
+        "no_insights": "Hakuna maelezo ya ustawi ya {{name}} bado. Ongeza rekodi za afya na ustawi.",
+        "view_passport": "Tazama pasipoti ya kidijitali ya afya na ustawi",
         "log_vaccines": "Log vaccines, deworming, etc.",
         "update_weight": "Update weight and feeding schedules.",
         "medication": "Medication",
         "log_medications": "Log medications and dosage notes from your vet.",
         "surgery": "Surgery",
         "log_surgeries": "Log operations and recoveries.",
-        "save_notes": "Save general observations and vet visit notes."
+        "save_notes": "Save general observations and vet visit notes.",
+        "pro_tips": {
+            "advisor_key_takeaway": "Dondoo kuu: {{insight}}",
+            "no_pet": "Ongeza wasifu wa mnyama ili kupata vidokezo vya ustawi kulingana na rekodi, umri, na tarehe zijazo.",
+            "overdue": "{{name}} ana {{type}} iliyochelewa. Panga muda na daktari wa mifugo aliyehitimu au sasisha rekodi baada ya huduma kukamilika.",
+            "due_today": "{{name}} ana {{type}} leo. Heshimu miadi au sasisha tarehe ikiwa daktari wa mifugo tayari ameshughulikia.",
+            "due_soon": "{{name}} ana {{type}} ndani ya siku {{count}}. Weka kikumbusho sasa ili isipite.",
+            "no_records": "Anza pasipoti ya {{name}} kwa rekodi ya karibuni ya chanjo, ziara ya daktari wa mifugo, au dawa ya minyoo uliyonayo.",
+            "no_vaccination": "{{name}} hana rekodi ya chanjo bado. Ongeza maelezo ya karibuni au muulize daktari wa mifugo kinachofuata.",
+            "no_checkup": "{{name}} hana rekodi ya ukaguzi bado. Ziara ya kawaida kwa daktari wa mifugo ni msingi mzuri hata kila kitu kikionekana sawa.",
+            "medication": "Weka maelezo ya dawa ya {{name}} wazi: kipimo, muda, maagizo ya daktari wa mifugo, na mwitikio wowote unaouona.",
+            "surgery": "Kwa historia ya upasuaji ya {{name}}, andika maelezo ya kupona na tarehe za ufuatiliaji ili daktari awe na mfululizo wazi.",
+            "young_pet": "{{name}} bado ni mdogo. Fuatilia chanjo, dawa ya minyoo, uzito, na mabadiliko ya chakula wakati wa ukuaji wa haraka.",
+            "senior_pet": "{{name}} yuko katika umri mkubwa. Muulize daktari wa mifugo mara ngapi ukaguzi wa ustawi, meno, na uzito unahitajika.",
+            "recent_record": "Kazi nzuri kusasisha rekodi za {{name}}. Ongeza tarehe ijayo ukishaijua ili vikumbusho viwe na maana.",
+            "rotate_hydration": "Angalia kunywa maji na hamu ya kula kila siku. Mabadiliko ya ghafla yaandike na umshirikishe daktari wa mifugo yakidumu.",
+            "rotate_body_condition": "Tumia uzito pamoja na hali ya mwili. Uzito thabiti unaweza kuficha mabadiliko ya taratibu ya misuli au mafuta.",
+            "rotate_preventives": "Kinga dhidi ya vimelea hutegemea eneo, maisha, na ushauri wa daktari wa mifugo. Hifadhi tarehe ya dozi inayofuata kwenye pasipoti.",
+            "rotate_notes": "Ukiona dalili mpya, andika ilianza lini, hutokea mara ngapi, na kilichobadilika wakati huo."
+        }
     },
     "onboarding": {
         "skip": "Ruka",
@@ -497,8 +516,8 @@
                 "description": "Mwandani kamili kwa maisha ya mbwa wako. Telezesha ili kujifunza jinsi ya kutumia jukwaa hili."
             },
             {
-                "title": "🐾 Kituo cha Ustawi",
-                "description": "Keep track of vaccinations, weight growth, and vet notes. Manage your pet's Health & Wellness passport here."
+                "title": "🐾 Kituo cha afya na ustawi",
+                "description": "Fuatilia chanjo, ukuaji wa uzito, na maelezo ya daktari wa mifugo. Simamia pasipoti ya ustawi ya mnyama wako hapa."
             },
             {
                 "title": "🛒 Soko",
@@ -669,7 +688,7 @@
         "based_on": "Kulingana na ukamilishaji {{count}}",
         "my_pets": "Zilizoandikishwa Mnyama",
         "register_pet": "Sajili Mnyama",
-        "register_pet_desc": "Bonyeza hapa kutembelea Kituo cha Ustawi na kuongeza mnyama wako wa kwanza!",
+        "register_pet_desc": "Gusa hapa kufungua Kituo cha afya na ustawi na kuongeza mnyama wako wa kwanza!",
         "register_another": "Sajili Mnyama Mwingine",
         "personal_info": "Taarifa za Kibinafsi",
         "update": "Sasisha",
@@ -853,7 +872,7 @@
         "color": "Rangi",
         "size": "Ukubwa",
         "about_pet": "About {{name}}:",
-        "health_records": "Health & Wellness Records",
+        "health_records": "Rekodi za afya na ustawi",
         "add_record": "+ Add Record",
         "no_records": "No health records found.",
         "next_due": "Next Due",
@@ -989,28 +1008,28 @@
         }
     },
     "health_passport": {
-        "title": "Digital Health & Wellness Passport",
-        "load_error": "Could not load health and wellness passport",
-        "unable_load": "Unable to load health and wellness passport.",
+        "title": "Pasipoti ya kidijitali ya afya na ustawi",
+        "load_error": "Haikuwezekana kupakia pasipoti ya afya na ustawi",
+        "unable_load": "Haiwezi kupakia pasipoti ya afya na ustawi.",
         "unknown": "Unknown",
         "unknown_breed": "Unknown Breed",
         "age": "AGE",
         "years": "Years",
         "weight": "WEIGHT",
         "gender": "GENDER",
-        "current_status": "Current Health & Wellness Status",
+        "current_status": "Hali ya sasa ya afya na ustawi",
         "next_due_dates": "Next Due Dates",
         "all_records_current": "All records up to date",
         "all_up_to_date": "All up to date",
-        "info_text": "This passport is a digital verification of health and wellness records provided through the Lovedogs 360 platform.",
+        "info_text": "Pasipoti hii ni uthibitisho wa kidijitali wa rekodi za afya na ustawi zilizotolewa kupitia jukwaa la Lovedogs 360.",
         "export_failed": "Export Failed",
         "export_failed_msg": "Could not generate shareable report.",
-        "share_title": "{{name}} Health & Wellness Passport",
-        "share_message": "Lovedogs 360 Health & Wellness Passport\n\nDog: {{name}}\nBreed: {{breed}}\nWeight: {{weight}}kg\nHealth & Wellness Status: {{status}}\n\nNext Due:\n{{nextDue}}",
+        "share_title": "Pasipoti ya afya na ustawi ya {{name}}",
+        "share_message": "Pasipoti ya afya na ustawi ya Lovedogs 360\n\nMnyama: {{name}}\nAina: {{breed}}\nUzito: {{weight}} kg\nHali ya afya na ustawi: {{status}}\n\nInayofuata:\n{{nextDue}}",
         "status": {
             "unknown": "Unknown",
             "action_needed": "Action Needed",
-            "healthy": "Healthy"
+            "healthy": "Mwenye afya"
         }
     },
     "service_responses": {

@@ -180,7 +180,7 @@
         },
         "categories": {
             "all": "すべて",
-            "health": "健康",
+            "health": "健康とウェルネス",
             "therapy": "セラピー",
             "training": "トレーニング",
             "grooming": "トリミング",
@@ -382,7 +382,7 @@
         "i_lost_desc": "Report your missing dog for community help."
     },
     "health": {
-        "title": "健康記録を追加",
+        "title": "健康・ウェルネス記録を追加",
         "labels": {
             "type": "記録の種類",
             "date": "日付 (YYYY-MM-DD)",
@@ -401,11 +401,11 @@
             "surgery": "Surgery"
         },
         "alerts": {
-            "success": "健康記録を追加しました！",
-            "error": "健康記録の追加に失敗しました",
+            "success": "健康・ウェルネス記録を追加しました！",
+            "error": "健康・ウェルネス記録の追加に失敗しました",
             "date_required": "日付は必須です"
         },
-        "reminder": "健康リマインダー：{{name}}",
+        "reminder": "健康・ウェルネスのリマインダー: {{name}}",
         "reminder_body": "次回の {{type}} の予定日：{{date}}",
         "smart_reminders": "Care Reminders",
         "days_before": "{{count}} Days Before",
@@ -453,7 +453,7 @@
         "my_dogs": "登録済みのマイ・ドッグ"
     },
     "wellness": {
-        "title": "ウェルネス・ハブ",
+        "title": "健康・ウェルネスハブ",
         "weight_growth": "体重の推移 (kg)",
         "weight_advice": "{{start}} 以降、{{amount}}kg 増えました。順調な成長です！",
         "active_vaccinations": "有効な予防接種",
@@ -470,22 +470,41 @@
         "pro_tip": "役立つヒント",
         "pro_tip_text": "定期的な検診により、愛犬の寿命が最大2年延びる可能性があります！",
         "dog_required_title": "Dog Profile Required",
-        "dog_required_records": "Please add a pet to your profile before adding care records.",
-        "dog_required_passport": "Please add a pet to view their Health & Wellness passport.",
+        "dog_required_records": "健康・ウェルネス記録を追加する前に、プロフィールにペットを追加してください。",
+        "dog_required_passport": "健康・ウェルネスパスポートを見るにはペットを追加してください。",
         "add_pet": "愛犬を追加",
         "setup_required": "Setup Required",
-        "setup_desc": "To start tracking health and wellness records and viewing digital passports, please register a pet to your profile first.",
+        "setup_desc": "健康・ウェルネス記録を管理しデジタルパスポートを見るには、まずプロフィールにペットを登録してください。",
         "register_pet": "ペットを登録",
-        "health_advisor": "Health & Wellness Advisor: {{name}}",
-        "no_insights": "No care notes available for {{name}} yet. Add health and wellness records.",
-        "view_passport": "View Digital Health & Wellness Passport",
+        "health_advisor": "健康・ウェルネスアドバイザー: {{name}}",
+        "no_insights": "{{name}} のウェルネスメモはまだありません。健康・ウェルネス記録を追加してください。",
+        "view_passport": "デジタル健康・ウェルネスパスポートを見る",
         "log_vaccines": "Log vaccines, deworming, etc.",
         "update_weight": "Update weight and feeding schedules.",
         "medication": "Medication",
         "log_medications": "Log medications and dosage notes from your vet.",
         "surgery": "Surgery",
         "log_surgeries": "Log operations and recoveries.",
-        "save_notes": "Save general observations and vet visit notes."
+        "save_notes": "Save general observations and vet visit notes.",
+        "pro_tips": {
+            "advisor_key_takeaway": "重要ポイント: {{insight}}",
+            "no_pet": "記録、年齢、今後の予定に基づくウェルネスヒントを受け取るには、ペットプロフィールを追加してください。",
+            "overdue": "{{name}} の {{type}} が期限切れです。資格のある獣医師に相談するか、対応済みなら記録を更新してください。",
+            "due_today": "{{name}} の {{type}} は今日が予定日です。予約を守るか、獣医師が対応済みなら日付を更新してください。",
+            "due_soon": "{{name}} の {{type}} は {{count}} 日後に予定されています。忘れないよう今リマインダーを設定しましょう。",
+            "no_records": "{{name}} のパスポートは、手元にある最新のワクチン、獣医受診、駆虫記録から始めましょう。",
+            "no_vaccination": "{{name}} のワクチン記録がまだありません。最新情報を追加するか、次に必要な内容を獣医師に確認してください。",
+            "no_checkup": "{{name}} の健康診断記録がまだありません。普段通りに見えても、定期受診は有用な基準になります。",
+            "medication": "{{name}} の投薬メモは、用量、時間、獣医師の指示、観察した反応を明確に残しましょう。",
+            "surgery": "{{name}} の手術歴には、回復メモとフォローアップ日を記録し、獣医師にわかりやすい経過を残しましょう。",
+            "young_pet": "{{name}} はまだ若いです。成長が早い時期は、ワクチン、駆虫、体重、食事変更を丁寧に記録しましょう。",
+            "senior_pet": "{{name}} はシニア期です。健康診断、歯のケア、体重確認の頻度を獣医師に相談しましょう。",
+            "recent_record": "{{name}} の記録を最新に保てています。次の予定日が分かったら追加して、リマインダーを役立てましょう。",
+            "rotate_hydration": "水分摂取と食欲を毎日確認しましょう。急な変化が続く場合は記録し、獣医師に共有してください。",
+            "rotate_body_condition": "体重と体型の状態を一緒に見ましょう。体重が安定していても、筋肉や脂肪の変化が隠れることがあります。",
+            "rotate_preventives": "寄生虫予防は地域、生活スタイル、獣医師の指示によって変わります。次の投与日をパスポートに記録しましょう。",
+            "rotate_notes": "新しい症状に気づいたら、始まった時期、頻度、その頃に変わったことを記録しましょう。"
+        }
     },
     "onboarding": {
         "skip": "Skip",
@@ -497,8 +516,8 @@
                 "description": "The ultimate companion app for your dog's life. Swipe to learn how to navigate the platform."
             },
             {
-                "title": "🐾 Health & Wellness Hub",
-                "description": "Keep track of vaccinations, weight growth, and vet notes. Manage your pet's Health & Wellness passport here."
+                "title": "🐾 健康・ウェルネスハブ",
+                "description": "ワクチン、体重の変化、獣医メモを記録します。ペットのウェルネスパスポートをここで管理できます。"
             },
             {
                 "title": "🛒 Marketplace",
@@ -669,7 +688,7 @@
         "based_on": "{{count}}件の完了に基づく",
         "my_pets": "登録済みのペット",
         "register_pet": "ペットを登録",
-        "register_pet_desc": "ここをタップしてウェルネスハブを開き、最初のペットを追加してください。",
+        "register_pet_desc": "ここをタップして健康・ウェルネスハブを開き、最初のペットを追加しましょう。",
         "register_another": "別のペットを登録",
         "personal_info": "個人情報",
         "update": "更新",
@@ -853,7 +872,7 @@
         "color": "毛色",
         "size": "サイズ",
         "about_pet": "About {{name}}:",
-        "health_records": "Health & Wellness Records",
+        "health_records": "健康・ウェルネス記録",
         "add_record": "+ Add Record",
         "no_records": "No health records found.",
         "next_due": "Next Due",
@@ -989,28 +1008,28 @@
         }
     },
     "health_passport": {
-        "title": "Digital Health & Wellness Passport",
-        "load_error": "Could not load health and wellness passport",
-        "unable_load": "Unable to load health and wellness passport.",
+        "title": "デジタル健康・ウェルネスパスポート",
+        "load_error": "健康・ウェルネスパスポートを読み込めませんでした",
+        "unable_load": "健康・ウェルネスパスポートを読み込めません。",
         "unknown": "Unknown",
         "unknown_breed": "Unknown Breed",
         "age": "AGE",
         "years": "Years",
         "weight": "WEIGHT",
         "gender": "GENDER",
-        "current_status": "Current Health & Wellness Status",
+        "current_status": "現在の健康・ウェルネス状態",
         "next_due_dates": "Next Due Dates",
         "all_records_current": "All records up to date",
         "all_up_to_date": "All up to date",
-        "info_text": "This passport is a digital verification of health and wellness records provided through the Lovedogs 360 platform.",
+        "info_text": "このパスポートは、Lovedogs 360 プラットフォームで提供された健康・ウェルネス記録のデジタル確認です。",
         "export_failed": "Export Failed",
         "export_failed_msg": "Could not generate shareable report.",
-        "share_title": "{{name}} Health & Wellness Passport",
-        "share_message": "Lovedogs 360 Health & Wellness Passport\n\nDog: {{name}}\nBreed: {{breed}}\nWeight: {{weight}}kg\nHealth & Wellness Status: {{status}}\n\nNext Due:\n{{nextDue}}",
+        "share_title": "{{name}} の健康・ウェルネスパスポート",
+        "share_message": "Lovedogs 360 健康・ウェルネスパスポート\n\nペット: {{name}}\n品種: {{breed}}\n体重: {{weight}}kg\n健康・ウェルネス状態: {{status}}\n\n次の予定:\n{{nextDue}}",
         "status": {
             "unknown": "Unknown",
             "action_needed": "Action Needed",
-            "healthy": "Healthy"
+            "healthy": "健康"
         }
     },
     "service_responses": {

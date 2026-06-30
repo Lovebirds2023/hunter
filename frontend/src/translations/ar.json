@@ -180,7 +180,7 @@
         },
         "categories": {
             "all": "الكل",
-            "health": "صحة",
+            "health": "الصحة والعافية",
             "therapy": "علاج",
             "training": "تدريب",
             "grooming": "نظافة",
@@ -382,7 +382,7 @@
         "i_lost_desc": "Report your missing dog for community help."
     },
     "health": {
-        "title": "إضافة سجل صحي",
+        "title": "إضافة سجل الصحة والعافية",
         "labels": {
             "type": "نوع السجل",
             "date": "التاريخ (YYYY-MM-DD)",
@@ -401,11 +401,11 @@
             "surgery": "Surgery"
         },
         "alerts": {
-            "success": "تم إضافة السجل الصحي!",
-            "error": "فشل إضافة السجل الصحي",
+            "success": "تمت إضافة سجل الصحة والعافية!",
+            "error": "فشل في إضافة سجل الصحة والعافية",
             "date_required": "التاريخ مطلوب"
         },
-        "reminder": "تذكير صحي: {{name}}",
+        "reminder": "تذكير الصحة والعافية: {{name}}",
         "reminder_body": "{{type}} القادم مستحق في {{date}}",
         "smart_reminders": "Care Reminders",
         "days_before": "{{count}} Days Before",
@@ -453,7 +453,7 @@
         "my_dogs": "كلابي المسجلة"
     },
     "wellness": {
-        "title": "مركز العافية",
+        "title": "مركز الصحة والعافية",
         "weight_growth": "نمو الوزن (كجم)",
         "weight_advice": "زاد وزن كلبك بمقدار {{amount}} كجم منذ {{start}}. نمو صحي!",
         "active_vaccinations": "تطعيمات نشطة",
@@ -470,22 +470,41 @@
         "pro_tip": "نصيحة للمحترفين",
         "pro_tip_text": "الفحوصات المنتظمة يمكن أن تطيل عمر كلبك حتى سنتين!",
         "dog_required_title": "Dog Profile Required",
-        "dog_required_records": "Please add a pet to your profile before adding care records.",
-        "dog_required_passport": "Please add a pet to view their Health & Wellness passport.",
+        "dog_required_records": "يرجى إضافة حيوان أليف إلى ملفك الشخصي قبل إضافة سجلات الصحة والعافية.",
+        "dog_required_passport": "يرجى إضافة حيوان أليف لعرض جواز الصحة والعافية الخاص به.",
         "add_pet": "إضافة كلب",
         "setup_required": "Setup Required",
-        "setup_desc": "To start tracking health and wellness records and viewing digital passports, please register a pet to your profile first.",
+        "setup_desc": "لبدء تتبع سجلات الصحة والعافية وعرض الجوازات الرقمية، يرجى تسجيل حيوان أليف في ملفك الشخصي أولاً.",
         "register_pet": "تسجيل حيوان أليف",
-        "health_advisor": "Health & Wellness Advisor: {{name}}",
-        "no_insights": "No care notes available for {{name}} yet. Add health and wellness records.",
-        "view_passport": "View Digital Health & Wellness Passport",
+        "health_advisor": "مستشار الصحة والعافية: {{name}}",
+        "no_insights": "لا توجد ملاحظات عافية متاحة لـ {{name}} بعد. أضف سجلات الصحة والعافية.",
+        "view_passport": "عرض جواز الصحة والعافية الرقمي",
         "log_vaccines": "Log vaccines, deworming, etc.",
         "update_weight": "Update weight and feeding schedules.",
         "medication": "Medication",
         "log_medications": "Log medications and dosage notes from your vet.",
         "surgery": "Surgery",
         "log_surgeries": "Log operations and recoveries.",
-        "save_notes": "Save general observations and vet visit notes."
+        "save_notes": "Save general observations and vet visit notes.",
+        "pro_tips": {
+            "advisor_key_takeaway": "الخلاصة المهمة: {{insight}}",
+            "no_pet": "أضف ملفاً لحيوانك الأليف للحصول على نصائح عافية مبنية على سجلاته وعمره والمواعيد القادمة.",
+            "overdue": "لدى {{name}} موعد {{type}} متأخر. احجز مع طبيب بيطري مؤهل أو حدّث السجل بعد إتمام الرعاية.",
+            "due_today": "لدى {{name}} موعد {{type}} اليوم. التزم بالموعد أو حدّث التاريخ إذا كان الطبيب البيطري قد تولى الأمر.",
+            "due_soon": "لدى {{name}} موعد {{type}} خلال {{count}} أيام. اضبط تذكيراً الآن حتى لا يفوتك الموعد.",
+            "no_records": "ابدأ جواز {{name}} بأحدث سجل لقاح أو زيارة بيطرية أو إزالة ديدان لديك.",
+            "no_vaccination": "لا يوجد سجل لقاحات لـ {{name}} بعد. أضف آخر التفاصيل أو اسأل الطبيب البيطري عما يستحق قريباً.",
+            "no_checkup": "لا يوجد سجل فحص دوري لـ {{name}} بعد. الزيارة الروتينية للطبيب البيطري تمنحك خط أساس مفيداً حتى لو بدا كل شيء طبيعياً.",
+            "medication": "اجعل ملاحظات دواء {{name}} واضحة: الجرعة والتوقيت وتعليمات الطبيب البيطري وأي رد فعل تلاحظه.",
+            "surgery": "بالنسبة لتاريخ جراحة {{name}}، سجل ملاحظات التعافي ومواعيد المتابعة ليكون لدى الطبيب البيطري تسلسل واضح.",
+            "young_pet": "{{name}} لا يزال صغيراً. تتبع اللقاحات وإزالة الديدان والوزن وتغييرات الطعام بعناية أثناء النمو السريع.",
+            "senior_pet": "{{name}} في مرحلة متقدمة من العمر. اسأل الطبيب البيطري عن تكرار فحوصات العافية والعناية بالأسنان ومراجعة الوزن.",
+            "recent_record": "عمل جيد في تحديث سجلات {{name}}. أضف موعد الاستحقاق التالي عندما تعرفه لتبقى التذكيرات مفيدة.",
+            "rotate_hydration": "راقب شرب الماء والشهية يومياً. التغيرات المفاجئة تستحق التسجيل ومشاركتها مع الطبيب البيطري إذا استمرت.",
+            "rotate_body_condition": "استخدم الوزن وحالة الجسم معاً. قد يخفي الوزن المستقر تغيرات تدريجية في العضلات أو الدهون.",
+            "rotate_preventives": "تعتمد الوقاية من الطفيليات على الموقع ونمط الحياة وتوجيه الطبيب البيطري. احتفظ بتاريخ الجرعة التالية في الجواز.",
+            "rotate_notes": "عند ملاحظة عرض جديد، سجل متى بدأ وكم يتكرر وما الذي تغيّر حول ذلك الوقت."
+        }
     },
     "onboarding": {
         "skip": "Skip",
@@ -497,8 +516,8 @@
                 "description": "The ultimate companion app for your dog's life. Swipe to learn how to navigate the platform."
             },
             {
-                "title": "🐾 Health & Wellness Hub",
-                "description": "Keep track of vaccinations, weight growth, and vet notes. Manage your pet's Health & Wellness passport here."
+                "title": "🐾 مركز الصحة والعافية",
+                "description": "تتبع اللقاحات ونمو الوزن وملاحظات الطبيب البيطري. أدر جواز العافية الخاص بحيوانك هنا."
             },
             {
                 "title": "🛒 Marketplace",
@@ -669,7 +688,7 @@
         "based_on": "استنادًا إلى {{count}} إكمال",
         "my_pets": "حيواناتي الأليفة المسجلة",
         "register_pet": "تسجيل حيوان أليف",
-        "register_pet_desc": "اضغط هنا لزيارة مركز العافية وإضافة أول حيوان أليف لك!",
+        "register_pet_desc": "اضغط هنا لزيارة مركز الصحة والعافية وإضافة أول حيوان أليف لديك!",
         "register_another": "تسجيل حيوان أليف آخر",
         "personal_info": "المعلومات الشخصية",
         "update": "تحديث",
@@ -853,7 +872,7 @@
         "color": "اللون",
         "size": "الحجم",
         "about_pet": "About {{name}}:",
-        "health_records": "Health & Wellness Records",
+        "health_records": "سجلات الصحة والعافية",
         "add_record": "+ Add Record",
         "no_records": "No health records found.",
         "next_due": "Next Due",
@@ -989,28 +1008,28 @@
         }
     },
     "health_passport": {
-        "title": "Digital Health & Wellness Passport",
-        "load_error": "Could not load health and wellness passport",
-        "unable_load": "Unable to load health and wellness passport.",
+        "title": "جواز الصحة والعافية الرقمي",
+        "load_error": "تعذر تحميل جواز الصحة والعافية",
+        "unable_load": "لا يمكن تحميل جواز الصحة والعافية.",
         "unknown": "Unknown",
         "unknown_breed": "Unknown Breed",
         "age": "AGE",
         "years": "Years",
         "weight": "WEIGHT",
         "gender": "GENDER",
-        "current_status": "Current Health & Wellness Status",
+        "current_status": "حالة الصحة والعافية الحالية",
         "next_due_dates": "Next Due Dates",
         "all_records_current": "All records up to date",
         "all_up_to_date": "All up to date",
-        "info_text": "This passport is a digital verification of health and wellness records provided through the Lovedogs 360 platform.",
+        "info_text": "هذا الجواز تحقق رقمي من سجلات الصحة والعافية المقدمة عبر منصة Lovedogs 360.",
         "export_failed": "Export Failed",
         "export_failed_msg": "Could not generate shareable report.",
-        "share_title": "{{name}} Health & Wellness Passport",
-        "share_message": "Lovedogs 360 Health & Wellness Passport\n\nDog: {{name}}\nBreed: {{breed}}\nWeight: {{weight}}kg\nHealth & Wellness Status: {{status}}\n\nNext Due:\n{{nextDue}}",
+        "share_title": "جواز الصحة والعافية لـ {{name}}",
+        "share_message": "جواز الصحة والعافية من Lovedogs 360\n\nالحيوان: {{name}}\nالسلالة: {{breed}}\nالوزن: {{weight}} كجم\nحالة الصحة والعافية: {{status}}\n\nالمواعيد القادمة:\n{{nextDue}}",
         "status": {
             "unknown": "Unknown",
             "action_needed": "Action Needed",
-            "healthy": "Healthy"
+            "healthy": "بصحة جيدة"
         }
     },
     "service_responses": {
