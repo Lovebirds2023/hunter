@@ -3325,15 +3325,15 @@ def request_withdrawal(
     available = float(wallet["withdrawable"] or 0)
     pending_withdrawal = float(wallet.get("pending_withdrawal") or 0)
     if pending_withdrawal > 0:
-        raise HTTPException(status_code=400, detail="You already have a pending withdrawal request")
+        raise HTTPException(status_code=400, detail="You already have a pending payout request")
 
     amount = round(float(req.amount or available), 2)
     if amount <= 0:
-        raise HTTPException(status_code=400, detail="No available balance to withdraw")
+        raise HTTPException(status_code=400, detail="No completed seller earnings are ready for payout")
     if amount > available:
-        raise HTTPException(status_code=400, detail="Withdrawal amount exceeds available balance")
+        raise HTTPException(status_code=400, detail="Payout request exceeds completed seller earnings")
     if abs(amount - available) > 0.01:
-        raise HTTPException(status_code=400, detail="Withdraw the full available balance for now")
+        raise HTTPException(status_code=400, detail="Request the full ready-for-payout amount for now")
 
     method = (req.method or current_user.payment_method or "").strip().lower()
     if method not in {"mpesa", "card"}:
@@ -3341,7 +3341,7 @@ def request_withdrawal(
 
     destination = get_payout_destination(current_user, method)
     if method == "mpesa" and not destination:
-        raise HTTPException(status_code=400, detail="Add your M-Pesa phone number before requesting withdrawal")
+        raise HTTPException(status_code=400, detail="Add your M-Pesa phone number before requesting payout")
 
     withdrawal = models.Transaction(
         id=str(uuid.uuid4()),
@@ -3360,8 +3360,8 @@ def request_withdrawal(
     add_notification(
         db,
         current_user.id,
-        "Withdrawal Requested",
-        f"Your KES {amount:,.2f} withdrawal request is pending admin processing.",
+        "Payout Requested",
+        f"Your KES {amount:,.2f} seller payout request is pending admin processing.",
         "payout",
         commit=False,
     )
@@ -3375,7 +3375,7 @@ def request_withdrawal(
         add_notification(
             db,
             admin_user.id,
-            "Seller Withdrawal Request",
+            "Seller Payout Request",
             f"{current_user.full_name or current_user.email} requested KES {amount:,.2f} to {method.upper()} ({destination_label}).",
             "payout",
             commit=False,
@@ -3383,7 +3383,7 @@ def request_withdrawal(
 
     db.commit()
     return {
-        "message": "Withdrawal request submitted",
+        "message": "Payout request submitted",
         "withdrawal_id": withdrawal.id,
         "amount": amount,
         "status": withdrawal.status,
@@ -3443,9 +3443,9 @@ def admin_complete_withdrawal(
         models.Transaction.type == "withdrawal",
     ).first()
     if not withdrawal:
-        raise HTTPException(status_code=404, detail="Withdrawal request not found")
+        raise HTTPException(status_code=404, detail="Payout request not found")
     if withdrawal.status != "pending":
-        raise HTTPException(status_code=400, detail=f"Withdrawal is already {withdrawal.status}")
+        raise HTTPException(status_code=400, detail=f"Payout request is already {withdrawal.status}")
 
     seller = db.query(models.User).filter(models.User.id == withdrawal.user_id).first()
     if not seller:
@@ -3474,7 +3474,7 @@ def admin_complete_withdrawal(
     if abs(remaining) > 0.01:
         raise HTTPException(
             status_code=400,
-            detail="Withdrawal amount does not match available completed payouts"
+            detail="Payout request amount does not match completed seller earnings"
         )
 
     for order in orders_to_settle:
@@ -3486,14 +3486,14 @@ def admin_complete_withdrawal(
     add_notification(
         db,
         seller.id,
-        "Withdrawal Completed",
-        f"Your KES {withdrawal_amount:,.2f} withdrawal to {destination} has been marked as paid.",
+        "Payout Completed",
+        f"Your KES {withdrawal_amount:,.2f} seller payout to {destination} has been marked as paid.",
         "payout",
         commit=False,
     )
     db.commit()
     return {
-        "message": f"Withdrawal of KES {withdrawal_amount:,.2f} marked as completed.",
+        "message": f"Seller payout of KES {withdrawal_amount:,.2f} marked as completed.",
         "withdrawal": serialize_withdrawal(db, withdrawal),
         "wallet": get_provider_wallet_summary(db, seller),
     }
@@ -5182,12 +5182,12 @@ def admin_complete_order(
             db,
             service.provider_id,
             "Delivery confirmed",
-            f"Delivery for '{item_title}' has been confirmed. Your payout is now available for withdrawal.",
+            f"Delivery for '{item_title}' has been confirmed. Your seller earnings are ready for payout request.",
             "delivery",
             commit=False
         )
     db.commit()
-    return {"message": "Order marked as completed. Seller payout is now available for withdrawal.", "status": order.status}
+    return {"message": "Order marked as completed. Seller earnings are ready for payout request.", "status": order.status}
 
 @app.post("/admin/orders/{order_id}/settle")
 def admin_settle_order(
@@ -5195,7 +5195,7 @@ def admin_settle_order(
     db: Session = Depends(database.get_db),
     admin: models.User = Depends(require_admin)
 ):
-    """Admin approves seller payout — transitions order from COMPLETED to SETTLED and credits the seller's wallet."""
+    """Admin approves seller payout and transitions order from COMPLETED to SETTLED."""
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -5214,7 +5214,7 @@ def admin_settle_order(
     provider = db.query(models.User).filter(models.User.id == provider_id).first()
     payout_amount = order.payout or 0
 
-    # Credit the provider's wallet (create wallet if it doesn't exist)
+    # Avoid creating duplicate seller payout transaction records.
     wallet = db.query(models.Transaction).filter(
         models.Transaction.order_id == order_id,
         models.Transaction.type == "payout"

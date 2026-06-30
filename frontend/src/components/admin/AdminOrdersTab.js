@@ -94,13 +94,13 @@ export const AdminOrdersTab = ({ onBack }) => {
         if (Platform.OS === 'web') {
             confirmAdminAction(
                 'Confirm Delivery',
-                'Mark this order as completed (service delivered)? This will make the seller payout available for withdrawal.',
+                'Mark this order as completed (service delivered)? This will make the seller earnings ready for payout request.',
                 'Confirm Delivery',
                 async () => {
                     setActioningId(orderId);
                     try {
                         const res = await client.post(`/admin/orders/${orderId}/complete`);
-                        Alert.alert('Success', res.data?.message || 'Order marked as completed. Seller payout is now available for withdrawal.');
+                        Alert.alert('Success', res.data?.message || 'Order marked as completed. Seller earnings are ready for payout request.');
                         fetchOrders(true);
                     } catch (e) {
                         const msg = e.response?.data?.detail || 'Failed to complete order.';
@@ -115,7 +115,7 @@ export const AdminOrdersTab = ({ onBack }) => {
 
         Alert.alert(
             'Confirm Delivery',
-            'Mark this order as completed (service delivered)? This will make the seller payout available for withdrawal.',
+            'Mark this order as completed (service delivered)? This will make the seller earnings ready for payout request.',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -124,7 +124,7 @@ export const AdminOrdersTab = ({ onBack }) => {
                         setActioningId(orderId);
                         try {
                             await client.post(`/admin/orders/${orderId}/complete`);
-                            Alert.alert('Success', 'Order marked as completed. Seller payout is now available for withdrawal.');
+                            Alert.alert('Success', 'Order marked as completed. Seller earnings are ready for payout request.');
                             fetchOrders(true);
                         } catch (e) {
                             const msg = e.response?.data?.detail || 'Failed to complete order.';
@@ -189,17 +189,17 @@ export const AdminOrdersTab = ({ onBack }) => {
 
     const handleCompleteWithdrawal = async (withdrawal) => {
         confirmAdminAction(
-            'Complete Withdrawal',
+            'Complete Payout Request',
             `Mark KES ${(withdrawal.amount || 0).toLocaleString()} as paid to ${withdrawal.seller_name || 'seller'}?\n\nDestination: ${withdrawal.destination || withdrawal.method || 'Configured payout destination'}`,
-            'Complete Withdrawal',
+            'Complete Payout',
             async () => {
                 setActioningId(`withdrawal-${withdrawal.id}`);
                 try {
                     const res = await client.post(`/admin/withdrawals/${withdrawal.id}/complete`);
-                    Alert.alert('Withdrawal Completed', res.data.message);
+                    Alert.alert('Payout Completed', res.data.message);
                     fetchOrders(true);
                 } catch (e) {
-                    const msg = e.response?.data?.detail || 'Failed to complete withdrawal.';
+                    const msg = e.response?.data?.detail || 'Failed to complete payout request.';
                     Alert.alert('Error', msg);
                 } finally {
                     setActioningId(null);
@@ -251,7 +251,7 @@ export const AdminOrdersTab = ({ onBack }) => {
                     <View style={{ flex: 1 }}>
                         <Text style={s.sectionTitle}>Order Tracking & Payouts</Text>
                         <Text style={{ fontSize: 12, color: ADMIN_COLORS.textMuted }}>
-                            {orders.length} total orders - {pendingWithdrawals.length} pending withdrawals
+                            {orders.length} total orders - {pendingWithdrawals.length} pending payout requests
                         </Text>
                     </View>
                 </View>
@@ -277,7 +277,7 @@ export const AdminOrdersTab = ({ onBack }) => {
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                             <View>
                                 <Text style={{ fontSize: 14, fontWeight: '800', color: ADMIN_COLORS.textPrimary }}>
-                                    Seller Withdrawal Requests
+                                    Seller Payout Requests
                                 </Text>
                                 <Text style={{ fontSize: 11, color: ADMIN_COLORS.textMuted }}>
                                     Pending total: KES {pendingWithdrawalTotal.toLocaleString()}
@@ -320,7 +320,7 @@ export const AdminOrdersTab = ({ onBack }) => {
                                             <>
                                                 <Ionicons name="checkmark-circle-outline" size={16} color={ADMIN_COLORS.success} />
                                                 <Text style={[s.actionBtnText, { color: ADMIN_COLORS.success, fontWeight: '700' }]}>
-                                                    Mark Withdrawal Paid
+                                                    Mark Payout Paid
                                                 </Text>
                                             </>
                                         )}
@@ -509,7 +509,7 @@ export const AdminOrdersTab = ({ onBack }) => {
                                     }}>
                                         <Ionicons name="time-outline" size={18} color={ADMIN_COLORS.warning} />
                                         <Text style={{ color: ADMIN_COLORS.warning, fontSize: 12, fontWeight: '700', marginLeft: 8, flex: 1 }}>
-                                            Seller has a pending wallet withdrawal. Complete it from the withdrawal queue above.
+                                            Seller has a pending payout request. Complete it from the payout request queue above.
                                         </Text>
                                     </View>
                                 )}

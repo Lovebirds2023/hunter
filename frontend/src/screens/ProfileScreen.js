@@ -459,7 +459,10 @@ export const ProfileScreen = ({ navigation }) => {
                         </Text>
                         {(walletSummary?.pending_withdrawal || 0) > 0 && (
                             <Text style={styles.walletPendingText}>
-                                Pending withdrawal: KES {(walletSummary.pending_withdrawal || 0).toLocaleString()}
+                                {t('payouts.pending_withdrawal', {
+                                    defaultValue: 'Payout request pending: KES {{amount}}',
+                                    amount: (walletSummary.pending_withdrawal || 0).toLocaleString()
+                                })}
                             </Text>
                         )}
                         
@@ -478,7 +481,7 @@ export const ProfileScreen = ({ navigation }) => {
                                 <TouchableOpacity style={styles.withdrawProfileBtn} onPress={() => navigation.navigate('Payouts')}>
                                     <Ionicons name="cash-outline" size={15} color={COLORS.primaryDark} />
                                     <Text style={styles.withdrawProfileBtnText}>
-                                        {t('payouts.withdraw', { defaultValue: 'Withdraw' })}
+                                        {t('payouts.withdraw', { defaultValue: 'Request payout' })}
                                     </Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity style={styles.configureBtn} onPress={() => setIsPaymentEditing(true)}>

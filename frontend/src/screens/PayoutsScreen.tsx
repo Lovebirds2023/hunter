@@ -235,13 +235,13 @@ export const PayoutsScreen = () => {
     const handleRequestWithdrawal = async () => {
         const amount = wallet.withdrawable ?? wallet.available ?? 0;
         if (amount <= 0) {
-            Alert.alert(t('common.error'), t('payouts.no_available_withdrawal', { defaultValue: 'No available balance to withdraw yet.' }));
+            Alert.alert(t('common.error'), t('payouts.no_available_withdrawal', { defaultValue: 'No completed seller earnings are ready for payout yet.' }));
             return;
         }
         if (!wallet.payment_method) {
             Alert.alert(
                 t('common.error'),
-                t('payouts.configure_payout_first', { defaultValue: 'Please set your payout method in profile first.' }),
+                t('payouts.configure_payout_first', { defaultValue: 'Please set your payout destination in profile first.' }),
                 [{ text: t('profile_screen.setup', { defaultValue: 'Setup' }), onPress: () => navigation.navigate('Profile') }]
             );
             return;
@@ -260,9 +260,9 @@ export const PayoutsScreen = () => {
                     ...prev.filter(item => item.id !== res.data.withdrawal.id)
                 ]);
             }
-            Alert.alert(t('common.success'), res.data.message || t('payouts.withdrawal_requested', { defaultValue: 'Withdrawal request submitted.' }));
+            Alert.alert(t('common.success'), res.data.message || t('payouts.withdrawal_requested', { defaultValue: 'Payout request submitted.' }));
         } catch (error: any) {
-            const detail = error.response?.data?.detail || error.message || t('payouts.withdrawal_failed', { defaultValue: 'Could not request withdrawal.' });
+            const detail = error.response?.data?.detail || error.message || t('payouts.withdrawal_failed', { defaultValue: 'Could not request payout.' });
             Alert.alert(t('common.error'), typeof detail === 'string' ? detail : JSON.stringify(detail));
         } finally {
             setWithdrawing(false);
@@ -355,12 +355,12 @@ export const PayoutsScreen = () => {
 
                                 <View style={styles.withdrawPanel}>
                                     <View style={{ flex: 1 }}>
-                                        <Text style={styles.withdrawLabel}>{t('payouts.withdraw_to', { defaultValue: 'Withdraw to' })}</Text>
+                                        <Text style={styles.withdrawLabel}>{t('payouts.withdraw_to', { defaultValue: 'Pay out to' })}</Text>
                                         <Text style={styles.withdrawMethod}>{getPayoutMethodLabel()}</Text>
                                         {(wallet.pending_withdrawal || 0) > 0 && (
                                             <Text style={styles.pendingWithdrawalText}>
                                                 {t('payouts.pending_withdrawal', {
-                                                    defaultValue: 'Pending withdrawal: KES {{amount}}',
+                                                    defaultValue: 'Payout request pending: KES {{amount}}',
                                                     amount: (wallet.pending_withdrawal || 0).toLocaleString()
                                                 })}
                                             </Text>
@@ -380,7 +380,7 @@ export const PayoutsScreen = () => {
                                             <>
                                                 <Ionicons name="cash-outline" size={16} color={COLORS.primaryDark} />
                                                 <Text style={styles.withdrawButtonText}>
-                                                    {t('payouts.withdraw', { defaultValue: 'Withdraw' })}
+                                                    {t('payouts.withdraw', { defaultValue: 'Request payout' })}
                                                 </Text>
                                             </>
                                         )}
@@ -399,7 +399,7 @@ export const PayoutsScreen = () => {
                             {withdrawals.length > 0 && (
                                 <>
                                     <Text style={styles.sectionTitle}>
-                                        {t('payouts.withdrawal_history', { defaultValue: 'Withdrawal History' })}
+                                        {t('payouts.withdrawal_history', { defaultValue: 'Payout Request History' })}
                                     </Text>
                                     {withdrawals.map((withdrawal) => {
                                         const withdrawalStatus = getWithdrawalStatusStyle(withdrawal.status);
