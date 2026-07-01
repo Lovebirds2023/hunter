@@ -61,6 +61,14 @@ const defaultPaidTierDescription = 'Paid registration for organizations, teams, 
 const defaultScorecardTitle = 'Community Impact Assessment';
 const defaultScorecardDescription = 'Collect baseline and follow-up data for M&E, outcome tracking, and partner reporting.';
 
+const requestErrorMessage = (error, fallback) => {
+    const detail = error?.response?.data?.detail;
+    if (typeof detail === 'string' && detail.trim()) return detail.trim();
+    if (Array.isArray(detail) && detail.length > 0) return detail.map(item => item?.msg || item).join('\n');
+    if (typeof error?.message === 'string' && error.message.trim()) return error.message.trim();
+    return fallback;
+};
+
 const toDatetimeLocal = (value) => {
     if (!value) return '';
     const date = new Date(value);
@@ -298,7 +306,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
             Alert.alert('Created', 'Event created and pinned by default.');
         } catch (e) {
             console.error('Create event error:', e);
-            Alert.alert('Error', e.response?.data?.detail || 'Failed to create event.');
+            Alert.alert('Event not created', requestErrorMessage(e, 'Failed to create event.'));
         } finally {
             setCreating(false);
         }

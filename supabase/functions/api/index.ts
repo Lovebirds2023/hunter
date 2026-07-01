@@ -663,6 +663,7 @@ const handleCaseLike = async (request: Request, reportId: string) => {
 };
 
 const handleListEvents = async () => {
+  const pins = await getActivePins();
   const { data, error } = await supabaseAdmin
     .from("events")
     .select("*")
@@ -674,8 +675,7 @@ const handleListEvents = async () => {
     ...event,
     images: asStringArray((event as JsonRecord).images),
     registrant_count: await countRows("registrations", "event_id", cleanString((event as JsonRecord).id)),
-    is_pinned: false,
-    pin_priority: null,
+    ...pinMetadata(pins.get(`event:${cleanString((event as JsonRecord).id)}`)),
   })));
   return jsonResponse(events);
 };
@@ -716,17 +716,39 @@ const handleCreateEvent = async (request: Request) => {
 
   const { data, error } = await supabaseAdmin.from("events").insert(payload).select("*").single();
   if (error) throw error;
-  return jsonResponse({ ...data, registrant_count: 0, is_pinned: false, pin_priority: null }, 201);
+
+  let pin: JsonRecord | null = null;
+  if (isAdminProfile(profile)) {
+    const { data: pinData, error: pinError } = await supabaseAdmin
+      .from("content_pins")
+      .upsert({
+        target_type: "event",
+        target_id: cleanString((data as JsonRecord).id),
+        title,
+        description: body.description ?? null,
+        image_url: body.poster_url ?? null,
+        priority: 150,
+        is_active: true,
+        created_by_id: cleanString(profile.id),
+        updated_at: nowIso(),
+      }, { onConflict: "target_type,target_id" })
+      .select("*")
+      .single();
+    if (pinError) throw pinError;
+    pin = pinData as JsonRecord;
+  }
+
+  return jsonResponse({ ...data, registrant_count: 0, ...pinMetadata(pin) }, 201);
 };
 
 const handleGetEvent = async (eventId: string) => {
   const event = await selectSingle("events", eventId, "Event");
+  const pins = await getActivePins();
   return jsonResponse({
     ...event,
     images: asStringArray(event.images),
     registrant_count: await countRows("registrations", "event_id", eventId),
-    is_pinned: false,
-    pin_priority: null,
+    ...pinMetadata(pins.get(`event:${eventId}`)),
   });
 };
 
