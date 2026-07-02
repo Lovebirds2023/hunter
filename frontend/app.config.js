@@ -1,6 +1,10 @@
 const appJson = require('./app.json');
 const path = require('path');
 
+const DEFAULT_API_URL = 'https://dnuwenqsyurjgmyurttj.functions.supabase.co/api';
+const DEFAULT_SUPABASE_URL = 'https://dnuwenqsyurjgmyurttj.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_cOsMYXv_rVaTPYvSbdiEYw_vXHXIs4L';
+
 try {
   require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 } catch (error) {
@@ -19,9 +23,10 @@ module.exports = () => {
   const expo = JSON.parse(JSON.stringify(appJson.expo));
   const apiUrl =
     getEnvValue('EXPO_PUBLIC_API_URL') ||
-    getEnvValue('EXPO_PUBLIC_SUPABASE_FUNCTIONS_URL');
-  const supabaseUrl = getEnvValue('EXPO_PUBLIC_SUPABASE_URL');
-  const supabaseAnonKey = getEnvValue('EXPO_PUBLIC_SUPABASE_ANON_KEY');
+    getEnvValue('EXPO_PUBLIC_SUPABASE_FUNCTIONS_URL') ||
+    DEFAULT_API_URL;
+  const supabaseUrl = getEnvValue('EXPO_PUBLIC_SUPABASE_URL') || DEFAULT_SUPABASE_URL;
+  const supabaseAnonKey = getEnvValue('EXPO_PUBLIC_SUPABASE_ANON_KEY') || DEFAULT_SUPABASE_ANON_KEY;
   const supabaseStorageBuckets = {
     petIdentity: getEnvValue('EXPO_PUBLIC_SUPABASE_PET_IDENTITY_BUCKET') || 'pet-identity',
     caseEvidence: getEnvValue('EXPO_PUBLIC_SUPABASE_CASE_EVIDENCE_BUCKET') || 'case-evidence',

@@ -1,5 +1,11 @@
 import Constants from 'expo-constants';
 
+export const DEFAULT_RUNTIME_CONFIG = {
+    apiUrl: 'https://dnuwenqsyurjgmyurttj.functions.supabase.co/api',
+    supabaseUrl: 'https://dnuwenqsyurjgmyurttj.supabase.co',
+    supabaseAnonKey: 'sb_publishable_cOsMYXv_rVaTPYvSbdiEYw_vXHXIs4L',
+};
+
 const extra =
     Constants?.expoConfig?.extra
     || Constants?.manifest?.extra
@@ -17,9 +23,9 @@ export const readRuntimeValue = (envName, extraName, fallback = '') => (
 const extraBuckets = extra?.supabaseStorageBuckets || {};
 
 export const runtimeConfig = {
-    apiUrl: readRuntimeValue('EXPO_PUBLIC_API_URL', 'apiUrl'),
-    supabaseUrl: readRuntimeValue('EXPO_PUBLIC_SUPABASE_URL', 'supabaseUrl'),
-    supabaseAnonKey: readRuntimeValue('EXPO_PUBLIC_SUPABASE_ANON_KEY', 'supabaseAnonKey'),
+    apiUrl: readRuntimeValue('EXPO_PUBLIC_API_URL', 'apiUrl', DEFAULT_RUNTIME_CONFIG.apiUrl),
+    supabaseUrl: readRuntimeValue('EXPO_PUBLIC_SUPABASE_URL', 'supabaseUrl', DEFAULT_RUNTIME_CONFIG.supabaseUrl),
+    supabaseAnonKey: readRuntimeValue('EXPO_PUBLIC_SUPABASE_ANON_KEY', 'supabaseAnonKey', DEFAULT_RUNTIME_CONFIG.supabaseAnonKey),
     storageBuckets: {
         petIdentity: readRuntimeValue('EXPO_PUBLIC_SUPABASE_PET_IDENTITY_BUCKET', 'petIdentityBucket', extraBuckets.petIdentity || 'pet-identity'),
         caseEvidence: readRuntimeValue('EXPO_PUBLIC_SUPABASE_CASE_EVIDENCE_BUCKET', 'caseEvidenceBucket', extraBuckets.caseEvidence || 'case-evidence'),

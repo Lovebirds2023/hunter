@@ -60,7 +60,7 @@ export const AuthProvider = ({ children }) => {
                 return 'Incorrect email or password. Please check your details and try again.';
             }
             if (normalizedDetail.includes('invalid google token')) {
-                return 'Google sign-in could not be verified. Check that Railway has the same Google OAuth client IDs as the frontend, and that the exact site URL is allowed in Google Cloud Console.';
+                return 'Google sign-in could not be verified. Check that Supabase and Google Cloud use the same OAuth client IDs, and that the exact redirect URL is allowed in Google Cloud Console.';
             }
             if (normalizedDetail.includes('google login is temporarily unavailable')) {
                 return 'Google verification is temporarily unavailable. Please try again shortly, or use email/password for now.';
@@ -159,7 +159,7 @@ export const AuthProvider = ({ children }) => {
         } catch (e) {
             if (__DEV__) console.log('Register error', e?.message, e?.response?.data || e);
             if (e?.message === 'Network Error') {
-                const message = "Could not reach the backend. Please check your connection and try again.";
+                const message = "Could not reach the Lovedogs 360 server. Please check your connection and try again.";
                 setAuthNotice({ type: 'error', message });
                 Alert.alert("Connection Failed", message);
                 return false;
