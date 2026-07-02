@@ -3,7 +3,7 @@
     "name": "Lovedogs 360",
     "slug": "lovedogs360",
     "scheme": "lovedogs360",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/app-icon.png",
     "userInterfaceStyle": "light",
@@ -18,7 +18,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.lovedogs360.app",
-      "buildNumber": "2",
+      "buildNumber": "3",
       "infoPlist": {
         "NSCameraUsageDescription": "Lovedogs 360 needs camera access to capture dog photos, nose prints, and profile images.",
         "NSPhotoLibraryUsageDescription": "Lovedogs 360 needs photo library access to upload images for profiles, services, and case reports.",
@@ -27,7 +27,7 @@
     },
     "android": {
       "package": "lovedogs360.co.ke",
-      "versionCode": 5,
+      "versionCode": 8,
       "adaptiveIcon": {
         "foregroundImage": "./assets/app-adaptive-foreground.png",
         "backgroundColor": "#4B0082"

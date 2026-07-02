@@ -263,7 +263,7 @@ export default function App() {
     const [updateInfo, setUpdateInfo] = useState(null);
     const [isRequiredUpdate, setIsRequiredUpdate] = useState(false);
 
-    const APP_VERSION = '1.0.2'; // Should match package.json
+    const APP_VERSION = '1.0.3'; // Should match package.json
 
     useEffect(() => {
         if (Platform.OS !== 'web' || typeof document === 'undefined') return undefined;
