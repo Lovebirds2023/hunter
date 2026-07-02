@@ -18,13 +18,20 @@ const isUsableGoogleClientId = (clientId) => {
 };
 
 const getEnvValue = (name) => process.env[name]?.trim() || '';
+const isLegacyApiUrl = (value) => {
+  const normalizedValue = value.trim().toLowerCase();
+  return normalizedValue.includes('railway.app') || normalizedValue.includes('hunter-production-0341');
+};
+const firstUsableApiUrl = (...values) => (
+  values.find((value) => value && !isLegacyApiUrl(value)) || DEFAULT_API_URL
+);
 
 module.exports = () => {
   const expo = JSON.parse(JSON.stringify(appJson.expo));
-  const apiUrl =
-    getEnvValue('EXPO_PUBLIC_API_URL') ||
-    getEnvValue('EXPO_PUBLIC_SUPABASE_FUNCTIONS_URL') ||
-    DEFAULT_API_URL;
+  const apiUrl = firstUsableApiUrl(
+    getEnvValue('EXPO_PUBLIC_API_URL'),
+    getEnvValue('EXPO_PUBLIC_SUPABASE_FUNCTIONS_URL'),
+  );
   const supabaseUrl = getEnvValue('EXPO_PUBLIC_SUPABASE_URL') || DEFAULT_SUPABASE_URL;
   const supabaseAnonKey = getEnvValue('EXPO_PUBLIC_SUPABASE_ANON_KEY') || DEFAULT_SUPABASE_ANON_KEY;
   const supabaseStorageBuckets = {

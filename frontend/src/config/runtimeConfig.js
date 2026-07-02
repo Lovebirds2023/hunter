@@ -13,6 +13,15 @@ const extra =
     || {};
 
 const cleanValue = (value) => (typeof value === 'string' ? value.trim() : '');
+const isLegacyApiUrl = (value) => {
+    const normalizedValue = cleanValue(value).toLowerCase();
+    return normalizedValue.includes('railway.app') || normalizedValue.includes('hunter-production-0341');
+};
+
+const firstUsableApiUrl = (...values) => (
+    values.map(cleanValue).find((value) => value && !isLegacyApiUrl(value))
+    || DEFAULT_RUNTIME_CONFIG.apiUrl
+);
 
 export const readRuntimeValue = (envName, extraName, fallback = '') => (
     cleanValue(process.env[envName])
@@ -23,7 +32,11 @@ export const readRuntimeValue = (envName, extraName, fallback = '') => (
 const extraBuckets = extra?.supabaseStorageBuckets || {};
 
 export const runtimeConfig = {
-    apiUrl: readRuntimeValue('EXPO_PUBLIC_API_URL', 'apiUrl', DEFAULT_RUNTIME_CONFIG.apiUrl),
+    apiUrl: firstUsableApiUrl(
+        process.env.EXPO_PUBLIC_API_URL,
+        process.env.EXPO_PUBLIC_SUPABASE_FUNCTIONS_URL,
+        extra?.apiUrl,
+    ),
     supabaseUrl: readRuntimeValue('EXPO_PUBLIC_SUPABASE_URL', 'supabaseUrl', DEFAULT_RUNTIME_CONFIG.supabaseUrl),
     supabaseAnonKey: readRuntimeValue('EXPO_PUBLIC_SUPABASE_ANON_KEY', 'supabaseAnonKey', DEFAULT_RUNTIME_CONFIG.supabaseAnonKey),
     storageBuckets: {
