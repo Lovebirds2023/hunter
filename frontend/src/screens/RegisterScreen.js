@@ -15,6 +15,7 @@ import {
     getGoogleAuthRequestConfig,
     getGoogleAuthStatus,
     getGoogleIdTokenFromResponse,
+    getGoogleOAuthRedirectTo,
 } from '../api/googleAuthConfig';
 import { setAppLanguage } from '../i18n';
 import {
@@ -31,6 +32,7 @@ import {
 } from '../utils/locationAccuracy';
 import { PRIVACY_POLICY_URL } from '../constants/legal';
 import { usePersistentDraft } from '../hooks/usePersistentDraft';
+import { isSupabaseConfigured, supabase } from '../../supabase';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -223,6 +225,25 @@ const RegisterScreen = ({ navigation }) => {
     const handleGoogleSignupPress = async () => {
         setGoogleLoading(true);
         try {
+            if (Platform.OS === 'web') {
+                if (!isSupabaseConfigured) {
+                    throw new Error('Supabase Google sign-in is not configured.');
+                }
+
+                const { error } = await supabase.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo: getGoogleOAuthRedirectTo(),
+                        queryParams: {
+                            prompt: 'select_account',
+                        },
+                    },
+                });
+
+                if (error) throw error;
+                return;
+            }
+
             const result = await promptGoogleAsync({ useProxy: false });
             if (result?.type && result.type !== 'success') {
                 setGoogleLoading(false);
@@ -289,7 +310,7 @@ const RegisterScreen = ({ navigation }) => {
                             <TouchableOpacity
                                 style={styles.googleSignUpBtn}
                                 onPress={handleGoogleSignupPress}
-                                disabled={!googleRequest || googleLoading}
+                                disabled={(Platform.OS !== 'web' && !googleRequest) || googleLoading}
                                 activeOpacity={0.8}
                             >
                                 <Image 

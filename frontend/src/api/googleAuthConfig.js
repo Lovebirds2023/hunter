@@ -63,6 +63,19 @@ export const getGoogleRedirectUri = () => {
     return undefined;
 };
 
+export const getGoogleOAuthRedirectTo = () => {
+    if (GOOGLE_REDIRECT_URI) {
+        return GOOGLE_REDIRECT_URI;
+    }
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        const path = GOOGLE_REDIRECT_PATH.replace(/^\/+/, '');
+        return `${window.location.origin}/${path}`;
+    }
+
+    return undefined;
+};
+
 export const getGoogleAuthStatus = () => {
     if (Platform.OS === 'web') {
         return {
@@ -133,6 +146,9 @@ const getUrlParam = (url, key) => {
 };
 
 export const getGoogleIdTokenFromUrl = (url) => getUrlParam(url, 'id_token');
+export const getGoogleAuthCodeFromUrl = (url) => getUrlParam(url, 'code');
+export const getGoogleAccessTokenFromUrl = (url) => getUrlParam(url, 'access_token');
+export const getGoogleRefreshTokenFromUrl = (url) => getUrlParam(url, 'refresh_token');
 
 export const getGoogleAuthErrorFromUrl = (url) => {
     const error = getUrlParam(url, 'error');

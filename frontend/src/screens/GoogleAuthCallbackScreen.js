@@ -4,9 +4,13 @@ import { AuthContext } from '../context/AuthContext';
 import { ThemeBackground } from '../components/ThemeBackground';
 import { COLORS, SPACING, SIZES } from '../constants/theme';
 import {
+    getGoogleAccessTokenFromUrl,
+    getGoogleAuthCodeFromUrl,
     getGoogleAuthErrorFromUrl,
     getGoogleIdTokenFromUrl,
+    getGoogleRefreshTokenFromUrl,
 } from '../api/googleAuthConfig';
+import { isSupabaseConfigured, supabase } from '../../supabase';
 
 const getCurrentWebUrl = () => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return '';
@@ -19,7 +23,7 @@ const replaceWebUrl = (path) => {
 };
 
 const GoogleAuthCallbackScreen = ({ navigation }) => {
-    const { googleLogin, authNotice, clearAuthNotice } = useContext(AuthContext);
+    const { googleLogin, completeSupabaseOAuthSession, authNotice, clearAuthNotice } = useContext(AuthContext);
     const [status, setStatus] = useState('loading');
     const [message, setMessage] = useState('Finishing Google sign-in...');
     const handledRef = useRef(false);
@@ -31,7 +35,49 @@ const GoogleAuthCallbackScreen = ({ navigation }) => {
         const finishGoogleLogin = async () => {
             const currentUrl = getCurrentWebUrl();
             const idToken = getGoogleIdTokenFromUrl(currentUrl);
+            const authCode = getGoogleAuthCodeFromUrl(currentUrl);
+            const accessToken = getGoogleAccessTokenFromUrl(currentUrl);
+            const refreshToken = getGoogleRefreshTokenFromUrl(currentUrl);
             const googleError = getGoogleAuthErrorFromUrl(currentUrl);
+            const hasSupabaseTokens = Boolean(accessToken && refreshToken);
+
+            const finishSupabaseOAuthSession = async () => {
+                if (!isSupabaseConfigured) {
+                    throw new Error('Supabase Google sign-in is not configured.');
+                }
+
+                const result = authCode
+                    ? await supabase.auth.exchangeCodeForSession(authCode)
+                    : await supabase.auth.setSession({
+                        access_token: accessToken,
+                        refresh_token: refreshToken,
+                    });
+
+                if (result.error) throw result.error;
+                if (!result.data?.session) throw new Error('Google did not return a valid session.');
+
+                replaceWebUrl('/auth/google');
+                const success = await completeSupabaseOAuthSession(result.data.session);
+                if (success) {
+                    replaceWebUrl('/');
+                    setStatus('success');
+                    setMessage('Google sign-in complete. Taking you into the app...');
+                } else {
+                    setStatus('error');
+                    setMessage(authNotice?.message || 'Google sign-in could not be completed. Please try again.');
+                }
+            };
+
+            if (authCode || hasSupabaseTokens) {
+                try {
+                    await finishSupabaseOAuthSession();
+                } catch (error) {
+                    replaceWebUrl('/auth/google');
+                    setStatus('error');
+                    setMessage(error?.message || 'Google sign-in could not be completed. Please try again.');
+                }
+                return;
+            }
 
             if (idToken) {
                 replaceWebUrl('/auth/google');
@@ -61,7 +107,7 @@ const GoogleAuthCallbackScreen = ({ navigation }) => {
         };
 
         finishGoogleLogin();
-    }, [authNotice?.message, clearAuthNotice, googleLogin]);
+    }, [authNotice?.message, clearAuthNotice, completeSupabaseOAuthSession, googleLogin]);
 
     const goToLogin = () => {
         if (navigation?.replace) {

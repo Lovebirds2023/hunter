@@ -135,6 +135,37 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    const completeSupabaseOAuthSession = async (session) => {
+        setIsLoading(true);
+        clearAuthNotice();
+        try {
+            const accessToken = session?.access_token;
+            if (!accessToken) {
+                throw new Error('Google did not return a valid Supabase session.');
+            }
+
+            await Storage.setItemAsync('userToken', accessToken);
+            const userRes = await client.get('/users/me', {
+                headers: { Authorization: `Bearer ${accessToken}` }
+            });
+
+            await setAppLanguage(userRes.data.language || 'en');
+            setUserToken(accessToken);
+            setUserInfo(userRes.data);
+            setIsAdmin(userRes.data.role === 'admin' || userRes.data.role === 'super_admin');
+            await Storage.setItemAsync('userInfo', JSON.stringify(userRes.data));
+
+            return true;
+        } catch (e) {
+            if (__DEV__) console.log('Supabase OAuth session error', e);
+            const message = getFriendlyAuthError(e, 'Google sign-in could not be completed. Please try again.');
+            setAuthNotice({ type: 'error', message });
+            return false;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const register = async (fullName, email, password, role, phoneNumber, bio, countryCode, preferredLanguage, latitude, longitude, locationAccuracyMeters) => {
         setIsLoading(true);
         clearAuthNotice();
@@ -322,6 +353,7 @@ export const AuthProvider = ({ children }) => {
             register,
             updateUser,
             googleLogin,
+            completeSupabaseOAuthSession,
             requestPasswordReset,
             resetPassword,
             clearAuthNotice,

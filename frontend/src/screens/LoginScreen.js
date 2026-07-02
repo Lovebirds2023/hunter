@@ -11,8 +11,10 @@ import {
     getGoogleAuthRequestConfig,
     getGoogleAuthStatus,
     getGoogleIdTokenFromResponse,
+    getGoogleOAuthRedirectTo,
 } from '../api/googleAuthConfig';
 import { PRIVACY_POLICY_URL } from '../constants/legal';
+import { isSupabaseConfigured, supabase } from '../../supabase';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -61,6 +63,25 @@ const GoogleSignInButton = ({ googleLogin, label, disabledLabel, onAuthNotice })
     const handleGooglePress = async () => {
         setGoogleLoading(true);
         try {
+            if (Platform.OS === 'web') {
+                if (!isSupabaseConfigured) {
+                    throw new Error('Supabase Google sign-in is not configured.');
+                }
+
+                const { error } = await supabase.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo: getGoogleOAuthRedirectTo(),
+                        queryParams: {
+                            prompt: 'select_account',
+                        },
+                    },
+                });
+
+                if (error) throw error;
+                return;
+            }
+
             const result = await promptAsync({ useProxy: false });
             if (result?.type && result.type !== 'success') {
                 setGoogleLoading(false);
@@ -74,9 +95,9 @@ const GoogleSignInButton = ({ googleLogin, label, disabledLabel, onAuthNotice })
     return (
         <SocialLoginButton
             imageUri="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg"
-            label={googleLoading ? 'Opening Google...' : request ? label : disabledLabel}
+            label={googleLoading ? 'Opening Google...' : (Platform.OS === 'web' || request) ? label : disabledLabel}
             onPress={handleGooglePress}
-            disabled={!request || googleLoading}
+            disabled={(Platform.OS !== 'web' && !request) || googleLoading}
         />
     );
 };
