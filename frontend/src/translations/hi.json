@@ -753,6 +753,13 @@
         "have_code": "Already have a reset code?",
         "reset_code": "Reset code",
         "new_password": "New password",
+        "confirm_password": "Naya password confirm karein",
+        "recovery_subtitle": "Apna account reset karne ke liye naya password daalein.",
+        "recovery_ready": "Aapka reset link taiyar hai. Naya password daalein.",
+        "recovery_error": "Yeh reset link galat hai ya expire ho chuka hai. Kripya naya link maangein.",
+        "weak_password": "Password kam se kam 8 characters ka hona chahiye.",
+        "password_mismatch": "Passwords match nahi karte.",
+        "password_updated": "Password update ho gaya. Ab aap log in kar sakte hain.",
         "update_password": "Update password",
         "back_to_login": "Back to login"
     },

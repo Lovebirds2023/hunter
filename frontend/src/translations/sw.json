@@ -753,6 +753,13 @@
         "have_code": "Already have a reset code?",
         "reset_code": "Reset code",
         "new_password": "New password",
+        "confirm_password": "Thibitisha nenosiri jipya",
+        "recovery_subtitle": "Weka nenosiri jipya ili kukamilisha kuweka upya akaunti yako.",
+        "recovery_ready": "Kiungo chako cha kuweka upya kiko tayari. Weka nenosiri jipya.",
+        "recovery_error": "Kiungo hiki cha kuweka upya si sahihi au muda wake umeisha. Tafadhali omba kiungo kipya.",
+        "weak_password": "Nenosiri lazima liwe na angalau herufi 8.",
+        "password_mismatch": "Manenosiri hayalingani.",
+        "password_updated": "Nenosiri limebadilishwa. Sasa unaweza kuingia.",
         "update_password": "Update password",
         "back_to_login": "Back to login"
     },

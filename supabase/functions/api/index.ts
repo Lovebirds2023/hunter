@@ -69,6 +69,15 @@ const readForm = async (request: Request) => {
 
 const cleanString = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 const nowIso = () => new Date().toISOString();
+const getPublicAppUrl = () => (
+  cleanString(Deno.env.get("PUBLIC_APP_URL")) ||
+  cleanString(Deno.env.get("LD_PUBLIC_APP_URL")) ||
+  "https://lovedogs360.co.ke"
+).replace(/\/+$/, "");
+const getPasswordResetRedirectUrl = () => (
+  cleanString(Deno.env.get("PASSWORD_RESET_REDIRECT_URL")) ||
+  `${getPublicAppUrl()}/reset-password`
+);
 const isRecord = (value: unknown): value is JsonRecord =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 const asArray = (value: unknown) => (Array.isArray(value) ? value : []);
@@ -2780,7 +2789,9 @@ const handlePasswordForgot = async (request: Request) => {
   const email = cleanString(body.email).toLowerCase();
   if (!email) return errorResponse("Email is required.");
 
-  const { error } = await supabase.auth.resetPasswordForEmail(email);
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: getPasswordResetRedirectUrl(),
+  });
   if (error) return errorResponse(error.message, 400);
 
   return jsonResponse({ message: "If that email exists, a password reset link has been sent." });

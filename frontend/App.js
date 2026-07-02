@@ -74,6 +74,8 @@ const getLinkingPrefixes = () => {
     const prefixes = [
         getCurrentWebOrigin(),
         'https://hunter-k9lr.vercel.app',
+        'https://lovedogs360.co.ke',
+        'https://www.lovedogs360.co.ke',
         'https://lovedogs360.com',
         'https://www.lovedogs360.com',
         'http://localhost:19006',
@@ -91,6 +93,7 @@ const linking = {
             Login: 'login',
             GoogleAuthCallback: 'auth/google',
             ForgotPassword: 'forgot-password',
+            ResetPassword: 'reset-password',
             Onboarding: 'onboarding',
             Register: 'register',
             Main: {
@@ -217,6 +220,7 @@ function AppNavigator() {
                     <Stack.Screen name="Login" component={LoginScreen} />
                     <Stack.Screen name="GoogleAuthCallback" component={GoogleAuthCallbackScreen} />
                     <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+                    <Stack.Screen name="ResetPassword" component={ForgotPasswordScreen} />
                     <Stack.Screen name="Onboarding" component={OnboardingScreen} />
                     <Stack.Screen name="Register" component={RegisterScreen} />
                 </>

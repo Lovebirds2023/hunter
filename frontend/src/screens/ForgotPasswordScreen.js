@@ -1,29 +1,137 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, KeyboardAvoidingView, ScrollView, Platform } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Button } from '../components/Button';
 import { AuthContext } from '../context/AuthContext';
 import { ThemeBackground } from '../components/ThemeBackground';
 import { COLORS, SPACING, SIZES } from '../constants/theme';
+import { isSupabaseConfigured, supabase } from '../../supabase';
+
+const readWebRecoveryParams = () => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return {};
+
+    const searchParams = new URLSearchParams(window.location.search || '');
+    const hashValue = (window.location.hash || '').replace(/^#/, '');
+    const hashParams = new URLSearchParams(hashValue);
+    const readParam = (key) => searchParams.get(key) || hashParams.get(key) || '';
+
+    return {
+        code: readParam('code'),
+        accessToken: readParam('access_token'),
+        refreshToken: readParam('refresh_token'),
+        type: readParam('type'),
+        error: readParam('error_description') || readParam('error'),
+    };
+};
 
 const ForgotPasswordScreen = ({ navigation }) => {
     const { t } = useTranslation();
     const [email, setEmail] = useState('');
-    const [resetToken, setResetToken] = useState('');
     const [newPassword, setNewPassword] = useState('');
-    const { requestPasswordReset, resetPassword, isLoading, authNotice, clearAuthNotice } = useContext(AuthContext);
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [isRecoveryLink, setIsRecoveryLink] = useState(false);
+    const [recoverySessionReady, setRecoverySessionReady] = useState(false);
+    const [isHandlingRecovery, setIsHandlingRecovery] = useState(false);
+    const [localNotice, setLocalNotice] = useState(null);
+    const { requestPasswordReset, isLoading, authNotice, clearAuthNotice } = useContext(AuthContext);
+    const visibleNotice = localNotice || authNotice;
+    const loading = isLoading || isHandlingRecovery;
+
+    useEffect(() => {
+        const initializeRecoverySession = async () => {
+            const params = readWebRecoveryParams();
+            const hasRecoveryCode = Boolean(params.code);
+            const hasRecoveryTokens = Boolean(params.accessToken && params.refreshToken);
+
+            if (params.error) {
+                setIsRecoveryLink(true);
+                setLocalNotice({ type: 'error', message: params.error });
+                return;
+            }
+
+            if (!hasRecoveryCode && !hasRecoveryTokens) return;
+
+            setIsRecoveryLink(true);
+            setIsHandlingRecovery(true);
+            setLocalNotice(null);
+            clearAuthNotice();
+
+            try {
+                if (!isSupabaseConfigured) {
+                    throw new Error(t('forgot_password.recovery_error'));
+                }
+
+                const result = hasRecoveryCode
+                    ? await supabase.auth.exchangeCodeForSession(params.code)
+                    : await supabase.auth.setSession({
+                        access_token: params.accessToken,
+                        refresh_token: params.refreshToken,
+                    });
+
+                if (result.error) throw result.error;
+
+                setRecoverySessionReady(true);
+                setLocalNotice({ type: 'success', message: t('forgot_password.recovery_ready') });
+
+                if (Platform.OS === 'web' && typeof window !== 'undefined' && window.history?.replaceState) {
+                    window.history.replaceState({}, document.title, window.location.pathname || '/reset-password');
+                }
+            } catch (error) {
+                setRecoverySessionReady(false);
+                setLocalNotice({
+                    type: 'error',
+                    message: error?.message || t('forgot_password.recovery_error'),
+                });
+            } finally {
+                setIsHandlingRecovery(false);
+            }
+        };
+
+        initializeRecoverySession();
+    }, []);
 
     const handleRequestReset = async () => {
+        setLocalNotice(null);
         clearAuthNotice();
         await requestPasswordReset(email.trim().toLowerCase());
     };
 
     const handleResetPassword = async () => {
+        setLocalNotice(null);
         clearAuthNotice();
-        const result = await resetPassword(resetToken.trim(), newPassword);
-        if (result.success) {
+
+        if (newPassword.length < 8) {
+            setLocalNotice({ type: 'error', message: t('forgot_password.weak_password') });
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            setLocalNotice({ type: 'error', message: t('forgot_password.password_mismatch') });
+            return;
+        }
+
+        if (!recoverySessionReady) {
+            setLocalNotice({ type: 'error', message: t('forgot_password.recovery_error') });
+            return;
+        }
+
+        setIsHandlingRecovery(true);
+        try {
+            const { error } = await supabase.auth.updateUser({ password: newPassword });
+            if (error) throw error;
+
+            await supabase.auth.signOut();
             setNewPassword('');
-            setResetToken('');
+            setConfirmPassword('');
+            setRecoverySessionReady(false);
+            setLocalNotice({ type: 'success', message: t('forgot_password.password_updated') });
+        } catch (error) {
+            setLocalNotice({
+                type: 'error',
+                message: error?.message || t('forgot_password.recovery_error'),
+            });
+        } finally {
+            setIsHandlingRecovery(false);
         }
     };
 
@@ -36,57 +144,62 @@ const ForgotPasswordScreen = ({ navigation }) => {
                 <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
                     <View style={styles.formContainer}>
                         <Text style={styles.title}>{t('forgot_password.title')}</Text>
-                        <Text style={styles.subtitle}>{t('forgot_password.subtitle')}</Text>
+                        <Text style={styles.subtitle}>
+                            {isRecoveryLink ? t('forgot_password.recovery_subtitle') : t('forgot_password.subtitle')}
+                        </Text>
 
-                        {authNotice && (
-                            <View style={[styles.notice, authNotice.type === 'success' && styles.noticeSuccess]}>
-                                <Text style={styles.noticeText}>{authNotice.message}</Text>
+                        {visibleNotice && (
+                            <View style={[styles.notice, visibleNotice.type === 'success' && styles.noticeSuccess]}>
+                                <Text style={styles.noticeText}>{visibleNotice.message}</Text>
                             </View>
                         )}
 
-                        <TextInput
-                            style={styles.input}
-                            placeholder={t('forgot_password.email')}
-                            placeholderTextColor="rgba(255,255,255,0.65)"
-                            value={email}
-                            onChangeText={setEmail}
-                            autoCapitalize="none"
-                            keyboardType="email-address"
-                        />
-                        <Button
-                            title={t('forgot_password.send_instructions')}
-                            onPress={handleRequestReset}
-                            variant="gold"
-                            loading={isLoading}
-                            disabled={!email.trim()}
-                        />
-
-                        <View style={styles.divider} />
-
-                        <Text style={styles.subtitle}>{t('forgot_password.have_code')}</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder={t('forgot_password.reset_code')}
-                            placeholderTextColor="rgba(255,255,255,0.65)"
-                            value={resetToken}
-                            onChangeText={setResetToken}
-                            autoCapitalize="none"
-                        />
-                        <TextInput
-                            style={styles.input}
-                            placeholder={t('forgot_password.new_password')}
-                            placeholderTextColor="rgba(255,255,255,0.65)"
-                            value={newPassword}
-                            onChangeText={setNewPassword}
-                            secureTextEntry
-                        />
-                        <Button
-                            title={t('forgot_password.update_password')}
-                            onPress={handleResetPassword}
-                            variant="gold"
-                            loading={isLoading}
-                            disabled={!resetToken.trim() || newPassword.length < 8}
-                        />
+                        {isRecoveryLink ? (
+                            <>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder={t('forgot_password.new_password')}
+                                    placeholderTextColor="rgba(255,255,255,0.65)"
+                                    value={newPassword}
+                                    onChangeText={setNewPassword}
+                                    secureTextEntry
+                                />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder={t('forgot_password.confirm_password')}
+                                    placeholderTextColor="rgba(255,255,255,0.65)"
+                                    value={confirmPassword}
+                                    onChangeText={setConfirmPassword}
+                                    secureTextEntry
+                                />
+                                <Button
+                                    title={t('forgot_password.update_password')}
+                                    onPress={handleResetPassword}
+                                    variant="gold"
+                                    loading={loading}
+                                    disabled={!recoverySessionReady || newPassword.length < 8 || confirmPassword.length < 8}
+                                />
+                            </>
+                        ) : (
+                            <>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder={t('forgot_password.email')}
+                                    placeholderTextColor="rgba(255,255,255,0.65)"
+                                    value={email}
+                                    onChangeText={setEmail}
+                                    autoCapitalize="none"
+                                    keyboardType="email-address"
+                                />
+                                <Button
+                                    title={t('forgot_password.send_instructions')}
+                                    onPress={handleRequestReset}
+                                    variant="gold"
+                                    loading={loading}
+                                    disabled={!email.trim()}
+                                />
+                            </>
+                        )}
 
                         <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.backLink}>
                             <Text style={styles.backText}>{t('forgot_password.back_to_login')}</Text>

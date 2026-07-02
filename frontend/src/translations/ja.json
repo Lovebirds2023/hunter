@@ -753,6 +753,13 @@
         "have_code": "Already have a reset code?",
         "reset_code": "Reset code",
         "new_password": "New password",
+        "confirm_password": "新しいパスワードを確認",
+        "recovery_subtitle": "新しいパスワードを入力してアカウントのリセットを完了してください。",
+        "recovery_ready": "リセットリンクの準備ができました。新しいパスワードを入力してください。",
+        "recovery_error": "このリセットリンクは無効または期限切れです。新しいリンクをリクエストしてください。",
+        "weak_password": "パスワードは8文字以上にしてください。",
+        "password_mismatch": "パスワードが一致しません。",
+        "password_updated": "パスワードを更新しました。ログインできます。",
         "update_password": "Update password",
         "back_to_login": "Back to login"
     },

@@ -753,6 +753,13 @@
         "have_code": "Already have a reset code?",
         "reset_code": "Reset code",
         "new_password": "New password",
+        "confirm_password": "Confirmar nueva contrasena",
+        "recovery_subtitle": "Ingresa una nueva contrasena para terminar de restablecer tu cuenta.",
+        "recovery_ready": "Tu enlace de restablecimiento esta listo. Ingresa tu nueva contrasena.",
+        "recovery_error": "Este enlace de restablecimiento no es valido o ha caducado. Solicita un enlace nuevo.",
+        "weak_password": "La contrasena debe tener al menos 8 caracteres.",
+        "password_mismatch": "Las contrasenas no coinciden.",
+        "password_updated": "Contrasena actualizada correctamente. Ya puedes iniciar sesion.",
         "update_password": "Update password",
         "back_to_login": "Back to login"
     },

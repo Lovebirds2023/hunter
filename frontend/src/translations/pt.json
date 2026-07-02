@@ -753,6 +753,13 @@
         "have_code": "Already have a reset code?",
         "reset_code": "Reset code",
         "new_password": "New password",
+        "confirm_password": "Confirmar nova senha",
+        "recovery_subtitle": "Digite uma nova senha para concluir a redefinicao da sua conta.",
+        "recovery_ready": "Seu link de redefinicao esta pronto. Digite sua nova senha.",
+        "recovery_error": "Este link de redefinicao e invalido ou expirou. Solicite um novo link.",
+        "weak_password": "A senha deve ter pelo menos 8 caracteres.",
+        "password_mismatch": "As senhas nao coincidem.",
+        "password_updated": "Senha atualizada com sucesso. Voce ja pode entrar.",
         "update_password": "Update password",
         "back_to_login": "Back to login"
     },
