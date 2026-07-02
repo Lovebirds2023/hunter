@@ -173,6 +173,14 @@ const requireAdminProfile = async (request: Request) => {
   return session;
 };
 
+const requireSuperAdminProfile = async (request: Request) => {
+  const session = await requireProfile(request);
+  if (cleanString(session.profile.role) !== "super_admin") {
+    throw new Response("Super admin access required", { status: 403 });
+  }
+  return session;
+};
+
 const fetchAuthor = async (userId: unknown) => {
   const id = cleanString(userId);
   if (!id) return null;
@@ -2014,6 +2022,69 @@ const handleUnsuspendUser = async (request: Request, userId: string) => {
   return jsonResponse({ message: `User ${cleanString(user.email)} restored`, role });
 };
 
+const handleUpdateUserRole = async (request: Request, userId: string) => {
+  const { profile } = await requireSuperAdminProfile(request);
+  if (userId === cleanString(profile.id)) return errorResponse("You cannot change your own role from this panel.");
+
+  const body = await readJson(request);
+  const nextRole = cleanString(body.role);
+  const allowedRoles = new Set(["buyer", "provider", "admin"]);
+  if (!allowedRoles.has(nextRole)) {
+    return errorResponse("Choose buyer, provider, or admin. Super admin changes must be made directly in Supabase.");
+  }
+
+  const user = await selectSingle("users", userId, "User");
+  const previousRole = cleanString(user.role) || "buyer";
+  if (previousRole === "super_admin") {
+    return errorResponse("Super admin accounts can only be changed directly in Supabase.");
+  }
+  if (previousRole === "suspended") {
+    return errorResponse("Restore this user before changing their role.");
+  }
+  if (previousRole === nextRole) {
+    return jsonResponse({ message: `User is already ${nextRole}.`, role: nextRole });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("users")
+    .update({
+      role: nextRole,
+      pre_suspension_role: null,
+      updated_at: nowIso(),
+    })
+    .eq("id", userId)
+    .select("*")
+    .single();
+  if (error) throw error;
+
+  const { error: auditError } = await supabaseAdmin.from("audit_logs").insert({
+    user_id: cleanString(profile.id),
+    action: "update_user_role",
+    target_type: "user",
+    target_id: userId,
+    details: JSON.stringify({
+      email: cleanString(user.email),
+      previous_role: previousRole,
+      new_role: nextRole,
+    }),
+  });
+  if (auditError) console.error("Role update audit log failed", auditError);
+
+  await createNotification(
+    userId,
+    "Account role updated",
+    `Your Lovedogs 360 account role was changed from ${previousRole} to ${nextRole}.`,
+    "moderation",
+  );
+
+  return jsonResponse({
+    message: `User ${cleanString(user.email)} changed from ${previousRole} to ${nextRole}.`,
+    user: serializeUser(data as JsonRecord),
+    previous_role: previousRole,
+    role: nextRole,
+  });
+};
+
 const handleAdminOrders = async (request: Request) => {
   await requireAdminProfile(request);
   const { data, error } = await supabaseAdmin.from("orders").select("*").order("created_at", { ascending: false });
@@ -2842,6 +2913,7 @@ const routeRequest = async (request: Request) => {
   if (method === "GET" && path === "/admin/analytics") return handleAdminAnalytics(request);
   if (method === "GET" && path === "/admin/stats") return handleAdminAnalytics(request);
   if (method === "GET" && path === "/admin/users") return handleAdminUsers(request);
+  if (method === "POST" && /^\/admin\/users\/[^/]+\/role$/.test(path)) return handleUpdateUserRole(request, firstPathMatch(path, /^\/admin\/users\/([^/]+)\/role$/));
   if (method === "POST" && /^\/admin\/users\/[^/]+\/suspend$/.test(path)) return handleSuspendUser(request, firstPathMatch(path, /^\/admin\/users\/([^/]+)\/suspend$/));
   if (method === "POST" && /^\/admin\/users\/[^/]+\/unsuspend$/.test(path)) return handleUnsuspendUser(request, firstPathMatch(path, /^\/admin\/users\/([^/]+)\/unsuspend$/));
   if (method === "GET" && path === "/admin/orders") return handleAdminOrders(request);

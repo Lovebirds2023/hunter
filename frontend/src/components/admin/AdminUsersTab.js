@@ -1,13 +1,19 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useContext } from 'react';
 import {
     View, Text, FlatList, TouchableOpacity, TextInput,
     ActivityIndicator, RefreshControl, Alert, ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import client from '../../api/client';
+import { AuthContext } from '../../context/AuthContext';
 import { adminStyles as s, ADMIN_COLORS } from './AdminStyles';
 
 const ROLE_FILTERS = ['All', 'buyer', 'provider', 'admin', 'super_admin', 'suspended'];
+const ROLE_UPDATE_OPTIONS = [
+    { value: 'buyer', label: 'Buyer', icon: 'paw-outline' },
+    { value: 'provider', label: 'Provider', icon: 'briefcase-outline' },
+    { value: 'admin', label: 'Admin', icon: 'shield-checkmark-outline' },
+];
 const ROLE_COLORS = {
     admin: ADMIN_COLORS.danger,
     provider: ADMIN_COLORS.chart1,
@@ -24,12 +30,16 @@ const SUSPENSION_OPTIONS = [
 const DEFAULT_SUSPENSION = { duration_value: 7, duration_unit: 'days', reason: '' };
 
 export const AdminUsersTab = ({ onBack }) => {
+    const { userInfo } = useContext(AuthContext);
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [search, setSearch] = useState('');
     const [roleFilter, setRoleFilter] = useState('All');
     const [suspendForms, setSuspendForms] = useState({});
+    const [roleActioningId, setRoleActioningId] = useState(null);
+    const currentUserId = userInfo?.id;
+    const isSuperAdmin = userInfo?.role === 'super_admin';
 
     const fetchUsers = useCallback(async (silent = false) => {
         if (!silent) setLoading(true);
@@ -113,6 +123,49 @@ export const AdminUsersTab = ({ onBack }) => {
                 }
             }
         ]);
+    };
+
+    const handleRoleChange = (user, nextRole) => {
+        if (!isSuperAdmin) {
+            Alert.alert('Super admin only', 'Only a super admin can change user roles.');
+            return;
+        }
+        if (user.id === currentUserId) {
+            Alert.alert('Not allowed', 'You cannot change your own role from this panel.');
+            return;
+        }
+        if (user.role === 'super_admin') {
+            Alert.alert('Supabase only', 'Super admin accounts can only be changed directly in Supabase.');
+            return;
+        }
+        if (user.role === 'suspended') {
+            Alert.alert('Restore first', 'Restore this user before changing their role.');
+            return;
+        }
+        if (user.role === nextRole) return;
+
+        Alert.alert(
+            'Change User Role',
+            `Change "${user.full_name || user.email}" from ${user.role} to ${nextRole}?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Change role',
+                    onPress: async () => {
+                        setRoleActioningId(user.id);
+                        try {
+                            const res = await client.post(`/admin/users/${user.id}/role`, { role: nextRole });
+                            Alert.alert('Done', res.data?.message || 'User role updated.');
+                            fetchUsers(true);
+                        } catch (e) {
+                            Alert.alert('Error', e.response?.data?.detail || 'Failed to update user role.');
+                        } finally {
+                            setRoleActioningId(null);
+                        }
+                    },
+                },
+            ],
+        );
     };
 
     const roleCounts = {};
@@ -213,6 +266,46 @@ export const AdminUsersTab = ({ onBack }) => {
                                 <Text style={{ fontSize: 11, color: ADMIN_COLORS.textMuted, marginTop: 6 }}>
                                     Joined {new Date(item.created_at).toLocaleDateString()}
                                 </Text>
+                            )}
+                            {isSuperAdmin && item.id !== currentUserId && !['super_admin', 'suspended'].includes(item.role) && (
+                                <View style={{ marginTop: 12, padding: 10, borderRadius: 12, backgroundColor: ADMIN_COLORS.surfaceLight, borderWidth: 1, borderColor: ADMIN_COLORS.surfaceBorder }}>
+                                    <Text style={{ fontSize: 12, color: ADMIN_COLORS.textMuted, fontWeight: '800', marginBottom: 8 }}>
+                                        Super admin role control
+                                    </Text>
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                                        {ROLE_UPDATE_OPTIONS.map(option => {
+                                            const active = item.role === option.value;
+                                            const busy = roleActioningId === item.id;
+                                            return (
+                                                <TouchableOpacity
+                                                    key={option.value}
+                                                    style={[s.actionBtn, {
+                                                        backgroundColor: active ? ADMIN_COLORS.surfaceBorder : ADMIN_COLORS.infoBg,
+                                                        opacity: active || busy ? 0.65 : 1,
+                                                    }]}
+                                                    disabled={active || busy}
+                                                    onPress={() => handleRoleChange(item, option.value)}
+                                                >
+                                                    {busy ? (
+                                                        <ActivityIndicator size="small" color={ADMIN_COLORS.info} />
+                                                    ) : (
+                                                        <Ionicons name={option.icon} size={14} color={active ? ADMIN_COLORS.textMuted : ADMIN_COLORS.info} />
+                                                    )}
+                                                    <Text style={[s.actionBtnText, { color: active ? ADMIN_COLORS.textMuted : ADMIN_COLORS.info }]}>
+                                                        {active ? `${option.label} now` : `Make ${option.label}`}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </View>
+                                </View>
+                            )}
+                            {isSuperAdmin && item.role === 'super_admin' && item.id !== currentUserId && (
+                                <View style={{ marginTop: 12, padding: 10, borderRadius: 12, backgroundColor: ADMIN_COLORS.warningBg || ADMIN_COLORS.surfaceLight, borderWidth: 1, borderColor: ADMIN_COLORS.surfaceBorder }}>
+                                    <Text style={{ fontSize: 12, color: ADMIN_COLORS.warning || ADMIN_COLORS.textSecondary, fontWeight: '700' }}>
+                                        Super admin changes are Supabase-only.
+                                    </Text>
+                                </View>
                             )}
                             {item.is_suspended && (
                                 <View style={{ marginTop: 10, padding: 10, borderRadius: 10, backgroundColor: ADMIN_COLORS.dangerBg }}>
