@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     View, Text, StyleSheet, TextInput, ScrollView,
@@ -19,6 +19,7 @@ import {
     getImageFrameAspectRatio,
     getImagePickerAspect,
 } from '../components/ImageFrameGuide';
+import { usePersistentDraft } from '../hooks/usePersistentDraft';
 import {
     formatCoordinatePair,
     formatLocationAccuracy,
@@ -44,6 +45,22 @@ const PET_TYPES = [
 ];
 const PET_SIZES = ['Small', 'Medium', 'Large', 'Giant'];
 const SEX_OPTIONS = ['Unknown', 'Male', 'Female'];
+
+const hasCaseDraftContent = (draft) => (
+    Boolean(String(draft.caseType || '').trim()) ||
+    Boolean(String(draft.title || '').trim()) ||
+    Boolean(String(draft.description || '').trim()) ||
+    Boolean(String(draft.location || '').trim()) ||
+    Boolean(String(draft.breed || '').trim()) ||
+    Boolean(String(draft.customBreed || '').trim()) ||
+    Boolean(String(draft.color || '').trim()) ||
+    Boolean(String(draft.customColor || '').trim()) ||
+    Boolean(String(draft.petSize || '').trim()) ||
+    Boolean(String(draft.microchipId || '').trim()) ||
+    Boolean(String(draft.collarDescription || '').trim()) ||
+    Boolean(String(draft.uniqueMarkings || '').trim()) ||
+    (Array.isArray(draft.images) && draft.images.length > 0)
+);
 
 const ReportCaseScreen = ({ navigation, route }) => {
     const { t } = useTranslation();
@@ -73,6 +90,79 @@ const ReportCaseScreen = ({ navigation, route }) => {
     const breedOptions = getBreedsForPetType(petType);
     const colorOptions = getColorsForPetType(petType);
     const petLabelTitle = petType === 'cat' ? 'Cat' : 'Dog';
+    const draftKey = `ld360:draft:report-case:${initialType || 'new'}`;
+
+    const draftData = useMemo(() => ({
+        caseType,
+        title,
+        description,
+        location,
+        latitude,
+        longitude,
+        locationAccuracy,
+        breed,
+        customBreed,
+        color,
+        customColor,
+        petType,
+        sex,
+        petSize,
+        microchipId,
+        collarDescription,
+        uniqueMarkings,
+        images,
+        imageFrameRatio,
+    }), [
+        caseType,
+        title,
+        description,
+        location,
+        latitude,
+        longitude,
+        locationAccuracy,
+        breed,
+        customBreed,
+        color,
+        customColor,
+        petType,
+        sex,
+        petSize,
+        microchipId,
+        collarDescription,
+        uniqueMarkings,
+        images,
+        imageFrameRatio,
+    ]);
+
+    const restoreDraft = useCallback((draft) => {
+        if (!draft || !hasCaseDraftContent(draft)) return;
+        setCaseType(draft.caseType ?? initialType ?? '');
+        setTitle(draft.title ?? '');
+        setDescription(draft.description ?? '');
+        setLocation(draft.location ?? '');
+        setLatitude(draft.latitude ?? null);
+        setLongitude(draft.longitude ?? null);
+        setLocationAccuracy(draft.locationAccuracy ?? null);
+        setBreed(draft.breed ?? '');
+        setCustomBreed(draft.customBreed ?? '');
+        setColor(draft.color ?? '');
+        setCustomColor(draft.customColor ?? '');
+        setPetType(draft.petType || 'dog');
+        setSex(draft.sex || 'Unknown');
+        setPetSize(draft.petSize ?? '');
+        setMicrochipId(draft.microchipId ?? '');
+        setCollarDescription(draft.collarDescription ?? '');
+        setUniqueMarkings(draft.uniqueMarkings ?? '');
+        setImages(Array.isArray(draft.images) ? draft.images : []);
+        setImageFrameRatio(draft.imageFrameRatio || '4:3');
+    }, [initialType]);
+
+    const { clearDraft } = usePersistentDraft({
+        key: draftKey,
+        data: draftData,
+        restore: restoreDraft,
+        enabled: hasCaseDraftContent(draftData),
+    });
 
     const handlePetTypeSelect = (nextType) => {
         if (nextType === petType) return;
@@ -208,6 +298,7 @@ const ReportCaseScreen = ({ navigation, route }) => {
                 ? `${t('report.form.alerts.success')} We found ${matchCount} possible match${matchCount === 1 ? '' : 'es'}${topConfidence ? `, up to ${Math.round(topConfidence)}% confidence` : ''}.`
                 : t('report.form.alerts.success');
 
+            await clearDraft();
             Alert.alert(t('report.form.title'), successMessage, [
                 { text: 'OK', onPress: () => navigation.goBack() }
             ]);

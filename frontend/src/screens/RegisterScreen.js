@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import React, { useCallback, useContext, useMemo, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Image, Linking } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Button } from '../components/Button';
@@ -30,8 +30,19 @@ import {
     hasValidCoordinatePair,
 } from '../utils/locationAccuracy';
 import { PRIVACY_POLICY_URL } from '../constants/legal';
+import { usePersistentDraft } from '../hooks/usePersistentDraft';
 
 WebBrowser.maybeCompleteAuthSession();
+
+const hasRegistrationDraftContent = (draft) => (
+    Boolean(String(draft.fullName || '').trim()) ||
+    Boolean(String(draft.email || '').trim()) ||
+    Boolean(String(draft.phoneNumber || '').trim()) ||
+    Boolean(String(draft.bio || '').trim()) ||
+    Boolean(draft.locationAllowed) ||
+    Boolean(draft.role && draft.role !== 'buyer') ||
+    Boolean(draft.preferredLanguage && draft.preferredLanguage !== 'en')
+);
 
 const RegisterScreen = ({ navigation }) => {
     const { t } = useTranslation();
@@ -94,6 +105,61 @@ const RegisterScreen = ({ navigation }) => {
 
     const { register, googleLogin, isLoading, authNotice, clearAuthNotice } = useContext(AuthContext);
     const visibleNotice = localGoogleNotice || authNotice;
+
+    const registrationDraftData = useMemo(() => ({
+        fullName,
+        email,
+        phoneNumber,
+        bio,
+        role,
+        countryCode,
+        countryCodeSelection,
+        customCountryCode,
+        preferredLanguage,
+        location,
+        locationAccuracy,
+        locationAllowed,
+        currentStep,
+    }), [
+        fullName,
+        email,
+        phoneNumber,
+        bio,
+        role,
+        countryCode,
+        countryCodeSelection,
+        customCountryCode,
+        preferredLanguage,
+        location,
+        locationAccuracy,
+        locationAllowed,
+        currentStep,
+    ]);
+
+    const restoreRegistrationDraft = useCallback((draft) => {
+        if (!hasRegistrationDraftContent(draft)) return;
+        setFullName(draft.fullName ?? '');
+        setEmail(draft.email ?? '');
+        setPhoneNumber(draft.phoneNumber ?? '');
+        setBio(draft.bio ?? '');
+        setRole(draft.role || 'buyer');
+        setCountryCode(draft.countryCode || '+254');
+        setCountryCodeSelection(draft.countryCodeSelection || '+254');
+        setCustomCountryCode(draft.customCountryCode || '');
+        setPreferredLanguage(draft.preferredLanguage || 'en');
+        setLocation(draft.location || null);
+        setLocationAccuracy(draft.locationAccuracy ?? null);
+        setLocationAllowed(Boolean(draft.locationAllowed && draft.location));
+        setCurrentStep(1);
+        setAppLanguage(draft.preferredLanguage || 'en').catch(() => {});
+    }, []);
+
+    const { clearDraft: clearRegistrationDraft } = usePersistentDraft({
+        key: 'ld360:draft:register',
+        data: registrationDraftData,
+        restore: restoreRegistrationDraft,
+        enabled: hasRegistrationDraftContent(registrationDraftData),
+    });
 
     const validateEmail = (value) => /\S+@\S+\.\S+/.test(value);
 
@@ -499,6 +565,7 @@ const RegisterScreen = ({ navigation }) => {
                                             currentLocation?.longitude
                                         );
                                         if (success) {
+                                            await clearRegistrationDraft();
                                             navigation.navigate('Login');
                                         }
                                     }} variant="gold" loading={isLoading} />

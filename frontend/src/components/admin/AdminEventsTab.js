@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     View, Text, FlatList, TouchableOpacity, TextInput, Image,
     ActivityIndicator, RefreshControl, Alert, Switch
@@ -17,6 +17,7 @@ import {
     getImageFrameAspectRatio,
     getImagePickerAspect,
 } from '../ImageFrameGuide';
+import { usePersistentDraft } from '../../hooks/usePersistentDraft';
 
 const getEventStatus = (startTime, endTime) => {
     const now = new Date();
@@ -65,6 +66,25 @@ const defaultPaidTierLabel = 'Paid Access';
 const defaultPaidTierDescription = 'Paid registration for organizations, teams, companies, or sponsored participants.';
 const defaultScorecardTitle = 'Community Impact Assessment';
 const defaultScorecardDescription = 'Collect baseline and follow-up data for M&E, outcome tracking, and partner reporting.';
+
+const hasAdminEventDraftContent = (draft) => {
+    const form = draft?.form || {};
+    return (
+        Boolean(String(form.title || '').trim()) ||
+        Boolean(String(form.description || '').trim()) ||
+        Boolean(String(form.location || '').trim()) ||
+        Boolean(String(form.poster_url || '').trim()) ||
+        String(form.category || 'outreach') !== 'outreach' ||
+        String(form.capacity || '0') !== '0' ||
+        String(form.ticket_price || '0') !== '0' ||
+        Boolean(form.tiered_ticketing) ||
+        Boolean(form.schedule_enabled) ||
+        (Array.isArray(form.available_slots) && form.available_slots.length > 0) ||
+        String(form.scorecard_title || defaultScorecardTitle) !== defaultScorecardTitle ||
+        String(form.scorecard_description || defaultScorecardDescription) !== defaultScorecardDescription ||
+        draft?.posterFrameRatio !== '16:9'
+    );
+};
 
 const requestErrorMessage = (error, fallback) => {
     const detail = error?.response?.data?.detail;
@@ -168,6 +188,27 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
     const [savingSchedule, setSavingSchedule] = useState(false);
     const [scheduleSlots, setScheduleSlots] = useState([]);
     const [deleteReasons, setDeleteReasons] = useState({});
+    const adminEventDraftData = useMemo(() => ({
+        form,
+        posterFrameRatio,
+    }), [form, posterFrameRatio]);
+
+    const restoreAdminEventDraft = useCallback((draft) => {
+        if (!hasAdminEventDraftContent(draft)) return;
+        setForm({
+            ...newEventForm(),
+            ...(draft.form || {}),
+        });
+        setPosterFrameRatio(draft.posterFrameRatio || '16:9');
+        setShowCreate(true);
+    }, []);
+
+    const { clearDraft: clearAdminEventDraft } = usePersistentDraft({
+        key: 'ld360:draft:admin-event-create',
+        data: adminEventDraftData,
+        restore: restoreAdminEventDraft,
+        enabled: showCreate && hasAdminEventDraftContent(adminEventDraftData),
+    });
 
     const uploadPosterIfNeeded = async (uri) => {
         if (!uri || /^https?:\/\//i.test(uri)) return uri;
@@ -307,6 +348,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                 scorecard_title: form.scorecard_enabled ? (form.scorecard_title.trim() || defaultScorecardTitle) : null,
                 scorecard_description: form.scorecard_enabled ? (form.scorecard_description.trim() || defaultScorecardDescription) : null,
             });
+            await clearAdminEventDraft();
             setForm(newEventForm());
             setShowCreate(false);
             await fetchEvents(true);

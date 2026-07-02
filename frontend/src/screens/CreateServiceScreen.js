@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity, Alert, SafeAreaView, Image, Switch, KeyboardAvoidingView, Platform } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Picker } from '@react-native-picker/picker';
@@ -15,6 +15,7 @@ import {
     getImageFrameAspectRatio,
     getImagePickerAspect,
 } from '../components/ImageFrameGuide';
+import { usePersistentDraft } from '../hooks/usePersistentDraft';
 import {
     formatCoordinatePair,
     formatLocationAccuracy,
@@ -33,6 +34,16 @@ const FALLBACK_EXCHANGE_RATES = {
     EUR: 0.92,
     GBP: 0.78,
 };
+
+const hasServiceDraftContent = (draft) => (
+    Boolean(String(draft.title || '').trim()) ||
+    Boolean(String(draft.description || '').trim()) ||
+    Boolean(String(draft.price || '').trim()) ||
+    Boolean(String(draft.locationLandmark || '').trim()) ||
+    Boolean(String(draft.address || '').trim()) ||
+    (Array.isArray(draft.images) && draft.images.length > 0) ||
+    (Array.isArray(draft.formFields) && draft.formFields.length > 0)
+);
 
 const convertAmount = (amount, fromCurrency, toCurrency, rates) => {
     const mergedRates = { ...FALLBACK_EXCHANGE_RATES, ...(rates || {}) };
@@ -96,6 +107,7 @@ const CreateServiceScreen = ({ route, navigation }) => {
     const [loading, setLoading] = useState(false);
     const [fetchingLocation, setFetchingLocation] = useState(false);
     const [formFields, setFormFields] = useState([]);
+    const draftKey = `ld360:draft:create-service:${service?.id || 'new'}`;
     const hasCapturedLocation = hasValidCoordinatePair({ latitude, longitude });
     const capturedLatitude = toCoordinateNumber(latitude);
     const capturedLongitude = toCoordinateNumber(longitude);
@@ -111,6 +123,75 @@ const CreateServiceScreen = ({ route, navigation }) => {
         currency,
         base: formatCurrency(minimumBasePrice, currency),
         final: formatCurrency(minimumFinalPrice, currency),
+    });
+
+    const draftData = useMemo(() => ({
+        title,
+        description,
+        price,
+        images,
+        imageFrameRatio,
+        currency,
+        stockCount,
+        slotsAvailable,
+        isBusy,
+        locationLandmark,
+        itemType,
+        category,
+        isPublished,
+        latitude,
+        longitude,
+        locationAccuracy,
+        address,
+        formFields,
+    }), [
+        title,
+        description,
+        price,
+        images,
+        imageFrameRatio,
+        currency,
+        stockCount,
+        slotsAvailable,
+        isBusy,
+        locationLandmark,
+        itemType,
+        category,
+        isPublished,
+        latitude,
+        longitude,
+        locationAccuracy,
+        address,
+        formFields,
+    ]);
+
+    const restoreDraft = useCallback((draft) => {
+        if (!draft || !hasServiceDraftContent(draft)) return;
+        setTitle(draft.title ?? '');
+        setDescription(draft.description ?? '');
+        setPrice(draft.price ?? '');
+        setImages(Array.isArray(draft.images) ? draft.images : []);
+        setImageFrameRatio(draft.imageFrameRatio || '3:2');
+        setCurrency(draft.currency || 'KES');
+        setStockCount(draft.stockCount ?? '');
+        setSlotsAvailable(draft.slotsAvailable ?? '');
+        setIsBusy(Boolean(draft.isBusy));
+        setLocationLandmark(draft.locationLandmark ?? '');
+        setItemType(draft.itemType || 'services');
+        setCategory(draft.category || SERVICE_CATEGORIES[0]);
+        setIsPublished(draft.isPublished ?? true);
+        setLatitude(draft.latitude ?? null);
+        setLongitude(draft.longitude ?? null);
+        setLocationAccuracy(draft.locationAccuracy ?? null);
+        setAddress(draft.address ?? '');
+        setFormFields(Array.isArray(draft.formFields) ? draft.formFields : []);
+    }, []);
+
+    const { clearDraft } = usePersistentDraft({
+        key: draftKey,
+        data: draftData,
+        restore: restoreDraft,
+        enabled: hasServiceDraftContent(draftData),
     });
 
     const getCurrentLocation = async () => {
@@ -221,9 +302,11 @@ const CreateServiceScreen = ({ route, navigation }) => {
 
             if (isEditing) {
                 await client.put(`/services/${service.id}`, data);
+                await clearDraft();
                 Alert.alert(t('common.success'), t('marketplace.create.success_update'));
             } else {
                 await client.post('/services', data);
+                await clearDraft();
                 Alert.alert(t('common.success'), t('marketplace.create.success_create', { type: itemType === 'services' ? t('marketplace.create.services') : t('marketplace.create.products') }));
             }
             navigation.goBack();
