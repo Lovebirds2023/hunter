@@ -340,7 +340,7 @@ const handleDogHealthRecords = async (request: Request, dogId: string) => {
   return jsonResponse(data, 201);
 };
 
-const serializeService = async (service: JsonRecord) => {
+const serializeService = async (service: JsonRecord, pin?: JsonRecord | null) => {
   const provider = await fetchAuthor(service.provider_id);
   return {
     ...service,
@@ -354,14 +354,14 @@ const serializeService = async (service: JsonRecord) => {
           total_ratings: 0,
         }
       : null,
-    is_pinned: false,
-    pin_priority: null,
+    ...pinMetadata(pin),
   };
 };
 
 const handleListServices = async (request: Request) => {
   const url = getUrl(request);
   const itemType = cleanString(url.searchParams.get("item_type"));
+  const pins = await getActivePins();
   let query = supabaseAdmin
     .from("services")
     .select("*")
@@ -372,7 +372,11 @@ const handleListServices = async (request: Request) => {
 
   const { data, error } = await query;
   if (error) throw error;
-  return jsonResponse(await Promise.all((data ?? []).map((service) => serializeService(service as JsonRecord))));
+  const rows = await Promise.all((data ?? []).map((service) => {
+    const row = service as JsonRecord;
+    return serializeService(row, pins.get(`service:${cleanString(row.id)}`));
+  }));
+  return jsonResponse(sortPinnedFirst(rows as JsonRecord[]));
 };
 
 const handleCreateService = async (request: Request) => {
@@ -436,7 +440,8 @@ const handleGetService = async (request: Request, serviceId: string) => {
   if (!service.admin_approved && cleanString(service.provider_id) !== cleanString(profile?.id) && !isAdminProfile(profile)) {
     throw new Response("Service pending admin approval", { status: 403 });
   }
-  return jsonResponse(await serializeService(service));
+  const pins = await getActivePins();
+  return jsonResponse(await serializeService(service, pins.get(`service:${serviceId}`)));
 };
 
 const handleUpdateService = async (request: Request, serviceId: string) => {
@@ -526,7 +531,7 @@ const handleServiceFormFields = async (request: Request, serviceId: string) => {
   return jsonResponse({ status: "success" });
 };
 
-const serializeCaseReport = async (report: JsonRecord, userId = "") => ({
+const serializeCaseReport = async (report: JsonRecord, userId = "", pin?: JsonRecord | null) => ({
   ...report,
   images: asStringArray(report.images),
   author: await fetchAuthor(report.author_id),
@@ -541,8 +546,7 @@ const serializeCaseReport = async (report: JsonRecord, userId = "") => ({
         .eq("user_id", userId)
         .maybeSingle()).data)
     : false,
-  is_pinned: false,
-  pin_priority: null,
+  ...pinMetadata(pin),
   match_count: await countRows("pet_match_candidates", "case_report_id", cleanString(report.id)),
   top_match_confidence: null,
 });
@@ -550,6 +554,7 @@ const serializeCaseReport = async (report: JsonRecord, userId = "") => ({
 const handleListCases = async (request: Request) => {
   const { profile } = await requireProfile(request);
   const userId = cleanString(profile.id);
+  const pins = await getActivePins();
   const { data, error } = await supabaseAdmin
     .from("case_reports")
     .select("*")
@@ -557,7 +562,11 @@ const handleListCases = async (request: Request) => {
     .order("created_at", { ascending: false })
     .limit(50);
   if (error) throw error;
-  return jsonResponse(await Promise.all((data ?? []).map((report) => serializeCaseReport(report as JsonRecord, userId))));
+  const rows = await Promise.all((data ?? []).map((report) => {
+    const row = report as JsonRecord;
+    return serializeCaseReport(row, userId, pins.get(`case:${cleanString(row.id)}`));
+  }));
+  return jsonResponse(sortPinnedFirst(rows as JsonRecord[]));
 };
 
 const handleCreateCase = async (request: Request) => {
@@ -601,7 +610,8 @@ const handleGetCase = async (request: Request, reportId: string) => {
   if (!report.is_approved && cleanString(report.author_id) !== cleanString(profile.id) && !isAdminProfile(profile)) {
     throw new Response("Report pending moderation", { status: 403 });
   }
-  return jsonResponse(await serializeCaseReport(report, cleanString(profile.id)));
+  const pins = await getActivePins();
+  return jsonResponse(await serializeCaseReport(report, cleanString(profile.id), pins.get(`case:${reportId}`)));
 };
 
 const handleCaseComments = async (request: Request, reportId: string) => {
@@ -1005,18 +1015,76 @@ const handleReadNotification = async (request: Request, notificationId: string) 
   return jsonResponse({ message: "Success" });
 };
 
+const PIN_ROUTE_BY_TARGET: Record<string, string> = {
+  event: "EventDetail",
+  service: "Marketplace",
+  case: "CaseDetail",
+  community: "Community",
+};
+
+const isPinTargetVisible = async (pin: JsonRecord) => {
+  const targetType = cleanString(pin.target_type);
+  const targetId = cleanString(pin.target_id);
+  if (!targetType || !targetId) return false;
+
+  if (targetType === "event") {
+    const { data, error } = await supabaseAdmin.from("events").select("is_public").eq("id", targetId).maybeSingle();
+    if (error) throw error;
+    return asNumber((data as JsonRecord | null)?.is_public) === 1;
+  }
+
+  if (targetType === "service") {
+    const { data, error } = await supabaseAdmin.from("services").select("is_published,admin_approved").eq("id", targetId).maybeSingle();
+    if (error) throw error;
+    return Boolean((data as JsonRecord | null)?.is_published) && Boolean((data as JsonRecord | null)?.admin_approved);
+  }
+
+  if (targetType === "case") {
+    const { data, error } = await supabaseAdmin.from("case_reports").select("is_approved").eq("id", targetId).maybeSingle();
+    if (error) throw error;
+    return Boolean((data as JsonRecord | null)?.is_approved);
+  }
+
+  if (targetType === "community") {
+    const { data, error } = await supabaseAdmin.from("community_messages").select("is_hidden").eq("id", targetId).maybeSingle();
+    if (error) throw error;
+    return data ? !Boolean((data as JsonRecord).is_hidden) : false;
+  }
+
+  return false;
+};
+
 const handleSpotlight = async () => {
+  const pins = await getActivePinRows();
+  const visiblePins = (await Promise.all(pins.map(async (pin) => (
+    await isPinTargetVisible(pin) ? pin : null
+  )))).filter((pin): pin is JsonRecord => Boolean(pin));
   const { data, error } = await supabaseAdmin
     .from("spotlight")
     .select("*")
     .eq("is_active", true)
     .order("updated_at", { ascending: false });
   if (error) throw error;
-  return jsonResponse((data ?? []).map((item) => ({ ...item, is_pinned: false, pin_priority: null, target_type: null })));
+  const pinnedSpotlight = visiblePins.map((pin) => ({
+    id: pin.id,
+    title: pin.title,
+    description: pin.description ?? "",
+    image_url: pin.image_url ?? null,
+    target_route: PIN_ROUTE_BY_TARGET[cleanString(pin.target_type)] ?? null,
+    target_id: pin.target_id,
+    is_active: pin.is_active,
+    updated_at: pin.updated_at,
+    is_pinned: true,
+    pin_priority: pin.priority ?? null,
+    target_type: pin.target_type,
+  }));
+  const legacySpotlight = (data ?? []).map((item) => ({ ...item, is_pinned: false, pin_priority: null, target_type: null }));
+  return jsonResponse([...pinnedSpotlight, ...legacySpotlight]);
 };
 
 const handleCommunityMessages = async (request: Request, globalOnly: boolean) => {
   const authUser = await getOptionalAuthUser(request);
+  const pins = await getActivePins();
   let query = supabaseAdmin
     .from("community_messages")
     .select("*")
@@ -1033,11 +1101,10 @@ const handleCommunityMessages = async (request: Request, globalOnly: boolean) =>
     reactions: [],
     poll_results: {},
     has_voted: null,
-    is_pinned: false,
-    pin_priority: null,
+    ...pinMetadata(pins.get(`community:${cleanString((message as JsonRecord).id)}`)),
   })));
-  if (!authUser) return jsonResponse(messages);
-  return jsonResponse(messages);
+  if (!authUser) return jsonResponse(sortPinnedFirst(messages as JsonRecord[]));
+  return jsonResponse(sortPinnedFirst(messages as JsonRecord[]));
 };
 
 const handleCreateCommunityMessage = async (request: Request) => {
@@ -1789,15 +1856,26 @@ const fetchUserFull = async (userId: unknown) => {
   return data as JsonRecord | null;
 };
 
-const getActivePins = async () => {
+const getActivePinRows = async () => {
   const { data, error } = await supabaseAdmin
     .from("content_pins")
     .select("*")
-    .eq("is_active", true);
+    .eq("is_active", true)
+    .order("priority", { ascending: false })
+    .order("updated_at", { ascending: false });
   if (error) throw error;
+  const now = Date.now();
+  return ((data ?? []) as JsonRecord[]).filter((pin) => {
+    const expiresAt = cleanString(pin.expires_at);
+    return !expiresAt || new Date(expiresAt).getTime() > now;
+  });
+};
+
+const getActivePins = async () => {
+  const pins = await getActivePinRows();
   const map = new Map<string, JsonRecord>();
-  for (const pin of data ?? []) {
-    map.set(`${cleanString((pin as JsonRecord).target_type)}:${cleanString((pin as JsonRecord).target_id)}`, pin as JsonRecord);
+  for (const pin of pins) {
+    map.set(`${cleanString(pin.target_type)}:${cleanString(pin.target_id)}`, pin);
   }
   return map;
 };
@@ -1806,6 +1884,19 @@ const pinMetadata = (pin: JsonRecord | undefined | null) => ({
   is_pinned: Boolean(pin),
   pin_priority: pin?.priority ?? null,
 });
+
+const sortPinnedFirst = (items: JsonRecord[], fallbackDateKey = "created_at") => (
+  [...items].sort((a, b) => {
+    const aPinned = Boolean(a.is_pinned);
+    const bPinned = Boolean(b.is_pinned);
+    if (aPinned !== bPinned) return aPinned ? -1 : 1;
+    const priorityDiff = asNumber(b.pin_priority) - asNumber(a.pin_priority);
+    if (priorityDiff !== 0) return priorityDiff;
+    const aTime = new Date(cleanString(a[fallbackDateKey])).getTime();
+    const bTime = new Date(cleanString(b[fallbackDateKey])).getTime();
+    return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0);
+  })
+);
 
 const serializeAdminOrder = async (order: JsonRecord) => {
   const service = order.service_id ? await selectSingle("services", cleanString(order.service_id), "Service").catch(() => null) : null;
@@ -2324,11 +2415,15 @@ const handlePinnableContent = async (request: Request) => {
     meta,
     ...pinMetadata(pins.get(`${type}:${cleanString(item.id)}`)),
   });
+  const publishedEvents = events.filter((item) => asNumber(item.is_public, 1) === 1);
+  const publishedServices = services.filter((item) => Boolean(item.is_published) && Boolean(item.admin_approved));
+  const publishedCases = cases.filter((item) => Boolean(item.is_approved));
+  const visibleCommunity = community.filter((item) => !Boolean(item.is_hidden));
   return jsonResponse({
-    events: events.map((item) => row(item, "event", item.title, item.description, cleanString(item.location) || "Event")),
-    services: services.map((item) => row(item, "service", item.title, item.description, cleanString(item.category) || "Marketplace")),
-    cases: cases.map((item) => row(item, "case", item.title, item.description, cleanString(item.case_type) || "Case")),
-    community: community.map((item) => row(item, "community", cleanString(item.content).slice(0, 80), item.content, "Community")),
+    events: publishedEvents.map((item) => row(item, "event", item.title, item.description, cleanString(item.location) || "Event")),
+    services: publishedServices.map((item) => row(item, "service", item.title, item.description, cleanString(item.category) || "Marketplace")),
+    cases: publishedCases.map((item) => row(item, "case", item.title, item.description, cleanString(item.case_type) || "Case")),
+    community: visibleCommunity.map((item) => row(item, "community", cleanString(item.content).slice(0, 80), item.content, "Community")),
   });
 };
 
@@ -2465,6 +2560,8 @@ const handleRegister = async (request: Request) => {
   const body = await readJson(request);
   const email = cleanString(body.email).toLowerCase();
   const password = cleanString(body.password);
+  const requestedRole = cleanString(body.role);
+  const publicRole = requestedRole === "provider" ? "provider" : "buyer";
 
   if (!email || !password) return errorResponse("Email and password are required.");
   if (password.length < 8) return errorResponse("Password must be at least 8 characters.");
@@ -2475,7 +2572,7 @@ const handleRegister = async (request: Request) => {
     email_confirm: true,
     user_metadata: {
       full_name: cleanString(body.full_name),
-      role: cleanString(body.role) || "buyer",
+      role: publicRole,
     },
   });
 
@@ -2484,7 +2581,7 @@ const handleRegister = async (request: Request) => {
   const profile = await upsertProfile(data.user as unknown as JsonRecord, {
     email,
     full_name: body.full_name,
-    role: body.role,
+    role: publicRole,
     phone_number: body.phone_number,
     country: body.country,
     language: body.language,
