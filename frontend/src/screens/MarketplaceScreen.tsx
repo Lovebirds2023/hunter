@@ -10,6 +10,7 @@ import * as SecureStore from 'expo-secure-store';
 import * as Location from 'expo-location';
 import { useFocusEffect } from '@react-navigation/native';
 import MapView, { Marker, Callout } from '../components/MapComponent';
+import CasesWebMap from '../components/CasesWebMap';
 import { useCurrency } from '../context/CurrencyContext';
 import { useAuth } from '../context/AuthContext';
 import { hasValidCoordinatePair } from '../utils/locationAccuracy';
@@ -156,6 +157,33 @@ export const MarketplaceScreen = ({ navigation }: any) => {
             return matchesTab && matchesCategory && matchesSearch;
         });
     }, [services, activeTab, selectedCategory, searchQuery]);
+
+    const mapUserLocation = useMemo(() => {
+        if (userLocation?.coords) {
+            return {
+                latitude: userLocation.coords.latitude,
+                longitude: userLocation.coords.longitude,
+            };
+        }
+
+        if (hasValidCoordinatePair(userInfo)) {
+            return {
+                latitude: Number(userInfo.latitude),
+                longitude: Number(userInfo.longitude),
+            };
+        }
+
+        return null;
+    }, [userInfo, userLocation]);
+
+    const getMarketplaceLocationLabel = (item: any) => (
+        item.location_landmark || item.address || item.provider?.address || ''
+    );
+
+    const getMarketplaceTypeLabel = (item: any) => {
+        const price = formatCurrency(convertPrice(item.price, item.currency || 'KES', preferredCurrency), preferredCurrency);
+        return [item.category || t('marketplace.general'), price].filter(Boolean).join(' | ');
+    };
 
     const renderCard = ({ item, index }: any) => {
         const isOwner = item.provider_id === userId;
@@ -387,35 +415,57 @@ export const MarketplaceScreen = ({ navigation }: any) => {
 
                 {showMap ? (
                     <View style={styles.mapContainer}>
-                        <MapView
-                            style={styles.map}
-                            initialRegion={{
-                                latitude: userLocation?.coords.latitude || -1.286389,
-                                longitude: userLocation?.coords.longitude || 36.817223,
-                                latitudeDelta: 0.05,
-                                longitudeDelta: 0.05,
-                            }}
-                            showsUserLocation={true}
-                        >
-                            {filteredItems.map((item) => (
-                                hasValidCoordinatePair(item) && (
-                                    <Marker
-                                        key={item.id}
-                                        coordinate={{ latitude: Number(item.latitude), longitude: Number(item.longitude) }}
-                                        title={item.title}
-                                        description={t('marketplace.map_description', { price: item.price, distance: item.distance || '' })}
-                                    >
-                                        <Callout onPress={() => navigateAppScreen('OrderReceipt', { service: item })}>
-                                            <View style={styles.callout}>
-                                                <Text style={styles.calloutTitle}>{item.title}</Text>
-                                                <Text style={styles.calloutPrice}>${item.price}</Text>
-                                                <Text style={styles.calloutAction}>{t('common.view_details')}</Text>
-                                            </View>
-                                        </Callout>
-                                    </Marker>
-                                )
-                            ))}
-                        </MapView>
+                        {Platform.OS === 'web' ? (
+                            <CasesWebMap
+                                reports={filteredItems}
+                                userLocation={mapUserLocation}
+                                onReportPress={(item: any) => navigateAppScreen('OrderReceipt', { service: item })}
+                                getReportConfig={(item: any) => ({
+                                    label: item.item_type === 'products' ? t('marketplace.tabs.products') : t('marketplace.tabs.services'),
+                                    icon: item.item_type === 'products' ? 'cart' : 'location-sharp',
+                                    color: '#E53935',
+                                })}
+                                getReportTypeLabel={getMarketplaceTypeLabel}
+                                getReportTitle={(item: any) => item.title || t('marketplace.general')}
+                                getReportLocation={getMarketplaceLocationLabel}
+                                getReportAccessibilityLabel={(item: any) => `Open ${item.title || 'marketplace listing'}`}
+                                getMapCountLabel={(count: number) => (count === 1 ? '1 mapped listing' : `${count} mapped listings`)}
+                                emptyNoticeText="Only marketplace listings with captured GPS coordinates appear on the map."
+                            />
+                        ) : (
+                            <MapView
+                                style={styles.map}
+                                initialRegion={{
+                                    latitude: userLocation?.coords.latitude || -1.286389,
+                                    longitude: userLocation?.coords.longitude || 36.817223,
+                                    latitudeDelta: 0.05,
+                                    longitudeDelta: 0.05,
+                                }}
+                                showsUserLocation={true}
+                            >
+                                {filteredItems.map((item) => (
+                                    hasValidCoordinatePair(item) && (
+                                        <Marker
+                                            key={item.id}
+                                            coordinate={{ latitude: Number(item.latitude), longitude: Number(item.longitude) }}
+                                            pinColor="#E53935"
+                                            title={item.title}
+                                            description={t('marketplace.map_description', { price: item.price, distance: item.distance || '' })}
+                                        >
+                                            <Callout onPress={() => navigateAppScreen('OrderReceipt', { service: item })}>
+                                                <View style={styles.callout}>
+                                                    <Text style={styles.calloutTitle}>{item.title}</Text>
+                                                    <Text style={styles.calloutPrice}>
+                                                        {formatCurrency(convertPrice(item.price, item.currency || 'KES', preferredCurrency), preferredCurrency)}
+                                                    </Text>
+                                                    <Text style={styles.calloutAction}>{t('common.view_details')}</Text>
+                                                </View>
+                                            </Callout>
+                                        </Marker>
+                                    )
+                                ))}
+                            </MapView>
+                        )}
                     </View>
                 ) : (
                     <FlatList

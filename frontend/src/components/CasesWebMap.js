@@ -108,6 +108,11 @@ const CasesWebMap = ({
     onReportPress,
     getReportConfig = () => ({ label: 'Case report', icon: 'location', color: COLORS.accent }),
     getReportTypeLabel = (report) => report?.case_type || 'Case report',
+    getReportTitle = (report) => report?.title || 'Case report',
+    getReportLocation = (report) => report?.location || '',
+    getReportAccessibilityLabel = (report) => `Open ${report?.title || 'case report'}`,
+    getMapCountLabel = (count) => (count === 1 ? '1 mapped case' : `${count} mapped cases`),
+    emptyNoticeText = 'Only reports with confirmed GPS coordinates appear on the map.',
     compact = false,
 }) => {
     const mappedReports = useMemo(() => (
@@ -242,7 +247,7 @@ const CasesWebMap = ({
                             key={report.id}
                             activeOpacity={0.85}
                             accessibilityRole="button"
-                            accessibilityLabel={`Open ${report.title || 'case report'}`}
+                            accessibilityLabel={getReportAccessibilityLabel(report)}
                             style={[
                                 styles.pinButton,
                                 pointStyle,
@@ -265,7 +270,7 @@ const CasesWebMap = ({
                 <View style={styles.headerPill}>
                     <Ionicons name="map" size={16} color={COLORS.accent} />
                     <Text style={styles.headerText}>
-                        {mappedReports.length === 1 ? '1 mapped case' : `${mappedReports.length} mapped cases`}
+                        {getMapCountLabel(mappedReports.length)}
                     </Text>
                 </View>
             )}
@@ -298,7 +303,7 @@ const CasesWebMap = ({
             {mappedReports.length === 0 && (
                 <View style={styles.notice}>
                     <Ionicons name="location-outline" size={22} color={COLORS.accent} />
-                    <Text style={styles.noticeText}>Only reports with confirmed GPS coordinates appear on the map.</Text>
+                    <Text style={styles.noticeText}>{emptyNoticeText}</Text>
                 </View>
             )}
 
@@ -320,14 +325,14 @@ const CasesWebMap = ({
                     </View>
                     <View style={styles.selectedContent}>
                         <Text style={styles.selectedTitle} numberOfLines={1}>
-                            {selectedItem.report.title || 'Case report'}
+                            {getReportTitle(selectedItem.report)}
                         </Text>
                         <Text style={styles.selectedMeta} numberOfLines={1}>
                             {getReportTypeLabel(selectedItem.report)}
                         </Text>
-                        {!!selectedItem.report.location && (
+                        {!!getReportLocation(selectedItem.report) && (
                             <Text style={styles.selectedLocation} numberOfLines={1}>
-                                {selectedItem.report.location}
+                                {getReportLocation(selectedItem.report)}
                             </Text>
                         )}
                     </View>
