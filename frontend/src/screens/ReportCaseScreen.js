@@ -15,6 +15,11 @@ import { getBreedsForPetType, getColorsForPetType } from '../constants/data';
 import { uploadImagesToSupabase } from '../utils/uploadImages';
 import { runtimeConfig } from '../config/runtimeConfig';
 import {
+    ImageFrameGuide,
+    getImageFrameAspectRatio,
+    getImagePickerAspect,
+} from '../components/ImageFrameGuide';
+import {
     formatCoordinatePair,
     formatLocationAccuracy,
     getReliableCurrentLocation,
@@ -61,6 +66,7 @@ const ReportCaseScreen = ({ navigation, route }) => {
     const [collarDescription, setCollarDescription] = useState('');
     const [uniqueMarkings, setUniqueMarkings] = useState('');
     const [images, setImages] = useState([]);
+    const [imageFrameRatio, setImageFrameRatio] = useState('4:3');
     const [submitting, setSubmitting] = useState(false);
     const [fetchingLocation, setFetchingLocation] = useState(false);
     const isLostFoundCase = caseType === 'lost_dog' || caseType === 'found_dog';
@@ -128,8 +134,8 @@ const ReportCaseScreen = ({ navigation, route }) => {
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
-            aspect: [4, 3],
-            quality: 0.7,
+            aspect: getImagePickerAspect(imageFrameRatio, '4:3'),
+            quality: 0.8,
         });
         if (!result.canceled) {
             setImages(prev => [...prev, result.assets[0].uri]);
@@ -149,8 +155,8 @@ const ReportCaseScreen = ({ navigation, route }) => {
         }
         const result = await ImagePicker.launchCameraAsync({
             allowsEditing: true,
-            aspect: [4, 3],
-            quality: 0.7,
+            aspect: getImagePickerAspect(imageFrameRatio, '4:3'),
+            quality: 0.8,
         });
         if (!result.canceled) {
             setImages(prev => [...prev, result.assets[0].uri]);
@@ -212,6 +218,8 @@ const ReportCaseScreen = ({ navigation, route }) => {
             setSubmitting(false);
         }
     };
+
+    const previewAspectRatio = getImageFrameAspectRatio(imageFrameRatio, '4:3');
 
     return (
         <ThemeBackground>
@@ -444,6 +452,14 @@ const ReportCaseScreen = ({ navigation, route }) => {
                                     : 'Best for matching: face, full body side, unique markings, collar/tag, and nose close-up for dogs.'}
                             </Text>
                         )}
+                        <ImageFrameGuide
+                            title="Report photo frame"
+                            guidance="Choose the frame before taking or selecting a photo. Use the editor to zoom and move the animal so the important details stay inside the frame."
+                            ratios={['4:3', '1:1', '3:2', '2:3']}
+                            selectedRatio={imageFrameRatio}
+                            onSelectRatio={setImageFrameRatio}
+                            dark
+                        />
 
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScroll}>
                             <TouchableOpacity 
@@ -465,8 +481,8 @@ const ReportCaseScreen = ({ navigation, route }) => {
                             </TouchableOpacity>
 
                             {images.map((img, idx) => (
-                                <View key={idx} style={[styles.imagePreviewWrapper, { marginLeft: 10 }]}>
-                                    <Image source={{ uri: img }} style={styles.imagePreviewSmall} />
+                                <View key={idx} style={[styles.imagePreviewWrapper, { marginLeft: 10, aspectRatio: previewAspectRatio }]}>
+                                    <Image source={{ uri: img }} style={styles.imagePreviewSmall} resizeMode="cover" />
                                     <TouchableOpacity style={styles.removeImageBtnSmall} onPress={() => removeImage(idx)}>
                                         <Ionicons name="close-circle" size={20} color="#FF4444" />
                                     </TouchableOpacity>
@@ -578,16 +594,18 @@ const styles = StyleSheet.create({
     },
     imagePreviewWrapper: {
         position: 'relative',
+        width: 128,
+        borderRadius: 12,
+        overflow: 'hidden',
     },
     imagePreviewSmall: {
-        width: 100,
-        height: 100,
-        borderRadius: 12,
+        width: '100%',
+        height: '100%',
     },
     removeImageBtnSmall: {
         position: 'absolute',
-        top: -8,
-        right: -8,
+        top: 4,
+        right: 4,
         backgroundColor: 'rgba(0,0,0,0.5)',
         borderRadius: 10,
     },

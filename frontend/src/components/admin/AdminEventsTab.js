@@ -12,6 +12,11 @@ import { supabase } from '../../../supabase';
 import { runtimeConfig } from '../../config/runtimeConfig';
 import { adminStyles as s, ADMIN_COLORS } from './AdminStyles';
 import { DistributionBar } from './ChartComponents';
+import {
+    ImageFrameGuide,
+    getImageFrameAspectRatio,
+    getImagePickerAspect,
+} from '../ImageFrameGuide';
 
 const getEventStatus = (startTime, endTime) => {
     const now = new Date();
@@ -137,6 +142,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
     const [showCreate, setShowCreate] = useState(false);
     const [creating, setCreating] = useState(false);
     const [form, setForm] = useState(newEventForm());
+    const [posterFrameRatio, setPosterFrameRatio] = useState('16:9');
     const [pinningId, setPinningId] = useState(null);
     const [ticketingEvent, setTicketingEvent] = useState(null);
     const [savingTicketing, setSavingTicketing] = useState(false);
@@ -207,8 +213,9 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
         try {
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: false,
-                quality: 0.75,
+                allowsEditing: true,
+                aspect: getImagePickerAspect(posterFrameRatio, '16:9'),
+                quality: 0.85,
             });
             if (!result.canceled && result.assets?.length > 0) {
                 const uri = result.assets[0].uri;
@@ -552,6 +559,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
     const pendingPayments = events.reduce((sum, e) => sum + (e.pending_payment_count || 0), 0);
     const totalRevenue = events.reduce((sum, e) => sum + (Number(e.event_revenue) || 0), 0);
     const upcoming = events.filter(e => new Date(e.start_time) > new Date()).length;
+    const posterPreviewAspectRatio = getImageFrameAspectRatio(posterFrameRatio, '16:9');
 
     const listHeader = (
         <View>
@@ -569,8 +577,18 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                         </TouchableOpacity>
                     </View>
 
+                    <View style={{ marginTop: 16 }}>
+                        <ImageFrameGuide
+                            title="Event poster frame"
+                            guidance="Event posters work best as a wide banner. Choose the ratio before selecting the poster, then zoom and move the artwork so names, dates, and logos stay inside the frame."
+                            ratios={['16:9', '1:1', '2:3']}
+                            selectedRatio={posterFrameRatio}
+                            onSelectRatio={setPosterFrameRatio}
+                        />
+                    </View>
+
                     <TouchableOpacity
-                        style={{ marginTop: 16, height: 150, borderRadius: 14, overflow: 'hidden', backgroundColor: `${ADMIN_COLORS.info}12`, borderWidth: 1, borderColor: ADMIN_COLORS.surfaceBorder, alignItems: 'center', justifyContent: 'center' }}
+                        style={{ width: '100%', aspectRatio: posterPreviewAspectRatio, borderRadius: 14, overflow: 'hidden', backgroundColor: `${ADMIN_COLORS.info}12`, borderWidth: 1, borderColor: ADMIN_COLORS.surfaceBorder, alignItems: 'center', justifyContent: 'center' }}
                         onPress={pickPoster}
                     >
                         {form.poster_url ? (

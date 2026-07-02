@@ -11,6 +11,11 @@ import { useCurrency } from '../context/CurrencyContext';
 import { runtimeConfig } from '../config/runtimeConfig';
 import { uploadImagesToSupabase } from '../utils/uploadImages';
 import {
+    ImageFrameGuide,
+    getImageFrameAspectRatio,
+    getImagePickerAspect,
+} from '../components/ImageFrameGuide';
+import {
     formatCoordinatePair,
     formatLocationAccuracy,
     getReliableCurrentLocation,
@@ -75,6 +80,7 @@ const CreateServiceScreen = ({ route, navigation }) => {
     const [description, setDescription] = useState(service?.description || '');
     const [price, setPrice] = useState(getEditablePrice(service));
     const [images, setImages] = useState(service?.images || (service?.image_url ? [service.image_url] : []));
+    const [imageFrameRatio, setImageFrameRatio] = useState('3:2');
     const [currency, setCurrency] = useState(service?.currency || 'KES');
     const [stockCount, setStockCount] = useState(service?.stock_count !== null && service?.stock_count !== undefined ? service.stock_count.toString() : '');
     const [slotsAvailable, setSlotsAvailable] = useState(service?.slots_available !== null && service?.slots_available !== undefined ? service.slots_available.toString() : '');
@@ -147,15 +153,14 @@ const CreateServiceScreen = ({ route, navigation }) => {
         }
         let result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: false,
-            allowsMultipleSelection: true,
-            selectionLimit: 5 - images.length,
-            quality: 0.7,
+            allowsEditing: true,
+            aspect: getImagePickerAspect(imageFrameRatio, '3:2'),
+            allowsMultipleSelection: false,
+            quality: 0.8,
         });
 
-        if (!result.canceled) {
-            const selectedUris = result.assets.map(a => a.uri);
-            setImages(prev => [...prev, ...selectedUris].slice(0, 5));
+        if (!result.canceled && result.assets?.length > 0) {
+            setImages(prev => [...prev, result.assets[0].uri].slice(0, 5));
         }
     };
 
@@ -232,6 +237,7 @@ const CreateServiceScreen = ({ route, navigation }) => {
     };
 
     const currentCategories = itemType === 'services' ? SERVICE_CATEGORIES : PRODUCT_CATEGORIES;
+    const previewAspectRatio = getImageFrameAspectRatio(imageFrameRatio, '3:2');
 
     return (
         <SafeAreaView style={styles.safeArea}>
@@ -277,18 +283,25 @@ const CreateServiceScreen = ({ route, navigation }) => {
                             </TouchableOpacity>
                         )}
                     </View>
+                    <ImageFrameGuide
+                        title="Marketplace image frame"
+                        guidance="Marketplace cards are cropped into a listing frame. Choose a ratio, then move and zoom the image in the editor before uploading. Add images one at a time so each can be fitted."
+                        ratios={['3:2', '1:1', '16:9', '2:3']}
+                        selectedRatio={imageFrameRatio}
+                        onSelectRatio={setImageFrameRatio}
+                    />
                     
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 20}}>
                         {images.map((uri, idx) => (
-                            <View key={idx} style={styles.imageWrapper}>
-                                <Image source={{ uri }} style={styles.galleryImage} />
+                            <View key={idx} style={[styles.imageWrapper, { aspectRatio: previewAspectRatio }]}>
+                                <Image source={{ uri }} style={styles.galleryImage} resizeMode="cover" />
                                 <TouchableOpacity style={styles.removeImageBtn} onPress={() => removeImage(idx)}>
                                     <Ionicons name="close-circle" size={24} color="white" />
                                 </TouchableOpacity>
                             </View>
                         ))}
                         {images.length === 0 && (
-                            <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
+                            <TouchableOpacity style={[styles.imagePicker, { aspectRatio: previewAspectRatio }]} onPress={pickImage}>
                                 <Ionicons name="images-outline" size={32} color={COLORS.primary} />
                                 <Text style={styles.imagePlaceholderText}>{t('marketplace.create.upload_limit')}</Text>
                             </TouchableOpacity>
@@ -556,8 +569,7 @@ const styles = StyleSheet.create({
     typeText: { marginLeft: 8, fontSize: 16, fontWeight: 'bold', color: COLORS.primary },
     activeTypeText: { color: 'white' },
     imagePicker: {
-        width: 150,
-        height: 150,
+        width: 180,
         backgroundColor: '#f9f9f9',
         borderRadius: 12,
         borderWidth: 1,
@@ -567,7 +579,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center'
     },
-    imageWrapper: { width: 150, height: 150, borderRadius: 12, overflow: 'hidden', marginRight: 10, borderWidth: 1, borderColor: '#eee' },
+    imageWrapper: { width: 180, borderRadius: 12, overflow: 'hidden', marginRight: 10, borderWidth: 1, borderColor: '#eee' },
     galleryImage: { width: '100%', height: '100%' },
     removeImageBtn: { position: 'absolute', top: 5, right: 5, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 15, padding: 2 },
     imagePlaceholder: { alignItems: 'center' },
