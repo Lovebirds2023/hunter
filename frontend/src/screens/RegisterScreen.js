@@ -9,14 +9,9 @@ import { ThemeBackground } from '../components/ThemeBackground';
 import { Picker } from '@react-native-picker/picker';
 import { Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
-import {
-    getGoogleAuthRequestConfig,
-    getGoogleAuthStatus,
-    getGoogleIdTokenFromResponse,
-    getGoogleOAuthRedirectTo,
-} from '../api/googleAuthConfig';
+import { getGoogleAuthStatus } from '../api/googleAuthConfig';
+import { startSupabaseGoogleOAuth } from '../api/googleOAuthFlow';
 import { setAppLanguage } from '../i18n';
 import {
     COUNTRY_CODES,
@@ -32,7 +27,6 @@ import {
 } from '../utils/locationAccuracy';
 import { PRIVACY_POLICY_URL } from '../constants/legal';
 import { usePersistentDraft } from '../hooks/usePersistentDraft';
-import { isSupabaseConfigured, supabase } from '../../supabase';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -105,7 +99,7 @@ const RegisterScreen = ({ navigation }) => {
         }
     };
 
-    const { register, googleLogin, isLoading, authNotice, clearAuthNotice } = useContext(AuthContext);
+    const { register, completeSupabaseOAuthSession, isLoading, authNotice, clearAuthNotice } = useContext(AuthContext);
     const visibleNotice = localGoogleNotice || authNotice;
 
     const registrationDraftData = useMemo(() => ({
@@ -185,76 +179,46 @@ const RegisterScreen = ({ navigation }) => {
     // Google Sign-Up setup
     const googleAuthStatus = getGoogleAuthStatus();
     const canUseGoogleAuth = googleAuthStatus.isAvailable;
-    const [googleRequest, googleResponse, promptGoogleAsync] = Google.useIdTokenAuthRequest(getGoogleAuthRequestConfig());
-
-    React.useEffect(() => {
-        let isMounted = true;
-        const finishLoading = () => {
-            if (isMounted) setGoogleLoading(false);
-        };
-
-        if (googleResponse?.type === 'success') {
-            const idToken = getGoogleIdTokenFromResponse(googleResponse);
-            if (idToken) {
-                setLocalGoogleNotice(null);
-                googleLogin(idToken).finally(finishLoading);
-            } else {
-                finishLoading();
-                clearAuthNotice();
-                setLocalGoogleNotice({
-                    type: 'error',
-                    message: 'Google did not return an ID token. Please try again or use email/password.',
-                });
-            }
-        } else if (googleResponse?.type === 'error') {
-            finishLoading();
-            clearAuthNotice();
-            setLocalGoogleNotice({
-                type: 'error',
-                message: googleResponse.error?.message || 'Google signup failed before reaching the server.',
-            });
-        } else if (googleResponse?.type === 'cancel' || googleResponse?.type === 'dismiss') {
-            finishLoading();
-        }
-
-        return () => {
-            isMounted = false;
-        };
-    }, [googleResponse, googleLogin, clearAuthNotice]);
 
     const handleGoogleSignupPress = async () => {
+        let keepLoading = false;
         setGoogleLoading(true);
         try {
-            if (Platform.OS === 'web') {
-                if (!isSupabaseConfigured) {
-                    throw new Error('Supabase Google sign-in is not configured.');
-                }
-
-                const { error } = await supabase.auth.signInWithOAuth({
-                    provider: 'google',
-                    options: {
-                        redirectTo: getGoogleOAuthRedirectTo(),
-                        queryParams: {
-                            prompt: 'select_account',
-                        },
-                    },
-                });
-
-                if (error) throw error;
+            const result = await startSupabaseGoogleOAuth();
+            if (result.type === 'redirect') {
+                keepLoading = true;
                 return;
             }
 
-            const result = await promptGoogleAsync({ useProxy: false });
-            if (result?.type && result.type !== 'success') {
-                setGoogleLoading(false);
+            if (result.type === 'success') {
+                setLocalGoogleNotice(null);
+                const success = await completeSupabaseOAuthSession(result.session);
+                if (!success) {
+                    setLocalGoogleNotice({
+                        type: 'error',
+                        message: 'Google sign-up could not be completed. Please try again.',
+                    });
+                }
+                return;
+            }
+
+            if (result.type !== 'cancel' && result.type !== 'dismiss') {
+                clearAuthNotice();
+                setLocalGoogleNotice({
+                    type: 'error',
+                    message: 'Google sign-up was not completed. Please try again.',
+                });
             }
         } catch (error) {
-            setGoogleLoading(false);
             clearAuthNotice();
             setLocalGoogleNotice({
                 type: 'error',
                 message: error?.message || 'Could not open Google signup. Please try again.',
             });
+        } finally {
+            if (!keepLoading) {
+                setGoogleLoading(false);
+            }
         }
     };
 
@@ -310,7 +274,7 @@ const RegisterScreen = ({ navigation }) => {
                             <TouchableOpacity
                                 style={styles.googleSignUpBtn}
                                 onPress={handleGoogleSignupPress}
-                                disabled={(Platform.OS !== 'web' && !googleRequest) || googleLoading}
+                                disabled={googleLoading}
                                 activeOpacity={0.8}
                             >
                                 <Image 

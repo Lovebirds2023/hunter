@@ -1,5 +1,6 @@
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import * as Linking from 'expo-linking';
 import { AuthContext } from '../context/AuthContext';
 import { ThemeBackground } from '../components/ThemeBackground';
 import { COLORS, SPACING, SIZES } from '../constants/theme';
@@ -10,7 +11,7 @@ import {
     getGoogleIdTokenFromUrl,
     getGoogleRefreshTokenFromUrl,
 } from '../api/googleAuthConfig';
-import { isSupabaseConfigured, supabase } from '../../supabase';
+import { finishSupabaseOAuthFromUrl } from '../api/googleOAuthFlow';
 
 const getCurrentWebUrl = () => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return '';
@@ -27,13 +28,17 @@ const GoogleAuthCallbackScreen = ({ navigation }) => {
     const [status, setStatus] = useState('loading');
     const [message, setMessage] = useState('Finishing Google sign-in...');
     const handledRef = useRef(false);
+    const linkingUrl = Linking.useURL();
 
     useEffect(() => {
         if (handledRef.current) return;
-        handledRef.current = true;
 
         const finishGoogleLogin = async () => {
-            const currentUrl = getCurrentWebUrl();
+            const currentUrl = Platform.OS === 'web' ? getCurrentWebUrl() : linkingUrl;
+            if (Platform.OS !== 'web' && !currentUrl) return;
+
+            handledRef.current = true;
+
             const idToken = getGoogleIdTokenFromUrl(currentUrl);
             const authCode = getGoogleAuthCodeFromUrl(currentUrl);
             const accessToken = getGoogleAccessTokenFromUrl(currentUrl);
@@ -42,22 +47,10 @@ const GoogleAuthCallbackScreen = ({ navigation }) => {
             const hasSupabaseTokens = Boolean(accessToken && refreshToken);
 
             const finishSupabaseOAuthSession = async () => {
-                if (!isSupabaseConfigured) {
-                    throw new Error('Supabase Google sign-in is not configured.');
-                }
-
-                const result = authCode
-                    ? await supabase.auth.exchangeCodeForSession(authCode)
-                    : await supabase.auth.setSession({
-                        access_token: accessToken,
-                        refresh_token: refreshToken,
-                    });
-
-                if (result.error) throw result.error;
-                if (!result.data?.session) throw new Error('Google did not return a valid session.');
+                const session = await finishSupabaseOAuthFromUrl(currentUrl);
 
                 replaceWebUrl('/auth/google');
-                const success = await completeSupabaseOAuthSession(result.data.session);
+                const success = await completeSupabaseOAuthSession(session);
                 if (success) {
                     replaceWebUrl('/');
                     setStatus('success');
@@ -107,7 +100,7 @@ const GoogleAuthCallbackScreen = ({ navigation }) => {
         };
 
         finishGoogleLogin();
-    }, [authNotice?.message, clearAuthNotice, completeSupabaseOAuthSession, googleLogin]);
+    }, [authNotice?.message, clearAuthNotice, completeSupabaseOAuthSession, googleLogin, linkingUrl]);
 
     const goToLogin = () => {
         if (navigation?.replace) {

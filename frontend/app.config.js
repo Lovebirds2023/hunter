@@ -11,12 +11,6 @@ try {
   // Expo CLI loads .env automatically; this keeps local EAS builds explicit.
 }
 
-const isUsableGoogleClientId = (clientId) => {
-  if (!clientId) return false;
-  const normalized = clientId.trim().toLowerCase();
-  return normalized.endsWith('.apps.googleusercontent.com') && !normalized.startsWith('your-');
-};
-
 const getEnvValue = (name) => process.env[name]?.trim() || '';
 const isLegacyApiUrl = (value) => {
   const normalizedValue = value.trim().toLowerCase();
@@ -80,18 +74,6 @@ module.exports = () => {
 
   if (process.env.EAS_BUILD && (!supabaseUrl || !supabaseAnonKey)) {
     throw new Error('Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY before creating release builds.');
-  }
-
-  if (process.env.EAS_BUILD) {
-    const buildPlatform = process.env.EAS_BUILD_PLATFORM;
-
-    if ((!buildPlatform || buildPlatform === 'android') && !isUsableGoogleClientId(googleClientIds.android)) {
-      throw new Error(`Set EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID before creating Android builds for ${expo.android.package}.`);
-    }
-
-    if ((!buildPlatform || buildPlatform === 'ios') && !isUsableGoogleClientId(googleClientIds.ios)) {
-      throw new Error(`Set EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID before creating iOS builds for ${expo.ios.bundleIdentifier}.`);
-    }
   }
 
   return expo;

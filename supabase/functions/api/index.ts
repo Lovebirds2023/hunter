@@ -167,7 +167,7 @@ const getProfile = async (userId: string) => {
 
 const requireProfile = async (request: Request) => {
   const authUser = await getCurrentAuthUser(request);
-  const profile = (await getProfile(authUser.id)) ?? await upsertProfile(authUser as unknown as JsonRecord);
+  const profile = await getOrCreateProfileForAuthUser(authUser as unknown as JsonRecord);
   return { authUser, profile };
 };
 
@@ -2636,6 +2636,75 @@ const upsertProfile = async (authUser: JsonRecord, values: JsonRecord = {}) => {
   return data as JsonRecord;
 };
 
+const getGoogleIdentity = (authUser: JsonRecord) =>
+  asArray(authUser.identities).filter(isRecord).find((identity) => cleanString(identity.provider) === "google");
+
+const getGoogleIdFromAuthUser = (authUser: JsonRecord) => {
+  const metadata = (authUser.user_metadata as JsonRecord | undefined) ?? {};
+  const googleIdentity = getGoogleIdentity(authUser);
+  const identityData = (googleIdentity?.identity_data as JsonRecord | undefined) ?? {};
+
+  return (
+    cleanString(metadata.sub) ||
+    cleanString(metadata.provider_id) ||
+    cleanString(identityData.sub) ||
+    cleanString(identityData.provider_id) ||
+    cleanString(googleIdentity?.id)
+  );
+};
+
+const authUserHasGoogleProvider = (authUser: JsonRecord) => {
+  const appMetadata = (authUser.app_metadata as JsonRecord | undefined) ?? {};
+  const metadata = (authUser.user_metadata as JsonRecord | undefined) ?? {};
+  const providers = asStringArray(appMetadata.providers).map((provider) => provider.toLowerCase());
+
+  return (
+    cleanString(appMetadata.provider) === "google" ||
+    cleanString(metadata.provider) === "google" ||
+    providers.includes("google") ||
+    Boolean(getGoogleIdentity(authUser))
+  );
+};
+
+const syncProfileWithAuthIdentity = async (profile: JsonRecord, authUser: JsonRecord) => {
+  const googleId = getGoogleIdFromAuthUser(authUser);
+  if (!authUserHasGoogleProvider(authUser) && !googleId) return profile;
+
+  const metadata = (authUser.user_metadata as JsonRecord | undefined) ?? {};
+  const updates: JsonRecord = {};
+
+  if (cleanString(profile.auth_provider) !== "google") {
+    updates.auth_provider = "google";
+  }
+
+  if (googleId && cleanString(profile.google_id) !== googleId) {
+    updates.google_id = googleId;
+  }
+
+  const fullName = cleanString(metadata.full_name) || cleanString(metadata.name);
+  if (!cleanString(profile.full_name) && fullName) {
+    updates.full_name = fullName;
+  }
+
+  if (!Object.keys(updates).length) return profile;
+
+  updates.updated_at = nowIso();
+  const { data, error } = await supabaseAdmin
+    .from("users")
+    .update(updates)
+    .eq("id", cleanString(profile.id))
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as JsonRecord;
+};
+
+const getOrCreateProfileForAuthUser = async (authUser: JsonRecord) => {
+  const profile = (await getProfile(cleanString(authUser.id))) ?? await upsertProfile(authUser);
+  return syncProfileWithAuthIdentity(profile, authUser);
+};
+
 const handleRegister = async (request: Request) => {
   const body = await readJson(request);
   const email = cleanString(body.email).toLowerCase();
@@ -2729,7 +2798,7 @@ const handleGoogleLogin = async (request: Request) => {
 
 const handleGetMe = async (request: Request) => {
   const authUser = await getCurrentAuthUser(request);
-  const profile = (await getProfile(authUser.id)) ?? await upsertProfile(authUser as unknown as JsonRecord);
+  const profile = await getOrCreateProfileForAuthUser(authUser as unknown as JsonRecord);
   return jsonResponse(serializeUser(profile, authUser as unknown as JsonRecord));
 };
 

@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import { makeRedirectUri } from 'expo-auth-session';
 import Constants from 'expo-constants';
 import appConfig from '../../app.json';
+import { hasSupabaseConfig } from '../config/runtimeConfig';
 
 const embeddedExtra =
     Constants?.expoConfig?.extra
@@ -31,10 +32,11 @@ export const GOOGLE_REDIRECT_URI = readConfigValue(
     ENV_GOOGLE_REDIRECT_URI,
     embeddedExtra.googleRedirectUri
 );
-const ANDROID_PACKAGE_NAME =
-    embeddedExtra.androidPackage
-    || appConfig?.expo?.android?.package
-    || 'your Android package';
+const APP_SCHEME = readConfigValue(
+    process.env.EXPO_PUBLIC_APP_SCHEME,
+    embeddedExtra.appScheme,
+    appConfig?.expo?.scheme || 'lovedogs360'
+);
 
 export const googleClientIds = {
     web: readConfigValue(ENV_GOOGLE_WEB_CLIENT_ID, embeddedGoogleClientIds.web),
@@ -73,35 +75,23 @@ export const getGoogleOAuthRedirectTo = () => {
         return `${window.location.origin}/${path}`;
     }
 
-    return undefined;
+    const path = GOOGLE_REDIRECT_PATH.replace(/^\/+/, '');
+    return makeRedirectUri({
+        scheme: APP_SCHEME,
+        native: `${APP_SCHEME}://${path}`,
+        path,
+    });
 };
 
 export const getGoogleAuthStatus = () => {
-    if (Platform.OS === 'web') {
+    if (!hasSupabaseConfig) {
         return {
-            isAvailable: isUsableGoogleClientId(googleClientIds.web),
-            reason: 'Google Web Client ID is missing or invalid.',
+            isAvailable: false,
+            reason: 'Supabase Google sign-in is not configured.',
         };
     }
 
-    if (Platform.OS === 'ios') {
-        return {
-            isAvailable: isUsableGoogleClientId(googleClientIds.ios),
-            reason: 'Google iOS Client ID is missing or invalid.',
-        };
-    }
-
-    if (Platform.OS === 'android') {
-        return {
-            isAvailable: isUsableGoogleClientId(googleClientIds.android),
-            reason: `Google Android Client ID is missing. Create one for package ${ANDROID_PACKAGE_NAME} with the app SHA-1 fingerprint.`,
-        };
-    }
-
-    return {
-        isAvailable: false,
-        reason: 'Google login is not available on this platform.',
-    };
+    return { isAvailable: true, reason: '' };
 };
 
 export const getGoogleAuthRequestConfig = () => {

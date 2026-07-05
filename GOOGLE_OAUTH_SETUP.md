@@ -60,47 +60,42 @@ EXPO_PUBLIC_GOOGLE_REDIRECT_PATH=auth/google
 
 ### Android Play/Internal Testing Client
 
-For Android builds distributed through Google Play internal testing, create an OAuth **Android** client in Google Cloud with:
+The production app now starts Google through Supabase OAuth on Android and iOS. Do not use the Expo native Google ID-token request for Android sign-in; Google rejects that custom URI scheme flow with `invalid_request`.
 
-```text
-Package name: lovedogs360.co.ke
-SHA-1: Play Console > Setup > App integrity > App signing key certificate > SHA-1
-```
-
-Then set the generated client ID in both places:
-
-```text
-Railway/backend: GOOGLE_ANDROID_CLIENT_ID
-EAS/frontend build env: EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID
-```
-
-Changing EAS environment variables does not update an already-installed APK/AAB; rebuild and upload a new internal test release after setting this value.
+Android OAuth client IDs are only needed if you later add a native Google Sign-In SDK. The current Supabase flow uses the Google **Web client** configured in Supabase, then returns to the app with `lovedogs360://auth/google`.
 
 ### Google Cloud Console Redirect URIs
 
-In Google Cloud Console, open **APIs & Services > Credentials > OAuth 2.0 Client IDs > Web client** and add these under **Authorized redirect URIs**:
+In Google Cloud Console, open **APIs & Services > Credentials > OAuth 2.0 Client IDs > Web client** and add the Supabase callback under **Authorized redirect URIs**:
 
 ```text
-https://hunter-k9lr.vercel.app/auth/google
-https://lovedogs360.com/auth/google
-https://www.lovedogs360.com/auth/google
-http://localhost:19006/auth/google
-http://localhost:8081/auth/google
-http://localhost:8082/auth/google
+https://dnuwenqsyurjgmyurttj.supabase.co/auth/v1/callback
 ```
 
-Also add these under **Authorized JavaScript origins**:
+Also add these under **Authorized JavaScript origins** for the web app:
 
 ```text
 https://hunter-k9lr.vercel.app
-https://lovedogs360.com
-https://www.lovedogs360.com
+https://lovedogs360.co.ke
+https://www.lovedogs360.co.ke
 http://localhost:19006
 http://localhost:8081
 http://localhost:8082
 ```
 
-If Google still shows `redirect_uri_mismatch`, expand the error details and copy the exact `redirect_uri` value into **Authorized redirect URIs**.
+In Supabase Dashboard, open **Authentication > URL Configuration** and allow these redirect URLs:
+
+```text
+https://lovedogs360.co.ke/auth/google
+https://www.lovedogs360.co.ke/auth/google
+https://hunter-k9lr.vercel.app/auth/google
+lovedogs360://auth/google
+http://localhost:19006/auth/google
+http://localhost:8081/auth/google
+http://localhost:8082/auth/google
+```
+
+If Google still shows `redirect_uri_mismatch`, expand the error details and copy the exact `redirect_uri` value into the Google Web client's **Authorized redirect URIs**. For Supabase OAuth it should be the Supabase `/auth/v1/callback` URL, not the app URL.
 
 ---
 
@@ -349,23 +344,18 @@ Backend updates user.google_id
 
 ### LoginScreen Auto-Login with Google
 ```javascript
-const googleLogin = async (idToken) => {
-  const response = await client.post('/auth/google', { id_token: idToken });
-  const { access_token, user } = response.data;
-  
-  // Store token
-  await Storage.setItemAsync('userToken', access_token);
-  await Storage.setItemAsync('userInfo', JSON.stringify(user));
-  
-  // Logged in!
-};
+const result = await startSupabaseGoogleOAuth();
+
+if (result.type === 'success') {
+  await completeSupabaseOAuthSession(result.session);
+}
 ```
 
 ### RegisterScreen Google Sign-Up
 ```javascript
 <TouchableOpacity
     style={styles.googleSignUpBtn}
-    onPress={() => promptGoogleAsync()}
+    onPress={handleGoogleSignupPress}
 >
     <Text>Sign up with Google</Text>
 </TouchableOpacity>

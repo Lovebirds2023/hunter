@@ -5,16 +5,10 @@ import { Button } from '../components/Button';
 import { AuthContext } from '../context/AuthContext';
 import { ThemeBackground } from '../components/ThemeBackground';
 import { COLORS, SPACING, SIZES } from '../constants/theme';
-import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
-import {
-    getGoogleAuthRequestConfig,
-    getGoogleAuthStatus,
-    getGoogleIdTokenFromResponse,
-    getGoogleOAuthRedirectTo,
-} from '../api/googleAuthConfig';
+import { getGoogleAuthStatus } from '../api/googleAuthConfig';
+import { startSupabaseGoogleOAuth } from '../api/googleOAuthFlow';
 import { PRIVACY_POLICY_URL } from '../constants/legal';
-import { isSupabaseConfigured, supabase } from '../../supabase';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -30,74 +24,45 @@ const SocialLoginButton = ({ imageUri, label, onPress, disabled }) => (
     </TouchableOpacity>
 );
 
-const GoogleSignInButton = ({ googleLogin, label, disabledLabel, onAuthNotice }) => {
-    const [request, response, promptAsync] = Google.useIdTokenAuthRequest(getGoogleAuthRequestConfig());
+const GoogleSignInButton = ({ completeSupabaseOAuthSession, label, disabledLabel, onAuthNotice }) => {
     const [googleLoading, setGoogleLoading] = useState(false);
 
-    React.useEffect(() => {
-        let isMounted = true;
-        const finishLoading = () => {
-            if (isMounted) setGoogleLoading(false);
-        };
-
-        if (response?.type === 'success') {
-            const idToken = getGoogleIdTokenFromResponse(response);
-            if (idToken) {
-                googleLogin(idToken).finally(finishLoading);
-            } else {
-                finishLoading();
-                onAuthNotice('Google did not return an ID token. Please try again or use email/password.');
-            }
-        } else if (response?.type === 'error') {
-            finishLoading();
-            onAuthNotice(response.error?.message || 'Google login failed before reaching the server.');
-        } else if (response?.type === 'cancel' || response?.type === 'dismiss') {
-            finishLoading();
-        }
-
-        return () => {
-            isMounted = false;
-        };
-    }, [response, googleLogin, onAuthNotice]);
-
     const handleGooglePress = async () => {
+        let keepLoading = false;
         setGoogleLoading(true);
         try {
-            if (Platform.OS === 'web') {
-                if (!isSupabaseConfigured) {
-                    throw new Error('Supabase Google sign-in is not configured.');
-                }
-
-                const { error } = await supabase.auth.signInWithOAuth({
-                    provider: 'google',
-                    options: {
-                        redirectTo: getGoogleOAuthRedirectTo(),
-                        queryParams: {
-                            prompt: 'select_account',
-                        },
-                    },
-                });
-
-                if (error) throw error;
+            const result = await startSupabaseGoogleOAuth();
+            if (result.type === 'redirect') {
+                keepLoading = true;
                 return;
             }
 
-            const result = await promptAsync({ useProxy: false });
-            if (result?.type && result.type !== 'success') {
-                setGoogleLoading(false);
+            if (result.type === 'success') {
+                const success = await completeSupabaseOAuthSession(result.session);
+                if (!success) {
+                    onAuthNotice('Google sign-in could not be completed. Please try again.');
+                }
+                return;
+            }
+
+            if (result.type !== 'cancel' && result.type !== 'dismiss') {
+                onAuthNotice('Google sign-in was not completed. Please try again.');
             }
         } catch (error) {
-            setGoogleLoading(false);
             onAuthNotice(error?.message || 'Could not open Google login. Please try again.');
+        } finally {
+            if (!keepLoading) {
+                setGoogleLoading(false);
+            }
         }
     };
 
     return (
         <SocialLoginButton
             imageUri="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg"
-            label={googleLoading ? 'Opening Google...' : (Platform.OS === 'web' || request) ? label : disabledLabel}
+            label={googleLoading ? 'Opening Google...' : label || disabledLabel}
             onPress={handleGooglePress}
-            disabled={(Platform.OS !== 'web' && !request) || googleLoading}
+            disabled={googleLoading}
         />
     );
 };
@@ -107,7 +72,7 @@ const LoginScreen = ({ navigation }) => {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [localNotice, setLocalNotice] = useState(null);
-    const { login, googleLogin, isLoading, authNotice, clearAuthNotice } = useContext(AuthContext);
+    const { login, completeSupabaseOAuthSession, isLoading, authNotice, clearAuthNotice } = useContext(AuthContext);
     const googleAuthStatus = getGoogleAuthStatus();
     const canUseGoogleAuth = googleAuthStatus.isAvailable;
     const visibleNotice = localNotice || authNotice;
@@ -176,7 +141,7 @@ const LoginScreen = ({ navigation }) => {
 
                         {canUseGoogleAuth ? (
                             <GoogleSignInButton
-                                googleLogin={googleLogin}
+                                completeSupabaseOAuthSession={completeSupabaseOAuthSession}
                                 label={t('login.continue_google')}
                                 disabledLabel={t('login.google_unavailable')}
                                 onAuthNotice={showGoogleError}
