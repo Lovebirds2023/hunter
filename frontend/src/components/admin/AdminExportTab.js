@@ -5,7 +5,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import { encode as encodeBase64 } from 'base64-arraybuffer';
 import client from '../../api/client';
 import { adminStyles as s, ADMIN_COLORS } from './AdminStyles';
 
@@ -27,15 +26,18 @@ export const AdminExportTab = ({ onBack }) => {
     const handleExport = async (type) => {
         setExportingId(type);
         try {
-            // Updated backend endpoint supports type query param
-            const response = await client.get(`/admin/export?type=${type}`, {
-                responseType: 'arraybuffer'
+            const response = await client.get('/admin/export', {
+                params: { type },
+                responseType: 'text',
             });
+            const csvText = typeof response.data === 'string'
+                ? response.data
+                : String(response.data || '');
 
             const fileName = `ld360_${type}_${new Date().toISOString().split('T')[0]}.csv`;
 
             if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                const blob = new Blob([response.data], {
+                const blob = new Blob([csvText], {
                     type: 'text/csv;charset=utf-8',
                 });
                 const blobUrl = window.URL.createObjectURL(blob);
@@ -56,10 +58,7 @@ export const AdminExportTab = ({ onBack }) => {
             }
 
             const fileUri = `${fileRoot}${fileName}`;
-            const base64 = encodeBase64(response.data);
-            await FileSystem.writeAsStringAsync(fileUri, base64, {
-                encoding: FileSystem.EncodingType.Base64,
-            });
+            await FileSystem.writeAsStringAsync(fileUri, csvText);
 
             const canShare = await Sharing.isAvailableAsync();
             if (canShare) {

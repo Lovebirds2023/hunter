@@ -15,6 +15,8 @@ import { useCurrency } from '../context/CurrencyContext';
 import { useAuth } from '../context/AuthContext';
 import { hasValidCoordinatePair } from '../utils/locationAccuracy';
 
+const MarketplaceWebMap = CasesWebMap as any;
+
 // Platform-aware storage helper
 const Storage = {
     getItemAsync: async (key: string): Promise<string | null> => {
@@ -416,7 +418,7 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                 {showMap ? (
                     <View style={styles.mapContainer}>
                         {Platform.OS === 'web' ? (
-                            <CasesWebMap
+                            <MarketplaceWebMap
                                 reports={filteredItems}
                                 userLocation={mapUserLocation}
                                 onReportPress={(item: any) => navigateAppScreen('OrderReceipt', { service: item })}

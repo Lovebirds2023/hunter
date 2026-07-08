@@ -848,6 +848,7 @@ const handleCreateCase = async (request: Request) => {
   const { data, error } = await supabaseAdmin.from("case_reports").insert(payload).select("*").single();
   if (error) throw error;
   if (lostFoundCaseTypes.has(caseType)) await runPetMatchForCase(data as JsonRecord);
+  await awardKarma(profile.id, KARMA_CASE_REPORT_REWARD, "case_report", `Reported case: ${title}`);
   return jsonResponse(await serializeCaseReport(data as JsonRecord, cleanString(profile.id)), 201);
 };
 
@@ -893,6 +894,7 @@ const handleCaseComments = async (request: Request, reportId: string) => {
     .select("*")
     .single();
   if (error) throw error;
+  await awardKarma(profile.id, KARMA_CASE_COMMENT_REWARD, "comment", "Commented on a case report");
   return jsonResponse({ ...data, author: await fetchAuthor(profile.id) }, 201);
 };
 
@@ -2183,8 +2185,39 @@ const handleCreateOrder = async (request: Request) => {
   const serviceId = cleanString(body.service_id);
   const service = await selectSingle("services", serviceId, "Service");
   if (!service.is_published || !service.admin_approved) return errorResponse("This marketplace item is not available for purchase.");
+  if (cleanString(service.item_type) === "products") {
+    if (service.stock_count !== null && service.stock_count !== undefined && asNumber(service.stock_count) <= 0) {
+      return errorResponse("This product is out of stock");
+    }
+  } else {
+    if (asBoolean(service.is_busy, false)) return errorResponse("This service is currently unavailable");
+    if (service.slots_available !== null && service.slots_available !== undefined && asNumber(service.slots_available) <= 0) {
+      return errorResponse("No slots are available for this service");
+    }
+  }
 
-  const amount = Math.max(asNumber(service.price), 0);
+  const formResponses = asArray(body.form_responses);
+  const { data: fields, error: fieldsError } = await supabaseAdmin
+    .from("service_form_fields")
+    .select("id,label,is_required")
+    .eq("service_id", serviceId);
+  if (fieldsError) throw fieldsError;
+  const provided = new Map(
+    formResponses
+      .map((response) => (isRecord(response) ? response : {}))
+      .map((response) => [cleanString(response.field_id), response.answer_value]),
+  );
+  for (const field of (fields ?? []) as JsonRecord[]) {
+    const answer = provided.get(cleanString(field.id));
+    const hasAnswer = answer !== null && answer !== undefined && String(answer).trim() !== "";
+    if (asBoolean(field.is_required, false) && !hasAnswer) {
+      return errorResponse(`Question '${cleanString(field.label)}' is required`);
+    }
+  }
+
+  const baseAmount = Math.max(asNumber(service.price), 0);
+  const { pointsRedeemed, discountAmount } = calculateKarmaRedemption(profile, baseAmount, body.karma_points_to_redeem);
+  const amount = Math.round(Math.max(baseAmount - discountAmount, 1) * 100) / 100;
   const payout = Math.round((amount / 1.235) * 100) / 100;
   const commission = Math.round((amount - payout) * 100) / 100;
   const { data, error } = await supabaseAdmin
@@ -2195,6 +2228,8 @@ const handleCreateOrder = async (request: Request) => {
       amount,
       commission,
       payout,
+      discount_amount: discountAmount,
+      karma_points_redeemed: pointsRedeemed,
       status: "pending",
       share_phone: asBoolean(body.share_phone, false),
       pesapal_merchant_reference: crypto.randomUUID(),
@@ -2204,7 +2239,15 @@ const handleCreateOrder = async (request: Request) => {
     .single();
   if (error) throw error;
 
-  const formResponses = asArray(body.form_responses);
+  if (pointsRedeemed) {
+    await awardKarma(
+      profile.id,
+      -pointsRedeemed,
+      "purchase_discount",
+      `Redeemed ${pointsRedeemed} points for order discount on ${cleanString(service.title) || "marketplace item"}`,
+    );
+  }
+
   if (formResponses.length) {
     const rows = formResponses.map((response) => {
       const record = isRecord(response) ? response : {};
@@ -2586,6 +2629,7 @@ const handleCreateCommunityMessage = async (request: Request) => {
     .select("*")
     .single();
   if (error) throw error;
+  await awardKarma(profile.id, 1, "chat", "Sent a community message");
   return jsonResponse({ ...data, hashtags, author: await fetchAuthor(profile.id), reactions: [], flag_count: 0, poll_results: {}, has_voted: null }, 201);
 };
 
@@ -2991,6 +3035,20 @@ const normalizeAppPlatform = (platform: unknown) => {
   return ["android", "ios", "all"].includes(normalized) ? normalized : "all";
 };
 
+const serializeAppVersion = (row: JsonRecord) => ({
+  id: row.id,
+  platform: row.platform,
+  version: row.version,
+  build_number: row.build_number ?? null,
+  download_url: row.download_url ?? row.update_url ?? null,
+  update_url: row.update_url ?? row.download_url ?? null,
+  release_notes: row.release_notes ?? null,
+  is_required: asBoolean(row.is_required, false),
+  is_active: asBoolean(row.is_active, true),
+  created_at: row.created_at ?? null,
+  updated_at: row.updated_at ?? null,
+});
+
 const handleLatestAppVersion = async (request: Request) => {
   const platform = normalizeAppPlatform(getUrl(request).searchParams.get("platform"));
   const eligiblePlatforms = platform === "all" ? ["all"] : [platform, "all"];
@@ -3004,19 +3062,59 @@ const handleLatestAppVersion = async (request: Request) => {
     .maybeSingle();
   if (error) throw error;
   if (!data) return jsonResponse(null);
-  const row = data as JsonRecord;
-  return jsonResponse({
-    id: row.id,
-    platform: row.platform,
-    version: row.version,
-    build_number: row.build_number ?? null,
-    download_url: row.download_url ?? row.update_url ?? null,
-    update_url: row.update_url ?? row.download_url ?? null,
-    release_notes: row.release_notes ?? null,
-    is_required: asBoolean(row.is_required, false),
-    is_active: asBoolean(row.is_active, true),
-    created_at: row.created_at ?? null,
-  });
+  return jsonResponse(serializeAppVersion(data as JsonRecord));
+};
+
+const handleCreateAppVersion = async (request: Request) => {
+  await requireAdminProfile(request);
+  const body = await readJson(request);
+  const version = cleanString(body.version);
+  if (!version) return errorResponse("Version is required.");
+  const downloadUrl = cleanString(body.download_url) || cleanString(body.update_url) || null;
+
+  const payload = {
+    version,
+    platform: normalizeAppPlatform(body.platform),
+    build_number: asNullableNumber(body.build_number),
+    release_notes: body.release_notes ?? null,
+    download_url: downloadUrl,
+    update_url: downloadUrl,
+    is_required: asBoolean(body.is_required, false),
+    is_active: asBoolean(body.is_active, true),
+    updated_at: nowIso(),
+  };
+
+  const { data, error } = await supabaseAdmin.from("app_versions").insert(payload).select("*").single();
+  if (error) throw error;
+  return jsonResponse(serializeAppVersion(data as JsonRecord));
+};
+
+const handleUpdateAppVersion = async (request: Request, versionId: string) => {
+  await requireAdminProfile(request);
+  const body = await readJson(request);
+  const updates: JsonRecord = { updated_at: nowIso() };
+
+  if ("version" in body) updates.version = cleanString(body.version);
+  if ("platform" in body) updates.platform = normalizeAppPlatform(body.platform);
+  if ("build_number" in body) updates.build_number = asNullableNumber(body.build_number);
+  if ("release_notes" in body) updates.release_notes = body.release_notes ?? null;
+  if ("download_url" in body || "update_url" in body) {
+    const downloadUrl = cleanString(body.download_url) || cleanString(body.update_url) || null;
+    updates.download_url = downloadUrl;
+    updates.update_url = downloadUrl;
+  }
+  if ("is_required" in body) updates.is_required = asBoolean(body.is_required, false);
+  if ("is_active" in body) updates.is_active = asBoolean(body.is_active, true);
+
+  const { data, error } = await supabaseAdmin
+    .from("app_versions")
+    .update(updates)
+    .eq("id", versionId)
+    .select("*")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return notFound("App version");
+  return jsonResponse(serializeAppVersion(data as JsonRecord));
 };
 
 const handleExchangeRates = () => jsonResponse({
@@ -3029,6 +3127,11 @@ const handleExchangeRates = () => jsonResponse({
 });
 
 const PAID_ORDER_STATES = new Set(["paid", "completed", "settled"]);
+const KARMA_REDEMPTION_TARGET = 100;
+const KARMA_POINT_VALUE = 1;
+const KARMA_MAX_ORDER_DISCOUNT_RATE = 0.20;
+const KARMA_CASE_REPORT_REWARD = 10;
+const KARMA_CASE_COMMENT_REWARD = 2;
 
 const normalizeStatus = (value: unknown) => cleanString(value).toLowerCase();
 
@@ -3038,6 +3141,57 @@ const calculateKarmaReward = (amount: unknown) => {
   const value = asNumber(amount);
   if (value <= 0) return 0;
   return Math.min(500, Math.max(5, Math.floor(value / 100)));
+};
+
+const calculateKarmaRedemption = (profile: JsonRecord, orderTotal: unknown, requestedPoints: unknown) => {
+  const requested = Math.floor(asNumber(requestedPoints));
+  if (requested <= 0) return { pointsRedeemed: 0, discountAmount: 0 };
+
+  const available = Math.floor(asNumber(profile.available_karma));
+  if (available < KARMA_REDEMPTION_TARGET) {
+    throw new Response(`You need at least ${KARMA_REDEMPTION_TARGET} points before redeeming a discount.`, { status: 400 });
+  }
+  if (requested < KARMA_REDEMPTION_TARGET) {
+    throw new Response(`Redeem at least ${KARMA_REDEMPTION_TARGET} points.`, { status: 400 });
+  }
+
+  const maxDiscountAmount = Math.max(asNumber(orderTotal) * KARMA_MAX_ORDER_DISCOUNT_RATE, 0);
+  const maxPointsForOrder = Math.floor(maxDiscountAmount / KARMA_POINT_VALUE);
+  const pointsRedeemed = Math.min(requested, available, maxPointsForOrder);
+  if (pointsRedeemed < KARMA_REDEMPTION_TARGET) {
+    throw new Response(`This order can only use discounts from ${KARMA_REDEMPTION_TARGET} points or more.`, { status: 400 });
+  }
+
+  return {
+    pointsRedeemed,
+    discountAmount: Math.round(pointsRedeemed * KARMA_POINT_VALUE * 100) / 100,
+  };
+};
+
+const awardKarma = async (userId: unknown, amount: number, category: string, description: string) => {
+  const id = cleanString(userId);
+  const points = Math.trunc(amount);
+  if (!id || !points) return;
+
+  const user = await fetchUserFull(id);
+  if (!user) return;
+
+  const updates: JsonRecord = {
+    available_karma: Math.max(asNumber(user.available_karma) + points, 0),
+    updated_at: nowIso(),
+  };
+  if (points > 0) updates.karma_points = asNumber(user.karma_points) + points;
+
+  const { error: userError } = await supabaseAdmin.from("users").update(updates).eq("id", id);
+  if (userError) throw userError;
+
+  const { error: txError } = await supabaseAdmin.from("karma_transactions").insert({
+    user_id: id,
+    amount: points,
+    category,
+    description,
+  });
+  if (txError) throw txError;
 };
 
 const createNotification = async (
@@ -3264,11 +3418,20 @@ const markOrderPaid = async (order: JsonRecord, trackingId?: string) => {
       target_id: order.id,
     });
   }
+  const buyerReward = calculateKarmaReward(order.amount);
+  if (buyerReward) {
+    await awardKarma(order.buyer_id, buyerReward, "purchase", `Earned for purchase: ${cleanString(service.title) || "Marketplace item"}`);
+  }
+  const sellerReward = calculateKarmaReward(order.payout);
+  if (service.provider_id && sellerReward) {
+    await awardKarma(service.provider_id, sellerReward, "sale", `Earned for sale: ${cleanString(service.title) || "Marketplace item"}`);
+  }
   return true;
 };
 
 const markRegistrationPaid = async (registration: JsonRecord, trackingId?: string) => {
   if (normalizeStatus(registration.payment_status) === "paid") return false;
+  const event = await selectSingle("events", cleanString(registration.event_id), "Event");
   const { error } = await supabaseAdmin
     .from("registrations")
     .update({
@@ -3281,11 +3444,15 @@ const markRegistrationPaid = async (registration: JsonRecord, trackingId?: strin
     })
     .eq("id", registration.id);
   if (error) throw error;
-  await createNotification(registration.user_id, "Event payment confirmed", "Your event ticket payment has been confirmed.", "event", {
+  await createNotification(registration.user_id, "Event payment confirmed", `Your payment for '${cleanString(event.title) || "this event"}' is confirmed. Your ticket is ready.`, "event", {
     target_type: "event",
     target_id: registration.event_id,
     target_route: "EventDetail",
   });
+  const reward = calculateKarmaReward(registration.amount);
+  if (reward) {
+    await awardKarma(registration.user_id, reward, "event_registration", `Registered for paid event: ${cleanString(event.title) || "Event"}`);
+  }
   return true;
 };
 
@@ -3364,6 +3531,109 @@ const handlePaymentStatus = async (request: Request, orderId: string) => {
     seller_reward_points: paymentSuccess ? calculateKarmaReward(order.payout) : 0,
     discount_amount: order.discount_amount ?? 0,
     karma_points_redeemed: order.karma_points_redeemed ?? 0,
+  });
+};
+
+const handleSubmitRating = async (request: Request) => {
+  const { profile } = await requireProfile(request);
+  const body = await readJson(request);
+  const orderId = cleanString(body.order_id);
+  const order = await selectSingle("orders", orderId, "Order");
+  if (cleanString(order.buyer_id) !== cleanString(profile.id)) {
+    throw new Response("Only the buyer can rate this service", { status: 403 });
+  }
+  if (!isPaidOrderStatus(order.status)) {
+    return errorResponse("Can only rate completed/paid services");
+  }
+
+  const service = await selectSingle("services", cleanString(order.service_id), "Service");
+  const ratedId = cleanString(body.rated_id) || cleanString(service.provider_id);
+  if (cleanString(service.provider_id) !== ratedId) {
+    return errorResponse("Rating target does not match the service provider.");
+  }
+
+  const score = Math.round(asNumber(body.score));
+  if (score < 1 || score > 5) {
+    return errorResponse("Rating score must be between 1 and 5.");
+  }
+
+  const { data: existingRating, error: existingError } = await supabaseAdmin
+    .from("ratings")
+    .select("id")
+    .eq("order_id", orderId)
+    .maybeSingle();
+  if (existingError) throw existingError;
+  if (existingRating) return errorResponse("Order already rated");
+
+  const { data, error } = await supabaseAdmin
+    .from("ratings")
+    .insert({
+      order_id: orderId,
+      rater_id: cleanString(profile.id),
+      rated_id: ratedId,
+      score,
+      comment: body.comment ?? null,
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+
+  const { data: ratings, error: ratingsError } = await supabaseAdmin
+    .from("ratings")
+    .select("score")
+    .eq("rated_id", ratedId);
+  if (ratingsError) throw ratingsError;
+  const scores = (ratings ?? []).map((rating) => asNumber((rating as JsonRecord).score)).filter((value) => value > 0);
+  const totalRatings = scores.length;
+  const averageRating = totalRatings
+    ? Math.round((scores.reduce((sum, value) => sum + value, 0) / totalRatings) * 10) / 10
+    : 0;
+  const { error: userError } = await supabaseAdmin
+    .from("users")
+    .update({ average_rating: averageRating, total_ratings: totalRatings, updated_at: nowIso() })
+    .eq("id", ratedId);
+  if (userError) throw userError;
+
+  return jsonResponse(data, 201);
+};
+
+const handleUserRatings = async (userId: string) => {
+  const { data, error } = await supabaseAdmin
+    .from("ratings")
+    .select("*")
+    .eq("rated_id", userId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+
+  const ratings = (data ?? []) as JsonRecord[];
+  if (!ratings.length) {
+    return jsonResponse({ average_score: 0, count: 0, ratings: [] });
+  }
+
+  const raterIds = uniqueStrings(ratings.map((rating) => rating.rater_id));
+  const raters = new Map<string, JsonRecord>();
+  if (raterIds.length) {
+    const { data: users, error: usersError } = await supabaseAdmin
+      .from("users")
+      .select("id,full_name")
+      .in("id", raterIds);
+    if (usersError) throw usersError;
+    for (const user of users ?? []) raters.set(cleanString((user as JsonRecord).id), user as JsonRecord);
+  }
+
+  const scores = ratings.map((rating) => asNumber(rating.score)).filter((value) => value > 0);
+  const averageScore = scores.length
+    ? Math.round((scores.reduce((sum, value) => sum + value, 0) / scores.length) * 10) / 10
+    : 0;
+  return jsonResponse({
+    average_score: averageScore,
+    count: ratings.length,
+    ratings: ratings.map((rating) => ({
+      score: asNumber(rating.score),
+      comment: rating.comment ?? null,
+      created_at: rating.created_at ?? null,
+      rater_name: raters.get(cleanString(rating.rater_id))?.full_name ?? null,
+    })),
   });
 };
 
@@ -3770,6 +4040,50 @@ const handleAdminUsers = async (request: Request) => {
   return jsonResponse(rows);
 };
 
+const handleAdminCreateUser = async (request: Request) => {
+  await requireAdminProfile(request);
+  const body = await readJson(request);
+  const email = cleanString(body.email).toLowerCase();
+  const password = cleanString(body.password);
+  const requestedRole = cleanString(body.role);
+  const role = ["buyer", "provider", "admin"].includes(requestedRole) ? requestedRole : "buyer";
+
+  if (!email || !password) return errorResponse("Email and password are required.");
+  if (password.length < 8) return errorResponse("Password must be at least 8 characters.");
+
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from("users")
+    .select("id")
+    .eq("email", email)
+    .maybeSingle();
+  if (existingError) throw existingError;
+  if (existing) return errorResponse("Email already registered");
+
+  const { data, error } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: {
+      full_name: cleanString(body.full_name),
+      role,
+    },
+    app_metadata: role === "admin" ? { role } : undefined,
+  });
+  if (error || !data.user) return errorResponse(error?.message || "User creation failed.", 400);
+
+  const profile = await upsertProfile(data.user as unknown as JsonRecord, {
+    email,
+    full_name: body.full_name,
+    role,
+    phone_number: body.phone_number,
+    country: body.country,
+    language: body.language,
+    bio: body.bio,
+    auth_provider: "email",
+  });
+  return jsonResponse(serializeUser(profile, data.user as unknown as JsonRecord), 201);
+};
+
 const suspensionEndDate = (body: JsonRecord) => {
   const value = Math.max(1, asNumber(body.duration_value, 7));
   const unit = cleanString(body.duration_unit) || "days";
@@ -4047,7 +4361,12 @@ const handleAdminApprove = async (request: Request, itemType: string, itemId: st
   if (itemType === "service") {
     const { error } = await supabaseAdmin
       .from("services")
-      .update({ admin_approved: isApproved, rejection_reason: isApproved ? null : reason, updated_at: nowIso() })
+      .update({
+        admin_approved: isApproved,
+        is_published: isApproved,
+        rejection_reason: isApproved ? null : reason,
+        updated_at: nowIso(),
+      })
       .eq("id", itemId);
     if (error) throw error;
     return jsonResponse({ message: isApproved ? "Service approved" : "Service rejected" });
@@ -4758,6 +5077,8 @@ const routeRequest = async (request: Request) => {
   if (method === "GET" && /^\/payments\/status\/[^/]+$/.test(path)) return handlePaymentStatus(request, firstPathMatch(path, /^\/payments\/status\/([^/]+)$/));
   if (method === "GET" && path === "/pesapal/callback") return handlePesapalCallback(request);
   if (method === "GET" && path === "/pesapal/ipn") return handlePesapalIpn(request);
+  if (method === "POST" && path === "/ratings") return handleSubmitRating(request);
+  if (method === "GET" && /^\/users\/[^/]+\/ratings$/.test(path)) return handleUserRatings(firstPathMatch(path, /^\/users\/([^/]+)\/ratings$/));
   if (method === "POST" && /^\/event-registrations\/[^/]+\/payment\/initiate$/.test(path)) return handleInitiateEventPayment(request, firstPathMatch(path, /^\/event-registrations\/([^/]+)\/payment\/initiate$/));
   if (method === "GET" && /^\/event-registrations\/[^/]+\/payment\/status$/.test(path)) return handleEventPaymentStatus(request, firstPathMatch(path, /^\/event-registrations\/([^/]+)\/payment\/status$/));
   if (method === "GET" && path === "/wallet/summary") return handleWalletSummary(request);
@@ -4791,10 +5112,13 @@ const routeRequest = async (request: Request) => {
   if (method === "GET" && /^\/health\/advisor\/[^/]+$/.test(path)) return handleHealthAdvisor(request, firstPathMatch(path, /^\/health\/advisor\/([^/]+)$/));
   if (method === "GET" && path === "/scorecard/questions") return handleScorecardQuestions(request);
   if (method === "GET" && path === "/app/version/latest") return handleLatestAppVersion(request);
+  if (method === "POST" && path === "/app/version") return handleCreateAppVersion(request);
+  if (method === "PUT" && /^\/app\/version\/[^/]+$/.test(path)) return handleUpdateAppVersion(request, firstPathMatch(path, /^\/app\/version\/([^/]+)$/));
 
   if (method === "GET" && path === "/admin/analytics") return handleAdminAnalytics(request);
   if (method === "GET" && path === "/admin/stats") return handleAdminAnalytics(request);
   if (method === "GET" && path === "/admin/users") return handleAdminUsers(request);
+  if (method === "POST" && path === "/admin/users") return handleAdminCreateUser(request);
   if (method === "POST" && /^\/admin\/users\/[^/]+\/role$/.test(path)) return handleUpdateUserRole(request, firstPathMatch(path, /^\/admin\/users\/([^/]+)\/role$/));
   if (method === "POST" && /^\/admin\/users\/[^/]+\/suspend$/.test(path)) return handleSuspendUser(request, firstPathMatch(path, /^\/admin\/users\/([^/]+)\/suspend$/));
   if (method === "POST" && /^\/admin\/users\/[^/]+\/unsuspend$/.test(path)) return handleUnsuspendUser(request, firstPathMatch(path, /^\/admin\/users\/([^/]+)\/unsuspend$/));

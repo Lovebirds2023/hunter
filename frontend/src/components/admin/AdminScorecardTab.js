@@ -6,7 +6,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import { encode as encodeBase64 } from 'base64-arraybuffer';
 import client from '../../api/client';
 import { adminStyles as s, ADMIN_COLORS } from './AdminStyles';
 
@@ -189,13 +188,16 @@ export const AdminScorecardTab = ({ onBack, initialEventId = null }) => {
         try {
             const response = await client.get('/admin/export', {
                 params: { type: 'scorecard', event_id: selectedEventId },
-                responseType: 'arraybuffer',
+                responseType: 'text',
             });
+            const csvText = typeof response.data === 'string'
+                ? response.data
+                : String(response.data || '');
             const exportName = safeExportSlug(selectedEvent?.scorecard_title || selectedEvent?.title || 'impact');
             const fileName = `${exportName}_impact_${new Date().toISOString().split('T')[0]}.csv`;
 
             if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                const blob = new Blob([response.data], {
+                const blob = new Blob([csvText], {
                     type: 'text/csv;charset=utf-8',
                 });
                 const blobUrl = window.URL.createObjectURL(blob);
@@ -211,9 +213,7 @@ export const AdminScorecardTab = ({ onBack, initialEventId = null }) => {
 
             const fileRoot = FileSystem.documentDirectory || FileSystem.cacheDirectory;
             const fileUri = `${fileRoot}${fileName}`;
-            await FileSystem.writeAsStringAsync(fileUri, encodeBase64(response.data), {
-                encoding: FileSystem.EncodingType.Base64,
-            });
+            await FileSystem.writeAsStringAsync(fileUri, csvText);
             if (await Sharing.isAvailableAsync()) {
                 await Sharing.shareAsync(fileUri);
             } else {
