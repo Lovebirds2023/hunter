@@ -42,6 +42,12 @@ const isAuthEndpoint = (url = '') => (
     url.includes('/password/')
 );
 
+const isSessionEndingError = (error) => {
+    const status = error?.response?.status;
+    const detail = String(error?.response?.data?.detail || '').toLowerCase();
+    return status === 401 || (status === 403 && detail.includes('account suspended'));
+};
+
 const notifySessionExpired = () => {
     sessionExpiredListeners.forEach((listener) => {
         try {
@@ -96,9 +102,8 @@ client.interceptors.request.use(
 client.interceptors.response.use(
     (response) => response,
     (error) => {
-        const status = error?.response?.status;
         const requestUrl = error?.config?.url || '';
-        if (status === 401 && !isAuthEndpoint(requestUrl)) {
+        if (isSessionEndingError(error) && !isAuthEndpoint(requestUrl)) {
             notifySessionExpired();
         }
         return Promise.reject(error);

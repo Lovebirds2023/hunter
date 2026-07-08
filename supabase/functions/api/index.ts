@@ -275,16 +275,52 @@ const getProfile = async (userId: string) => {
     .from("users")
     .select("*")
     .eq("id", userId)
-    .is("deleted_at", null)
     .single();
 
   if (error && error.code !== "PGRST116") throw error;
   return data as JsonRecord | null;
 };
 
+const restoreExpiredSuspension = async (profile: JsonRecord) => {
+  if (cleanString(profile.role) !== "suspended") return profile;
+  const endsAt = cleanString(profile.suspension_ends_at);
+  if (!endsAt || Date.parse(endsAt) > Date.now()) return profile;
+
+  const restoreRole = cleanString(profile.pre_suspension_role);
+  const role = restoreRole && restoreRole !== "suspended" ? restoreRole : "buyer";
+  const { data, error } = await supabaseAdmin
+    .from("users")
+    .update({
+      role,
+      pre_suspension_role: null,
+      suspended_at: null,
+      suspension_ends_at: null,
+      suspension_reason: null,
+      suspended_by_id: null,
+      updated_at: nowIso(),
+    })
+    .eq("id", cleanString(profile.id))
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as JsonRecord;
+};
+
+const requireActiveProfile = async (profile: JsonRecord) => {
+  if (profile.deleted_at) throw new Response("Account deleted", { status: 401 });
+  const current = await restoreExpiredSuspension(profile);
+  if (cleanString(current.role) !== "suspended") return current;
+
+  const until = cleanString(current.suspension_ends_at) || "further admin review";
+  const reason = cleanString(current.suspension_reason);
+  let detail = `Account suspended until ${until}.`;
+  if (reason) detail += ` Reason: ${reason}`;
+  throw new Response(detail, { status: 403 });
+};
+
 const requireProfile = async (request: Request) => {
   const authUser = await getCurrentAuthUser(request);
-  const profile = await getOrCreateProfileForAuthUser(authUser as unknown as JsonRecord);
+  const profile = await requireActiveProfile(await getOrCreateProfileForAuthUser(authUser as unknown as JsonRecord));
   return { authUser, profile };
 };
 
@@ -4153,6 +4189,31 @@ const handleUpdateUserRole = async (request: Request, userId: string) => {
     return jsonResponse({ message: `User is already ${nextRole}.`, role: nextRole });
   }
 
+  const { data: authData, error: authFetchError } = await supabaseAdmin.auth.admin.getUserById(userId);
+  if (authFetchError || !authData.user) {
+    return errorResponse(authFetchError?.message || "Could not find Supabase Auth user for this profile.", 400);
+  }
+
+  const nextAppMetadata = {
+    ...(((authData.user as unknown as JsonRecord).app_metadata as JsonRecord | undefined) ?? {}),
+  };
+  if (nextRole === "admin") {
+    nextAppMetadata.role = "admin";
+  } else {
+    delete nextAppMetadata.role;
+    const roles = asStringArray(nextAppMetadata.roles).filter((role) => !trustedAdminRoles.has(cleanString(role)));
+    if (roles.length) {
+      nextAppMetadata.roles = roles;
+    } else {
+      delete nextAppMetadata.roles;
+    }
+  }
+
+  const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+    app_metadata: nextAppMetadata,
+  });
+  if (authUpdateError) return errorResponse(authUpdateError.message || "Could not update Supabase Auth role metadata.", 400);
+
   const { data, error } = await supabaseAdmin
     .from("users")
     .update({
@@ -4609,7 +4670,12 @@ const campaignRecipients = async (payload: JsonRecord) => {
   const targetGroup = cleanString(payload.target_group);
   const filters = isRecord(payload.filters) ? payload.filters : {};
   if (targetGroup === "event_registrants" && filters.event_id) {
-    const { data, error } = await supabaseAdmin.from("registrations").select("user_id").eq("event_id", cleanString(filters.event_id));
+    let query = supabaseAdmin.from("registrations").select("user_id").eq("event_id", cleanString(filters.event_id));
+    if (filters.registration_status && cleanString(filters.registration_status) !== "all") query = query.eq("status", cleanString(filters.registration_status));
+    if (filters.payment_status && cleanString(filters.payment_status) !== "all") query = query.eq("payment_status", cleanString(filters.payment_status));
+    if (filters.ticket_tier_id && cleanString(filters.ticket_tier_id) !== "all") query = query.eq("ticket_tier_id", cleanString(filters.ticket_tier_id));
+    if (filters.booking_slot_id && cleanString(filters.booking_slot_id) !== "all") query = query.eq("booking_slot_id", cleanString(filters.booking_slot_id));
+    const { data, error } = await query;
     if (error) throw error;
     return [...new Set((data ?? []).map((row) => cleanString((row as JsonRecord).user_id)).filter(Boolean))];
   }
@@ -4620,9 +4686,40 @@ const campaignRecipients = async (payload: JsonRecord) => {
     if (error) throw error;
     return (data ?? []).map((row) => cleanString((row as JsonRecord).id)).filter(Boolean);
   }
-  const { data, error } = await supabaseAdmin.from("users").select("id").is("deleted_at", null);
-  if (error) throw error;
-  return (data ?? []).map((row) => cleanString((row as JsonRecord).id)).filter(Boolean);
+  if (targetGroup === "case_reporters") {
+    let query = supabaseAdmin.from("case_reports").select("author_id");
+    if (filters.case_type && cleanString(filters.case_type) !== "all") query = query.eq("case_type", cleanString(filters.case_type));
+    if (filters.case_status && cleanString(filters.case_status) !== "all") query = query.eq("status", cleanString(filters.case_status));
+    const { data, error } = await query;
+    if (error) throw error;
+    return [...new Set((data ?? []).map((row) => cleanString((row as JsonRecord).author_id)).filter(Boolean))];
+  }
+  if (targetGroup === "listing_publishers" || targetGroup === "product_publishers") {
+    let query = supabaseAdmin.from("services").select("provider_id");
+    const itemType = targetGroup === "product_publishers" ? "products" : cleanString(filters.item_type);
+    if (itemType && itemType !== "all") query = query.eq("item_type", itemType);
+    if (asBoolean(filters.published_only, false)) query = query.eq("is_published", true);
+    if (asBoolean(filters.approved_only, false)) query = query.eq("admin_approved", true);
+    const { data, error } = await query;
+    if (error) throw error;
+    return [...new Set((data ?? []).map((row) => cleanString((row as JsonRecord).provider_id)).filter(Boolean))];
+  }
+  if (targetGroup === "sellers_with_sales") {
+    const { data: orders, error: orderError } = await supabaseAdmin
+      .from("orders")
+      .select("service_id")
+      .in("status", [...PAID_ORDER_STATES]);
+    if (orderError) throw orderError;
+    const serviceIds = [...new Set((orders ?? []).map((row) => cleanString((row as JsonRecord).service_id)).filter(Boolean))];
+    if (!serviceIds.length) return [];
+
+    let query = supabaseAdmin.from("services").select("provider_id").in("id", serviceIds);
+    if (filters.item_type && cleanString(filters.item_type) !== "all") query = query.eq("item_type", cleanString(filters.item_type));
+    const { data, error } = await query;
+    if (error) throw error;
+    return [...new Set((data ?? []).map((row) => cleanString((row as JsonRecord).provider_id)).filter(Boolean))];
+  }
+  throw new Response("Unsupported notification target group", { status: 400 });
 };
 
 const handleNotificationOptions = async (request: Request) => {
@@ -4638,7 +4735,12 @@ const handleNotificationOptions = async (request: Request) => {
       { id: "sellers_with_sales", label: "Sellers with sales" },
     ],
     roles: ["buyer", "provider", "admin", "super_admin"],
-    events: events.map((event) => ({ id: event.id, title: event.title })),
+    events: events.map((event) => ({
+      id: event.id,
+      title: event.title,
+      ticket_tiers: asArray(event.ticket_tiers),
+      available_slots: asArray(event.available_slots),
+    })),
     case_types: ["lost_dog", "found_dog", "rabies_bite", "vehicle_hit", "injured_stray", "abuse", "other"],
     case_statuses: ["open", "resolved", "closed"],
     item_types: ["services", "products"],
@@ -4873,10 +4975,10 @@ const handleToken = async (request: Request) => {
     return errorResponse("Incorrect username or password", 401);
   }
 
-  const profile = (await getProfile(data.user.id)) ?? await upsertProfile(data.user as unknown as JsonRecord, {
+  const profile = await requireActiveProfile((await getProfile(data.user.id)) ?? await upsertProfile(data.user as unknown as JsonRecord, {
     email,
     auth_provider: "email",
-  });
+  }));
 
   return jsonResponse({
     access_token: data.session.access_token,
@@ -4899,12 +5001,12 @@ const handleGoogleLogin = async (request: Request) => {
     return errorResponse(error?.message || "Invalid Google token", 401);
   }
 
-  const profile = await upsertProfile(data.user as unknown as JsonRecord, {
+  const profile = await requireActiveProfile(await upsertProfile(data.user as unknown as JsonRecord, {
     email: data.user.email,
     full_name: data.user.user_metadata?.full_name || data.user.user_metadata?.name,
     auth_provider: "google",
     google_id: data.user.user_metadata?.sub,
-  });
+  }));
 
   return jsonResponse({
     access_token: data.session.access_token,
@@ -4914,13 +5016,12 @@ const handleGoogleLogin = async (request: Request) => {
 };
 
 const handleGetMe = async (request: Request) => {
-  const authUser = await getCurrentAuthUser(request);
-  const profile = await getOrCreateProfileForAuthUser(authUser as unknown as JsonRecord);
+  const { authUser, profile } = await requireProfile(request);
   return jsonResponse(serializeUser(profile, authUser as unknown as JsonRecord));
 };
 
 const handleUpdateMe = async (request: Request) => {
-  const authUser = await getCurrentAuthUser(request);
+  const { authUser } = await requireProfile(request);
   const body = await readJson(request);
   const allowed = [
     "full_name",
@@ -4957,7 +5058,7 @@ const handleUpdateMe = async (request: Request) => {
 };
 
 const handleDeleteMe = async (request: Request) => {
-  const authUser = await getCurrentAuthUser(request);
+  const { authUser } = await requireProfile(request);
 
   const { error } = await supabaseAdmin
     .from("users")

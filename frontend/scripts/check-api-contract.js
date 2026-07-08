@@ -9,6 +9,9 @@ const karmaMigration = read('supabase/migrations/20260708130000_karma_transactio
 const appVersionMigration = read('supabase/migrations/20260708131000_app_versions_admin_columns.sql');
 const adminExport = read('frontend/src/components/admin/AdminExportTab.js');
 const adminScorecard = read('frontend/src/components/admin/AdminScorecardTab.js');
+const adminAnnouncements = read('frontend/src/components/admin/AdminAnnouncementsTab.js');
+const apiClient = read('frontend/src/api/client.js');
+const authContext = read('frontend/src/context/AuthContext.js');
 
 const requiredRouteSnippets = [
   'path === "/register"',
@@ -150,10 +153,51 @@ if (!edgeApi.includes('is_published: isApproved')) {
   failures.push('Service approval must publish approved listings and unpublish rejected listings.');
 }
 
+for (const snippet of ['auth.admin.updateUserById', 'delete nextAppMetadata.role', 'trustedAdminRoles.has(cleanString(role))']) {
+  if (!edgeApi.includes(snippet)) {
+    failures.push(`Missing role metadata synchronization behavior: ${snippet}`);
+  }
+}
+
+for (const snippet of ['restoreExpiredSuspension', 'requireActiveProfile', 'Account suspended until', 'Account deleted']) {
+  if (!edgeApi.includes(snippet)) {
+    failures.push(`Missing suspended/deleted account enforcement: ${snippet}`);
+  }
+}
+
 for (const snippet of ['calculateKarmaRedemption', 'body.karma_points_to_redeem', 'awardKarma']) {
   if (!edgeApi.includes(snippet)) {
     failures.push(`Missing karma migration behavior: ${snippet}`);
   }
+}
+
+for (const snippet of [
+  'filters.registration_status',
+  'targetGroup === "case_reporters"',
+  'targetGroup === "listing_publishers"',
+  'targetGroup === "product_publishers"',
+  'targetGroup === "sellers_with_sales"',
+  'Unsupported notification target group',
+  'ticket_tiers: asArray(event.ticket_tiers)',
+  'available_slots: asArray(event.available_slots)',
+]) {
+  if (!edgeApi.includes(snippet)) {
+    failures.push(`Missing admin broadcast targeting behavior: ${snippet}`);
+  }
+}
+
+for (const snippet of ["typeof item === 'string'", 'const id = optionValue(item)']) {
+  if (!adminAnnouncements.includes(snippet)) {
+    failures.push(`Admin broadcast filters must support string and object options: ${snippet}`);
+  }
+}
+
+if (!apiClient.includes("detail.includes('account suspended')")) {
+  failures.push('API client must treat suspended accounts as session-ending responses.');
+}
+
+if (!authContext.includes("detail.includes('account suspended')")) {
+  failures.push('Auth context must clear suspended sessions during profile refresh.');
 }
 
 if (!karmaMigration.includes('create table if not exists public.karma_transactions')) {

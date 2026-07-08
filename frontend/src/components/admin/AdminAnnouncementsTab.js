@@ -215,19 +215,28 @@ export const AdminAnnouncementsTab = ({ onBack, initialEventId = '', initialTarg
         </TouchableOpacity>
     );
 
+    const optionValue = (item) => (typeof item === 'string' ? item : item.id);
+    const optionLabel = (item) => {
+        if (typeof item === 'string') return item.replace(/_/g, ' ');
+        return item.label || item.title || item.id;
+    };
+
     const optionRow = (label, items, value, setter, includeAll = true) => (
         <View style={{ marginTop: 12 }}>
             <Text style={s.inputLabel}>{label}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
                 {includeAll && <Chip label="All" active={value === 'all'} onPress={() => setter('all')} />}
-                {(items || []).map(item => (
-                    <Chip
-                        key={item.id}
-                        label={item.label || item.title || item.id}
-                        active={value === item.id}
-                        onPress={() => setter(item.id)}
-                    />
-                ))}
+                {(items || []).map(item => {
+                    const id = optionValue(item);
+                    return (
+                        <Chip
+                            key={id}
+                            label={optionLabel(item)}
+                            active={value === id}
+                            onPress={() => setter(id)}
+                        />
+                    );
+                })}
             </ScrollView>
         </View>
     );

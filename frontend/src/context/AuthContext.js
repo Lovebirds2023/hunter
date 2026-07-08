@@ -31,7 +31,10 @@ export const AuthProvider = ({ children }) => {
 
     const clearAuthNotice = () => setAuthNotice(null);
 
-    const isUnauthorizedError = (error) => error?.response?.status === 401;
+    const isUnauthorizedError = (error) => {
+        const detail = String(error?.response?.data?.detail || '').toLowerCase();
+        return error?.response?.status === 401 || (error?.response?.status === 403 && detail.includes('account suspended'));
+    };
 
     const clearStoredSession = async () => {
         setUserToken(null);
@@ -45,7 +48,8 @@ export const AuthProvider = ({ children }) => {
 
     const getFriendlyAuthError = (error, fallback) => {
         if (isUnauthorizedError(error)) {
-            return 'Your session has expired. Please sign in again.';
+            const detail = error?.response?.data?.detail;
+            return typeof detail === 'string' ? detail : 'Your session has expired. Please sign in again.';
         }
         if (error?.code === 'ECONNABORTED') {
             return 'The login request took too long. Please try again in a moment.';
