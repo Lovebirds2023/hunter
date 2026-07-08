@@ -82,6 +82,15 @@ const isRecord = (value: unknown): value is JsonRecord =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 const asArray = (value: unknown) => (Array.isArray(value) ? value : []);
 const asStringArray = (value: unknown) => asArray(value).map((item) => String(item));
+const trustedAdminRoles = new Set(["admin", "super_admin"]);
+const getTrustedAuthRole = (authUser: JsonRecord) => {
+  const appMetadata = (authUser.app_metadata as JsonRecord | undefined) ?? {};
+  const roleCandidates = [
+    cleanString(appMetadata.role),
+    ...asStringArray(appMetadata.roles).map(cleanString),
+  ];
+  return roleCandidates.find((role) => trustedAdminRoles.has(role)) || "";
+};
 const asNumber = (value: unknown, fallback = 0) => {
   const number = typeof value === "number" ? value : Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -2597,32 +2606,46 @@ const handleNotificationSend = async (request: Request) => {
   return jsonResponse(campaign, 201);
 };
 
+const hasOwn = (record: JsonRecord, key: string) => Object.prototype.hasOwnProperty.call(record, key);
+
+const valueWithExistingFallback = (
+  values: JsonRecord,
+  existing: JsonRecord | null,
+  key: string,
+  fallback: unknown = null,
+) => (hasOwn(values, key) ? values[key] ?? null : existing?.[key] ?? fallback);
+
 const upsertProfile = async (authUser: JsonRecord, values: JsonRecord = {}) => {
+  const userId = cleanString(authUser.id);
+  const existing = userId ? await getProfile(userId) : null;
   const metadata = (authUser.user_metadata as JsonRecord | undefined) ?? {};
+  const trustedAuthRole = getTrustedAuthRole(authUser);
   const provider =
     cleanString(values.auth_provider) ||
+    cleanString(existing?.auth_provider) ||
     cleanString(metadata.provider) ||
     cleanString((authUser.app_metadata as JsonRecord | undefined)?.provider) ||
     "email";
 
   const payload = {
-    id: cleanString(authUser.id),
-    email: cleanString(values.email) || cleanString(authUser.email),
+    id: userId,
+    email: cleanString(values.email) || cleanString(existing?.email) || cleanString(authUser.email),
     full_name:
       cleanString(values.full_name) ||
+      cleanString(existing?.full_name) ||
       cleanString(metadata.full_name) ||
       cleanString(metadata.name) ||
       cleanString(authUser.email),
-    role: cleanString(values.role) || "buyer",
+    role: cleanString(values.role) || trustedAuthRole || cleanString(existing?.role) || "buyer",
     auth_provider: provider,
-    google_id: values.google_id ?? metadata.sub ?? null,
-    phone_number: values.phone_number ?? null,
-    country: values.country ?? null,
-    language: cleanString(values.language) || "en",
-    bio: values.bio ?? null,
-    latitude: values.latitude ?? null,
-    longitude: values.longitude ?? null,
-    location_accuracy_meters: values.location_accuracy_meters ?? null,
+    google_id: valueWithExistingFallback(values, existing, "google_id", metadata.sub ?? null),
+    phone_number: valueWithExistingFallback(values, existing, "phone_number"),
+    country: valueWithExistingFallback(values, existing, "country"),
+    language: cleanString(values.language) || cleanString(existing?.language) || "en",
+    bio: valueWithExistingFallback(values, existing, "bio"),
+    latitude: valueWithExistingFallback(values, existing, "latitude"),
+    longitude: valueWithExistingFallback(values, existing, "longitude"),
+    location_accuracy_meters: valueWithExistingFallback(values, existing, "location_accuracy_meters"),
     updated_at: new Date().toISOString(),
   };
 
@@ -2668,10 +2691,15 @@ const authUserHasGoogleProvider = (authUser: JsonRecord) => {
 
 const syncProfileWithAuthIdentity = async (profile: JsonRecord, authUser: JsonRecord) => {
   const googleId = getGoogleIdFromAuthUser(authUser);
-  if (!authUserHasGoogleProvider(authUser) && !googleId) return profile;
+  const trustedAuthRole = getTrustedAuthRole(authUser);
+  if (!authUserHasGoogleProvider(authUser) && !googleId && !trustedAuthRole) return profile;
 
   const metadata = (authUser.user_metadata as JsonRecord | undefined) ?? {};
   const updates: JsonRecord = {};
+
+  if (trustedAuthRole && cleanString(profile.role) !== trustedAuthRole) {
+    updates.role = trustedAuthRole;
+  }
 
   if (cleanString(profile.auth_provider) !== "google") {
     updates.auth_provider = "google";
