@@ -49,6 +49,16 @@ const jsonResponse = (body: unknown, status = 200) =>
 
 const errorResponse = (detail: string, status = 400) => jsonResponse({ detail }, status);
 
+const fileResponse = (body: string, contentType: string, fileName: string) =>
+  new Response(body, {
+    status: 200,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": contentType,
+      "Content-Disposition": `attachment; filename="${fileName.replace(/"/g, "")}"`,
+    },
+  });
+
 const getPath = (request: Request) => {
   const url = new URL(request.url);
   return url.pathname
@@ -105,6 +115,104 @@ const asBoolean = (value: unknown, fallback = false) => (
 );
 const firstPathMatch = (path: string, pattern: RegExp) => path.match(pattern)?.[1] ?? "";
 const getUrl = (request: Request) => new URL(request.url);
+const safeFileSlug = (value: unknown) => (
+  cleanString(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 80) || "export"
+);
+const uniqueStrings = (values: unknown[]) => (
+  [...new Set(values.map((value) => cleanString(value)).filter(Boolean))]
+);
+const normalizeHashtag = (value: unknown) => (
+  cleanString(value)
+    .replace(/^#+/, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, "")
+    .slice(0, 50)
+);
+const extractHashtags = (content: unknown) => (
+  [...cleanString(content).matchAll(/#([A-Za-z0-9_]{2,50})/g)]
+    .map((match) => normalizeHashtag(match[1]))
+    .filter(Boolean)
+);
+const normalizeMatchText = (value: unknown) => (
+  cleanString(value)
+    .toLowerCase()
+    .replace(/[-_]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+);
+const textTokens = (value: unknown) => (
+  new Set(normalizeMatchText(value).split(" ").filter((token) => token.length >= 3))
+);
+const textSimilarityRatio = (left: unknown, right: unknown) => {
+  const leftTokens = textTokens(left);
+  const rightTokens = textTokens(right);
+  if (!leftTokens.size || !rightTokens.size) return 0;
+  let overlap = 0;
+  leftTokens.forEach((token) => {
+    if (rightTokens.has(token)) overlap += 1;
+  });
+  return overlap / Math.max(leftTokens.size, rightTokens.size);
+};
+const stringMatchScore = (left: unknown, right: unknown, exactPoints: number, partialPoints = 0) => {
+  const leftNorm = normalizeMatchText(left);
+  const rightNorm = normalizeMatchText(right);
+  if (!leftNorm || !rightNorm) return { score: 0, result: "missing" };
+  if (leftNorm === rightNorm) return { score: exactPoints, result: "exact" };
+  if (partialPoints && (leftNorm.includes(rightNorm) || rightNorm.includes(leftNorm) || textSimilarityRatio(leftNorm, rightNorm) >= 0.4)) {
+    return { score: partialPoints, result: "partial" };
+  }
+  return { score: 0, result: "different" };
+};
+const locationScore = (source: JsonRecord, target: JsonRecord) => {
+  const sourceLat = asNullableNumber(source.latitude);
+  const sourceLon = asNullableNumber(source.longitude);
+  const targetLat = asNullableNumber(target.latitude);
+  const targetLon = asNullableNumber(target.longitude);
+  if (sourceLat === null || sourceLon === null || targetLat === null || targetLon === null) {
+    return { score: 0, distance_km: null };
+  }
+
+  const earthRadiusKm = 6371;
+  const toRadians = (value: number) => value * Math.PI / 180;
+  const latDelta = toRadians(targetLat - sourceLat);
+  const lonDelta = toRadians(targetLon - sourceLon);
+  const a = Math.sin(latDelta / 2) ** 2 +
+    Math.cos(toRadians(sourceLat)) * Math.cos(toRadians(targetLat)) * Math.sin(lonDelta / 2) ** 2;
+  const distance = earthRadiusKm * 2 * Math.asin(Math.sqrt(a));
+  if (distance <= 1) return { score: 16, distance_km: distance };
+  if (distance <= 5) return { score: 12, distance_km: distance };
+  if (distance <= 15) return { score: 8, distance_km: distance };
+  if (distance <= 50) return { score: 4, distance_km: distance };
+  return { score: 0, distance_km: distance };
+};
+const imageEvidenceCount = (item: JsonRecord) => (
+  asStringArray(item.images).length + (cleanString(item.image_url) ? 1 : 0)
+);
+const registeredPetImageCount = (dog: JsonRecord) => (
+  ["nose_print_image", "body_image", "birthmark_image"].filter((key) => cleanString(dog[key])).length
+);
+const scorecardCategories = [
+  "Human Wellbeing",
+  "Animal Welfare",
+  "Environment",
+  "Social Cohesion",
+  "Indigenous/Local Knowledge",
+];
+const defaultReportingFields: JsonRecord = {
+  community_members_engaged: 0,
+  trainings_story_labs_conducted: 0,
+  animals_indirectly_benefiting: 0,
+  materials_tools_produced: "",
+  human_wellbeing_outcome_notes: "",
+  animal_welfare_outcome_notes: "",
+  environmental_benefit_notes: "",
+  social_cohesion_notes: "",
+  evidence_links_or_uploaded_files: "",
+};
 
 const serializeUser = (profile: JsonRecord | null, authUser?: JsonRecord | null) => ({
   id: cleanString(profile?.id) || cleanString(authUser?.id),
@@ -557,25 +665,132 @@ const handleServiceFormFields = async (request: Request, serviceId: string) => {
   return jsonResponse({ status: "success" });
 };
 
-const serializeCaseReport = async (report: JsonRecord, userId = "", pin?: JsonRecord | null) => ({
-  ...report,
-  images: asStringArray(report.images),
-  author: await fetchAuthor(report.author_id),
-  like_count: await countRows("case_likes", "report_id", cleanString(report.id)),
-  comment_count: await countRows("case_comments", "report_id", cleanString(report.id)),
-  is_liked: userId
-    ? (await countRows("case_likes", "report_id", cleanString(report.id))) > 0 &&
-      Boolean((await supabaseAdmin
-        .from("case_likes")
-        .select("id")
-        .eq("report_id", cleanString(report.id))
-        .eq("user_id", userId)
-        .maybeSingle()).data)
-    : false,
-  ...pinMetadata(pin),
-  match_count: await countRows("pet_match_candidates", "case_report_id", cleanString(report.id)),
-  top_match_confidence: null,
-});
+const handleServiceResponses = async (request: Request, serviceId: string) => {
+  const { profile } = await requireProfile(request);
+  const service = await selectSingle("services", serviceId, "Service");
+  if (cleanString(service.provider_id) !== cleanString(profile.id) && !isAdminProfile(profile)) {
+    throw new Response("Not authorized", { status: 403 });
+  }
+
+  const { data: orders, error: ordersError } = await supabaseAdmin
+    .from("orders")
+    .select("*, buyer:users(id, full_name, email, phone_number)")
+    .eq("service_id", serviceId)
+    .order("created_at", { ascending: false });
+  if (ordersError) throw ordersError;
+
+  const orderIds = (orders ?? []).map((order) => cleanString((order as JsonRecord).id)).filter(Boolean);
+  const { data: fields, error: fieldsError } = await supabaseAdmin
+    .from("service_form_fields")
+    .select("id,label")
+    .eq("service_id", serviceId);
+  if (fieldsError) throw fieldsError;
+
+  const fieldLabels = new Map(
+    ((fields ?? []) as JsonRecord[]).map((field) => [cleanString(field.id), cleanString(field.label)])
+  );
+
+  let responseRows: JsonRecord[] = [];
+  if (orderIds.length) {
+    const { data, error } = await supabaseAdmin
+      .from("order_form_responses")
+      .select("*")
+      .in("order_id", orderIds);
+    if (error) throw error;
+    responseRows = (data ?? []) as JsonRecord[];
+  }
+
+  const responsesByOrder = new Map<string, JsonRecord[]>();
+  for (const response of responseRows) {
+    const orderId = cleanString(response.order_id);
+    if (!responsesByOrder.has(orderId)) responsesByOrder.set(orderId, []);
+    responsesByOrder.get(orderId)?.push({
+      id: response.id,
+      field_id: response.field_id,
+      field_label: fieldLabels.get(cleanString(response.field_id)) || "",
+      answer_value: response.answer_value ?? null,
+    });
+  }
+
+  return jsonResponse(((orders ?? []) as JsonRecord[]).map((order) => {
+    const buyer = isRecord(order.buyer) ? order.buyer : {};
+    const canSharePhone = asBoolean(order.share_phone, false) || isAdminProfile(profile);
+    return {
+      order_id: cleanString(order.id),
+      created_at: order.created_at,
+      status: cleanString(order.status) || "pending",
+      buyer: {
+        id: buyer.id ?? null,
+        full_name: cleanString(buyer.full_name) || "Unknown",
+        email: buyer.email ?? null,
+        phone: canSharePhone ? buyer.phone_number ?? null : null,
+      },
+      responses: responsesByOrder.get(cleanString(order.id)) ?? [],
+    };
+  }));
+};
+
+const getCaseMatchSummary = async (reportId: string) => {
+  const { data, error } = await supabaseAdmin
+    .from("pet_match_candidates")
+    .select("confidence")
+    .or(`case_report_id.eq.${reportId},matched_case_report_id.eq.${reportId}`);
+  if (error) throw error;
+  const rows = (data ?? []) as JsonRecord[];
+  return {
+    count: rows.length,
+    top_confidence: rows.length ? Math.max(...rows.map((row) => asNumber(row.confidence))) : null,
+  };
+};
+
+const getBlockedRelationshipUserIds = async (userId: string) => {
+  if (!userId) return [];
+  const { data, error } = await supabaseAdmin
+    .from("user_blocks")
+    .select("blocker_id,blocked_id")
+    .or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`);
+  if (error) throw error;
+  return uniqueStrings(((data ?? []) as JsonRecord[]).map((row) => (
+    cleanString(row.blocker_id) === userId ? row.blocked_id : row.blocker_id
+  )));
+};
+
+const isBlockedRelationship = async (leftUserId: string, rightUserId: string) => {
+  if (!leftUserId || !rightUserId) return false;
+  const { data, error } = await supabaseAdmin
+    .from("user_blocks")
+    .select("blocker_id,blocked_id")
+    .or(`blocker_id.eq.${leftUserId},blocked_id.eq.${leftUserId}`);
+  if (error) throw error;
+  return ((data ?? []) as JsonRecord[]).some((row) => (
+    (cleanString(row.blocker_id) === leftUserId && cleanString(row.blocked_id) === rightUserId) ||
+    (cleanString(row.blocker_id) === rightUserId && cleanString(row.blocked_id) === leftUserId)
+  ));
+};
+
+const serializeCaseReport = async (report: JsonRecord, userId = "", pin?: JsonRecord | null) => {
+  const reportId = cleanString(report.id);
+  const matchSummary = await getCaseMatchSummary(reportId);
+  return {
+    ...report,
+    images: asStringArray(report.images),
+    author: await fetchAuthor(report.author_id),
+    like_count: await countRows("case_likes", "report_id", reportId),
+    comment_count: await countRows("case_comments", "report_id", reportId),
+    is_liked: userId
+      ? (await countRows("case_likes", "report_id", reportId)) > 0 &&
+        Boolean((await supabaseAdmin
+          .from("case_likes")
+          .select("id")
+          .eq("report_id", reportId)
+          .eq("user_id", userId)
+          .maybeSingle()).data)
+      : false,
+    ...pinMetadata(pin),
+    match_count: matchSummary.count,
+    top_match_confidence: matchSummary.top_confidence,
+  };
+};
 
 const handleListCases = async (request: Request) => {
   const { profile } = await requireProfile(request);
@@ -588,7 +803,12 @@ const handleListCases = async (request: Request) => {
     .order("created_at", { ascending: false })
     .limit(50);
   if (error) throw error;
-  const rows = await Promise.all((data ?? []).map((report) => {
+  const blockedUserIds = new Set(await getBlockedRelationshipUserIds(userId));
+  const visibleReports = ((data ?? []) as JsonRecord[]).filter((report) => {
+    const authorId = cleanString(report.author_id);
+    return authorId === userId || !blockedUserIds.has(authorId);
+  });
+  const rows = await Promise.all(visibleReports.map((report) => {
     const row = report as JsonRecord;
     return serializeCaseReport(row, userId, pins.get(`case:${cleanString(row.id)}`));
   }));
@@ -627,6 +847,7 @@ const handleCreateCase = async (request: Request) => {
 
   const { data, error } = await supabaseAdmin.from("case_reports").insert(payload).select("*").single();
   if (error) throw error;
+  if (lostFoundCaseTypes.has(caseType)) await runPetMatchForCase(data as JsonRecord);
   return jsonResponse(await serializeCaseReport(data as JsonRecord, cleanString(profile.id)), 201);
 };
 
@@ -698,6 +919,395 @@ const handleCaseLike = async (request: Request, reportId: string) => {
   return jsonResponse({ liked: true, like_count: await countRows("case_likes", "report_id", reportId) });
 };
 
+const lostFoundCaseTypes = new Set(["lost_dog", "found_dog"]);
+const oppositeLostFoundType: Record<string, string> = {
+  lost_dog: "found_dog",
+  found_dog: "lost_dog",
+};
+
+const scoreCaseCandidate = (report: JsonRecord, candidate: JsonRecord) => {
+  let score = 0;
+  const reasons: string[] = [];
+  const signals: JsonRecord = {};
+
+  const pet = stringMatchScore(report.pet_type || "dog", candidate.pet_type || "dog", 12);
+  score += pet.score;
+  signals.pet_type = pet.result;
+  if (pet.score) reasons.push(`Same animal type: ${cleanString(candidate.pet_type) || "pet"}`);
+
+  const breed = stringMatchScore(report.breed, candidate.breed, 14, 8);
+  score += breed.score;
+  signals.breed = breed.result;
+  if (breed.score) reasons.push("Breed looks similar");
+
+  const color = stringMatchScore(report.color, candidate.color, 15, 9);
+  score += color.score;
+  signals.color = color.result;
+  if (color.score) reasons.push("Color or pattern looks similar");
+
+  const size = stringMatchScore(report.size, candidate.size, 8, 4);
+  score += size.score;
+  signals.size = size.result;
+  if (size.score) reasons.push("Size is similar");
+
+  const sex = stringMatchScore(report.sex, candidate.sex, 6);
+  score += sex.score;
+  signals.sex = sex.result;
+  if (sex.score) reasons.push("Sex matches");
+
+  const microchip = stringMatchScore(report.microchip_id, candidate.microchip_id, 35);
+  score += microchip.score;
+  signals.microchip = microchip.result;
+  if (microchip.score) reasons.push("Microchip or tag ID matches");
+
+  const markingsRatio = textSimilarityRatio(report.unique_markings, candidate.unique_markings);
+  const markingsScore = Math.min(markingsRatio * 14, 14);
+  score += markingsScore;
+  signals.unique_markings = Math.round(markingsRatio * 100) / 100;
+  if (markingsScore >= 5) reasons.push("Unique markings overlap");
+
+  const collarRatio = textSimilarityRatio(report.collar_description, candidate.collar_description);
+  const collarScore = Math.min(collarRatio * 8, 8);
+  score += collarScore;
+  signals.collar = Math.round(collarRatio * 100) / 100;
+  if (collarScore >= 4) reasons.push("Collar or tag description overlaps");
+
+  const descriptionRatio = Math.max(
+    textSimilarityRatio(report.description, candidate.description),
+    textSimilarityRatio(report.title, candidate.title),
+  );
+  const descriptionScore = Math.min(descriptionRatio * 8, 8);
+  score += descriptionScore;
+  signals.description = Math.round(descriptionRatio * 100) / 100;
+
+  const location = locationScore(report, candidate);
+  score += location.score;
+  signals.distance_km = location.distance_km === null ? null : Math.round(location.distance_km * 10) / 10;
+  if (location.score && location.distance_km !== null) {
+    reasons.push(`Locations are about ${location.distance_km.toFixed(1)} km apart`);
+  }
+
+  if (imageEvidenceCount(report) && imageEvidenceCount(candidate)) {
+    score += 4;
+    reasons.push("Both reports include photos");
+    signals.photo_evidence = true;
+  }
+
+  const reportDate = new Date(cleanString(report.created_at));
+  const candidateDate = new Date(cleanString(candidate.created_at));
+  if (!Number.isNaN(reportDate.getTime()) && !Number.isNaN(candidateDate.getTime())) {
+    const daysApart = Math.abs((reportDate.getTime() - candidateDate.getTime()) / (24 * 60 * 60 * 1000));
+    signals.days_apart = Math.round(daysApart);
+    if (daysApart <= 30) score += 5;
+    else if (daysApart <= 90) score += 2;
+  }
+
+  return {
+    confidence: Math.min(Math.round(score * 10) / 10, 100),
+    reasons: reasons.slice(0, 6),
+    signals,
+    candidate_type: "case",
+  };
+};
+
+const scoreRegisteredPetCandidate = (report: JsonRecord, dog: JsonRecord) => {
+  let score = 0;
+  const reasons: string[] = [];
+  const signals: JsonRecord = {};
+
+  const pet = stringMatchScore(report.pet_type || "dog", dog.pet_type || "dog", 14);
+  score += pet.score;
+  signals.pet_type = pet.result;
+  if (pet.score) reasons.push(`Same animal type: ${cleanString(dog.pet_type) || "pet"}`);
+
+  const breed = stringMatchScore(report.breed, dog.breed, 16, 9);
+  score += breed.score;
+  signals.breed = breed.result;
+  if (breed.score) reasons.push("Breed looks similar");
+
+  const color = stringMatchScore(report.color, dog.color, 18, 10);
+  score += color.score;
+  signals.color = color.result;
+  if (color.score) reasons.push("Color or pattern looks similar");
+
+  const size = stringMatchScore(report.size, dog.body_structure, 9, 4);
+  score += size.score;
+  signals.size = size.result;
+  if (size.score) reasons.push("Body size looks similar");
+
+  const notesRatio = Math.max(
+    textSimilarityRatio(report.unique_markings, dog.bio),
+    textSimilarityRatio(report.description, dog.bio),
+  );
+  const notesScore = Math.min(notesRatio * 10, 10);
+  score += notesScore;
+  signals.profile_notes = Math.round(notesRatio * 100) / 100;
+  if (notesScore >= 4) reasons.push("Profile notes overlap with report details");
+
+  const owner = isRecord(dog.owner) ? dog.owner : {};
+  const location = locationScore(report, owner);
+  score += location.score;
+  signals.owner_distance_km = location.distance_km === null ? null : Math.round(location.distance_km * 10) / 10;
+  if (location.score && location.distance_km !== null) {
+    reasons.push(`Found near registered owner area (${location.distance_km.toFixed(1)} km)`);
+  }
+
+  if (imageEvidenceCount(report) && registeredPetImageCount(dog)) {
+    score += 5;
+    reasons.push("Both records include photos");
+    signals.photo_evidence = true;
+  }
+
+  return {
+    confidence: Math.min(Math.round(score * 10) / 10, 100),
+    reasons: reasons.slice(0, 6),
+    signals,
+    candidate_type: "registered_pet",
+  };
+};
+
+const runPetMatchForCase = async (report: JsonRecord) => {
+  const reportId = cleanString(report.id);
+  const caseType = cleanString(report.case_type);
+  if (!reportId || !lostFoundCaseTypes.has(caseType)) return [];
+
+  const rows: JsonRecord[] = [];
+  const oppositeType = oppositeLostFoundType[caseType];
+  const { data: cases, error: casesError } = await supabaseAdmin
+    .from("case_reports")
+    .select("*")
+    .eq("case_type", oppositeType)
+    .eq("is_approved", true)
+    .neq("id", reportId)
+    .limit(150);
+  if (casesError) throw casesError;
+
+  for (const candidate of (cases ?? []) as JsonRecord[]) {
+    const score = scoreCaseCandidate(report, candidate);
+    if (asNumber(score.confidence) >= 35) {
+      rows.push({
+        case_report_id: reportId,
+        matched_case_report_id: cleanString(candidate.id),
+        match_source: "rule",
+        confidence: score.confidence,
+        status: "suggested",
+        score_breakdown: score,
+        updated_at: nowIso(),
+      });
+    }
+  }
+
+  let dogQuery = supabaseAdmin
+    .from("dogs")
+    .select("*, owner:users(id, full_name, profile_image, latitude, longitude)")
+    .limit(200);
+  const petType = cleanString(report.pet_type);
+  if (petType) dogQuery = dogQuery.eq("pet_type", petType);
+  const { data: dogs, error: dogsError } = await dogQuery;
+  if (dogsError) throw dogsError;
+
+  for (const dog of (dogs ?? []) as JsonRecord[]) {
+    const score = scoreRegisteredPetCandidate(report, dog);
+    if (asNumber(score.confidence) >= 35) {
+      rows.push({
+        case_report_id: reportId,
+        matched_dog_id: cleanString(dog.id),
+        match_source: "rule",
+        confidence: score.confidence,
+        status: "suggested",
+        score_breakdown: score,
+        updated_at: nowIso(),
+      });
+    }
+  }
+
+  const { error: deleteError } = await supabaseAdmin
+    .from("pet_match_candidates")
+    .delete()
+    .eq("case_report_id", reportId);
+  if (deleteError) throw deleteError;
+
+  if (!rows.length) return [];
+  const { data, error } = await supabaseAdmin
+    .from("pet_match_candidates")
+    .insert(rows.sort((a, b) => asNumber(b.confidence) - asNumber(a.confidence)).slice(0, 25))
+    .select("*");
+  if (error) throw error;
+  return (data ?? []) as JsonRecord[];
+};
+
+const canViewPetMatch = async (match: JsonRecord, profile: JsonRecord) => {
+  if (isAdminProfile(profile)) return true;
+  const userId = cleanString(profile.id);
+  const caseIds = [cleanString(match.case_report_id), cleanString(match.matched_case_report_id)].filter(Boolean);
+  if (caseIds.length) {
+    const { data, error } = await supabaseAdmin
+      .from("case_reports")
+      .select("author_id")
+      .in("id", caseIds);
+    if (error) throw error;
+    if (((data ?? []) as JsonRecord[]).some((row) => cleanString(row.author_id) === userId)) return true;
+  }
+  const dogId = cleanString(match.matched_dog_id);
+  if (dogId) {
+    const { data, error } = await supabaseAdmin
+      .from("dogs")
+      .select("owner_id")
+      .eq("id", dogId)
+      .maybeSingle();
+    if (error) throw error;
+    if (cleanString((data as JsonRecord | null)?.owner_id) === userId) return true;
+  }
+  return false;
+};
+
+const serializePetMatch = async (match: JsonRecord, viewpointReportId = "") => {
+  let matchedCaseId = cleanString(match.matched_case_report_id);
+  if (viewpointReportId && matchedCaseId === viewpointReportId) {
+    matchedCaseId = cleanString(match.case_report_id);
+  }
+
+  let matchedCase: JsonRecord | null = null;
+  if (matchedCaseId) {
+    const { data, error } = await supabaseAdmin
+      .from("case_reports")
+      .select("*")
+      .eq("id", matchedCaseId)
+      .maybeSingle();
+    if (error) throw error;
+    matchedCase = data as JsonRecord | null;
+  }
+
+  let matchedDog: JsonRecord | null = null;
+  const dogId = cleanString(match.matched_dog_id);
+  if (dogId) {
+    const { data, error } = await supabaseAdmin
+      .from("dogs")
+      .select("id,name,breed,color,pet_type,body_structure,bio,nose_print_image,body_image,birthmark_image,owner:users(id,full_name,profile_image)")
+      .eq("id", dogId)
+      .maybeSingle();
+    if (error) throw error;
+    matchedDog = data as JsonRecord | null;
+  }
+
+  return {
+    ...match,
+    score_breakdown: isRecord(match.score_breakdown) ? match.score_breakdown : {},
+    matched_case: matchedCase ? {
+      ...matchedCase,
+      images: asStringArray(matchedCase.images),
+      author: await fetchAuthor(matchedCase.author_id),
+    } : null,
+    matched_dog: matchedDog ? {
+      ...matchedDog,
+      owner: isRecord(matchedDog.owner) ? matchedDog.owner : null,
+    } : null,
+  };
+};
+
+const handleCaseMatches = async (request: Request, reportId: string) => {
+  const { profile } = await requireProfile(request);
+  await handleGetCase(request, reportId);
+  const { data, error } = await supabaseAdmin
+    .from("pet_match_candidates")
+    .select("*")
+    .or(`case_report_id.eq.${reportId},matched_case_report_id.eq.${reportId}`)
+    .order("confidence", { ascending: false });
+  if (error) throw error;
+  const visible = [];
+  for (const match of (data ?? []) as JsonRecord[]) {
+    if (await canViewPetMatch(match, profile)) visible.push(await serializePetMatch(match, reportId));
+  }
+  return jsonResponse(visible);
+};
+
+const handleRefreshCaseMatches = async (request: Request, reportId: string) => {
+  const { profile } = await requireProfile(request);
+  const report = await selectSingle("case_reports", reportId, "Case report");
+  if (cleanString(report.author_id) !== cleanString(profile.id) && !isAdminProfile(profile)) {
+    throw new Response("Only the reporter or admin can refresh matches", { status: 403 });
+  }
+  await runPetMatchForCase(report);
+  return handleCaseMatches(request, reportId);
+};
+
+const handleUpdateCaseMatchStatus = async (request: Request, reportId: string, matchId: string) => {
+  const { profile } = await requireProfile(request);
+  const body = await readJson(request);
+  const status = cleanString(body.status);
+  if (!["suggested", "notified", "confirmed", "rejected"].includes(status)) {
+    return errorResponse("Invalid match status.");
+  }
+  const { data: match, error: matchError } = await supabaseAdmin
+    .from("pet_match_candidates")
+    .select("*")
+    .eq("id", matchId)
+    .or(`case_report_id.eq.${reportId},matched_case_report_id.eq.${reportId}`)
+    .maybeSingle();
+  if (matchError) throw matchError;
+  if (!match) throw new Response("Match not found", { status: 404 });
+  if (!(await canViewPetMatch(match as JsonRecord, profile))) {
+    throw new Response("You cannot update this match", { status: 403 });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("pet_match_candidates")
+    .update({ status, reviewed_at: nowIso(), updated_at: nowIso() })
+    .eq("id", matchId)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return jsonResponse(await serializePetMatch(data as JsonRecord, reportId));
+};
+
+const handleDogIdentify = async (request: Request) => {
+  await requireProfile(request);
+  const body = await readJson(request);
+  const reportLike = {
+    pet_type: cleanString(body.pet_type) || "dog",
+    breed: body.breed ?? null,
+    color: body.color ?? null,
+    size: body.body_structure ?? body.size ?? null,
+    description: body.description ?? null,
+    unique_markings: body.unique_markings ?? null,
+    image_url: body.image_url ?? body.nose_print_image ?? null,
+    images: asStringArray(body.images),
+  };
+
+  let query = supabaseAdmin
+    .from("dogs")
+    .select("*, owner:users(id, full_name, profile_image, latitude, longitude)")
+    .limit(100);
+  if (cleanString(reportLike.pet_type)) query = query.eq("pet_type", cleanString(reportLike.pet_type));
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const results = ((data ?? []) as JsonRecord[])
+    .map((dog) => ({ dog, score: scoreRegisteredPetCandidate(reportLike, dog) }))
+    .filter((item) => asNumber(item.score.confidence) >= 35)
+    .sort((a, b) => asNumber(b.score.confidence) - asNumber(a.score.confidence))
+    .slice(0, 10)
+    .map((item) => ({
+      dog: {
+        id: item.dog.id,
+        name: item.dog.name,
+        breed: item.dog.breed,
+        color: item.dog.color,
+        pet_type: item.dog.pet_type,
+        body_image: item.dog.body_image,
+      },
+      confidence: item.score.confidence,
+      match_reason: item.score.reasons.join(", ") || "Similar registered pet profile",
+      score_breakdown: item.score,
+    }));
+
+  return jsonResponse({
+    matches: results.length,
+    results,
+    message: results.length ? "Potential matches found." : "No strong match found.",
+  });
+};
+
 const handleListEvents = async () => {
   const pins = await getActivePins();
   const { data, error } = await supabaseAdmin
@@ -755,23 +1365,15 @@ const handleCreateEvent = async (request: Request) => {
 
   let pin: JsonRecord | null = null;
   if (isAdminProfile(profile)) {
-    const { data: pinData, error: pinError } = await supabaseAdmin
-      .from("content_pins")
-      .upsert({
-        target_type: "event",
-        target_id: cleanString((data as JsonRecord).id),
-        title,
-        description: body.description ?? null,
-        image_url: body.poster_url ?? null,
-        priority: 150,
-        is_active: true,
-        created_by_id: cleanString(profile.id),
-        updated_at: nowIso(),
-      }, { onConflict: "target_type,target_id" })
-      .select("*")
-      .single();
-    if (pinError) throw pinError;
-    pin = pinData as JsonRecord;
+    pin = await saveContentPin({
+      target_type: "event",
+      target_id: cleanString((data as JsonRecord).id),
+      title,
+      description: body.description ?? null,
+      image_url: body.poster_url ?? null,
+      priority: 150,
+      created_by_id: cleanString(profile.id),
+    });
   }
 
   return jsonResponse({ ...data, registrant_count: 0, ...pinMetadata(pin) }, 201);
@@ -788,11 +1390,74 @@ const handleGetEvent = async (eventId: string) => {
   });
 };
 
+const handleEventFormFields = async (request: Request, eventId: string) => {
+  if (request.method === "GET") {
+    const { data, error } = await supabaseAdmin
+      .from("event_form_fields")
+      .select("*")
+      .eq("event_id", eventId)
+      .order("sort_order", { ascending: true });
+    if (error) throw error;
+    return jsonResponse(data ?? []);
+  }
+
+  const { profile } = await requireProfile(request);
+  const event = await selectSingle("events", eventId, "Event");
+  if (cleanString(event.organizer_id) !== cleanString(profile.id) && !isAdminProfile(profile)) {
+    throw new Response("Not authorized to edit this event's form", { status: 403 });
+  }
+
+  const fields = asArray(await readJson(request));
+  const { error: deleteError } = await supabaseAdmin.from("event_form_fields").delete().eq("event_id", eventId);
+  if (deleteError) throw deleteError;
+
+  const rows = fields.map((field, index) => {
+    const record = isRecord(field) ? field : {};
+    return {
+      event_id: eventId,
+      field_type: cleanString(record.field_type),
+      label: cleanString(record.label),
+      options: record.options ?? null,
+      is_required: asBoolean(record.is_required, false),
+      sort_order: Number.isFinite(Number(record.sort_order)) ? Number(record.sort_order) : index,
+    };
+  }).filter((field) => field.field_type && field.label);
+
+  if (!rows.length) return jsonResponse([]);
+
+  const { data, error } = await supabaseAdmin
+    .from("event_form_fields")
+    .insert(rows)
+    .select("*")
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+  return jsonResponse(data ?? []);
+};
+
 const handleRegisterEvent = async (request: Request, eventId: string) => {
   const { profile } = await requireProfile(request);
   const event = await selectSingle("events", eventId, "Event");
   const body = await readJson(request);
-  const amount = asNumber(event.ticket_price);
+  const ticketTiers = asArray(event.ticket_tiers).filter(isRecord);
+  const selectedTierId = cleanString(body.ticket_tier_id);
+  const selectedTier = selectedTierId
+    ? ticketTiers.find((tier) => cleanString(tier.id) === selectedTierId) ?? null
+    : null;
+  if (ticketTiers.length > 0 && !selectedTier) {
+    return errorResponse("Choose a registration type before continuing.");
+  }
+
+  const availableSlots = asArray(event.available_slots).filter(isRecord);
+  const selectedSlotId = cleanString(body.booking_slot_id);
+  const selectedSlot = selectedSlotId
+    ? availableSlots.find((slot) => cleanString(slot.id) === selectedSlotId) ?? null
+    : null;
+  if (availableSlots.length > 0 && !selectedSlot) {
+    return errorResponse("Choose an available date/time before continuing.");
+  }
+
+  const amount = selectedTier ? Math.max(asNumber(selectedTier.price), 0) : Math.max(asNumber(event.ticket_price), 0);
+  const currency = cleanString(selectedTier?.currency) || cleanString(event.currency) || "KES";
   const payload = {
     event_id: eventId,
     user_id: cleanString(profile.id),
@@ -801,17 +1466,667 @@ const handleRegisterEvent = async (request: Request, eventId: string) => {
     role: cleanString(body.role) || "attendee",
     share_phone: asBoolean(body.share_phone, false),
     amount,
-    currency: cleanString(event.currency) || "KES",
+    currency,
     payment_status: amount > 0 ? "pending" : "free",
-    ticket_tier_id: body.ticket_tier_id ?? null,
+    ticket_tier_id: selectedTier ? cleanString(selectedTier.id) : null,
+    ticket_tier_label: selectedTier ? cleanString(selectedTier.label) : null,
     attendee_type_justification: body.attendee_type_justification ?? null,
-    booking_slot_id: body.booking_slot_id ?? null,
+    booking_slot_id: selectedSlot ? cleanString(selectedSlot.id) : null,
+    booking_slot_label: selectedSlot ? cleanString(selectedSlot.label) : null,
+    booking_start_time: selectedSlot ? cleanString(selectedSlot.start_time) || null : null,
+    booking_end_time: selectedSlot ? cleanString(selectedSlot.end_time) || null : null,
     updated_at: nowIso(),
   };
 
   const { data, error } = await supabaseAdmin
     .from("registrations")
     .upsert(payload, { onConflict: "event_id,user_id" })
+    .select("*")
+    .single();
+  if (error) throw error;
+
+  const registrationId = cleanString((data as JsonRecord).id);
+  const { error: deleteResponsesError } = await supabaseAdmin
+    .from("registration_responses")
+    .delete()
+    .eq("registration_id", registrationId);
+  if (deleteResponsesError) throw deleteResponsesError;
+
+  const formResponses = asArray(body.form_responses);
+  const responseRows = formResponses.map((response) => {
+    const record = isRecord(response) ? response : {};
+    return {
+      registration_id: registrationId,
+      field_id: cleanString(record.field_id),
+      answer_value: record.answer_value ?? null,
+    };
+  }).filter((response) => response.field_id);
+  if (responseRows.length) {
+    const { error: responsesError } = await supabaseAdmin.from("registration_responses").insert(responseRows);
+    if (responsesError) throw responsesError;
+  }
+
+  return jsonResponse({ ...data, responses: responseRows }, 201);
+};
+
+const handleEventResponses = async (request: Request, eventId: string) => {
+  const { profile } = await requireProfile(request);
+  const event = await selectSingle("events", eventId, "Event");
+  if (cleanString(event.organizer_id) !== cleanString(profile.id) && !isAdminProfile(profile)) {
+    throw new Response("Not authorized to view responses", { status: 403 });
+  }
+
+  const { data: registrations, error: registrationsError } = await supabaseAdmin
+    .from("registrations")
+    .select("*, user:users(id, full_name, email, phone_number), dog:dogs(id, name)")
+    .eq("event_id", eventId)
+    .order("created_at", { ascending: false });
+  if (registrationsError) throw registrationsError;
+
+  const registrationIds = ((registrations ?? []) as JsonRecord[])
+    .map((registration) => cleanString(registration.id))
+    .filter(Boolean);
+  const { data: fields, error: fieldsError } = await supabaseAdmin
+    .from("event_form_fields")
+    .select("id,label")
+    .eq("event_id", eventId);
+  if (fieldsError) throw fieldsError;
+  const fieldLabels = new Map(
+    ((fields ?? []) as JsonRecord[]).map((field) => [cleanString(field.id), cleanString(field.label)])
+  );
+
+  let responseRows: JsonRecord[] = [];
+  if (registrationIds.length) {
+    const { data, error } = await supabaseAdmin
+      .from("registration_responses")
+      .select("*")
+      .in("registration_id", registrationIds);
+    if (error) throw error;
+    responseRows = (data ?? []) as JsonRecord[];
+  }
+
+  const responsesByRegistration = new Map<string, JsonRecord[]>();
+  for (const response of responseRows) {
+    const registrationId = cleanString(response.registration_id);
+    if (!responsesByRegistration.has(registrationId)) responsesByRegistration.set(registrationId, []);
+    responsesByRegistration.get(registrationId)?.push({
+      id: response.id,
+      field_id: response.field_id,
+      field_label: fieldLabels.get(cleanString(response.field_id)) || "",
+      answer_value: response.answer_value ?? null,
+      created_at: response.created_at,
+    });
+  }
+
+  return jsonResponse(((registrations ?? []) as JsonRecord[]).map((registration) => {
+    const user = isRecord(registration.user) ? registration.user : {};
+    const dog = isRecord(registration.dog) ? registration.dog : {};
+    const canSharePhone = asBoolean(registration.share_phone, false) || isAdminProfile(profile);
+    return {
+      id: registration.id,
+      event_id: registration.event_id,
+      user_id: registration.user_id,
+      user_name: cleanString(user.full_name) || "Unknown",
+      user_email: user.email ?? null,
+      user_phone: canSharePhone ? user.phone_number ?? null : null,
+      dog_name: dog.name ?? null,
+      status: registration.status,
+      role: registration.role,
+      share_phone: registration.share_phone,
+      amount: registration.amount,
+      currency: registration.currency,
+      payment_status: registration.payment_status,
+      ticket_tier_id: registration.ticket_tier_id,
+      ticket_tier_label: registration.ticket_tier_label,
+      attendee_type_justification: registration.attendee_type_justification,
+      booking_slot_id: registration.booking_slot_id,
+      booking_slot_label: registration.booking_slot_label,
+      booking_start_time: registration.booking_start_time,
+      booking_end_time: registration.booking_end_time,
+      pesapal_tracking_id: registration.pesapal_tracking_id,
+      paid_at: registration.paid_at,
+      created_at: registration.created_at,
+      responses: responsesByRegistration.get(cleanString(registration.id)) ?? [],
+    };
+  }));
+};
+
+const getEventScorecardTitle = (event: JsonRecord | null) => (
+  cleanString(event?.scorecard_title) || "Community Impact Assessment"
+);
+
+const getEventScorecardDescription = (event: JsonRecord | null) => (
+  cleanString(event?.scorecard_description) || "Collect baseline and follow-up data for M&E, outcome tracking, and partner reporting."
+);
+
+const getScorecardQuestions = async (surveyType: string) => {
+  let query = supabaseAdmin
+    .from("scorecard_questions")
+    .select("*")
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true });
+  if (surveyType) query = query.eq("survey_type", surveyType);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as JsonRecord[];
+};
+
+const handleScorecardQuestions = async (request: Request) => {
+  const surveyType = cleanString(getUrl(request).searchParams.get("survey_type"));
+  if (surveyType && !["baseline", "followup"].includes(surveyType)) {
+    return errorResponse("survey_type must be baseline or followup.");
+  }
+  return jsonResponse(await getScorecardQuestions(surveyType));
+};
+
+const calculateScorecardScores = (questionMap: Map<string, JsonRecord>, responses: JsonRecord[]) => {
+  const categoryValues = new Map<string, number[]>();
+  scorecardCategories.forEach((category) => categoryValues.set(category, []));
+  const allValues: number[] = [];
+
+  for (const response of responses) {
+    const question = questionMap.get(cleanString(response.question_id));
+    if (!question || cleanString(question.question_type) !== "likert") continue;
+    const value = asNumber(response.answer_numeric, NaN);
+    if (!Number.isFinite(value) || value < 1 || value > 5) {
+      throw new Response("Likert responses must be between 1 and 5", { status: 400 });
+    }
+    const category = cleanString(question.category);
+    if (category) categoryValues.set(category, [...(categoryValues.get(category) ?? []), value]);
+    allValues.push(value);
+  }
+
+  const categoryScores: JsonRecord = {};
+  categoryValues.forEach((values, category) => {
+    if (values.length) categoryScores[category] = Math.round((values.reduce((sum, value) => sum + value, 0) / (values.length * 5)) * 10000) / 100;
+  });
+
+  const coexistenceIndex = allValues.length
+    ? Math.round((allValues.reduce((sum, value) => sum + value, 0) / (allValues.length * 5)) * 10000) / 100
+    : 0;
+  return { categoryScores, coexistenceIndex };
+};
+
+const findOrCreateScorecardParticipant = async (eventId: string, profile: JsonRecord) => {
+  if (!asBoolean(profile.consent, false)) {
+    throw new Response("Consent is required before submitting the impact assessment", { status: 400 });
+  }
+  const fullName = cleanString(profile.full_name);
+  const anonymousCode = cleanString(profile.anonymous_code);
+  const phoneNumber = cleanString(profile.phone_number);
+  const county = cleanString(profile.county);
+  const communityLocation = cleanString(profile.community_location);
+  if (!fullName && !anonymousCode) {
+    throw new Response("Provide a full name or anonymous participant code", { status: 400 });
+  }
+  if (!county || !communityLocation) {
+    throw new Response("County and community/location are required", { status: 400 });
+  }
+
+  let participant: JsonRecord | null = null;
+  const baseQuery = () => supabaseAdmin
+    .from("scorecard_participants")
+    .select("*")
+    .eq("event_id", eventId)
+    .limit(1);
+
+  if (anonymousCode) {
+    const { data, error } = await baseQuery().eq("anonymous_code", anonymousCode).maybeSingle();
+    if (error) throw error;
+    participant = data as JsonRecord | null;
+  }
+  if (!participant && phoneNumber) {
+    const { data, error } = await baseQuery().eq("phone_number", phoneNumber).maybeSingle();
+    if (error) throw error;
+    participant = data as JsonRecord | null;
+  }
+  if (!participant && fullName) {
+    const { data, error } = await baseQuery()
+      .eq("full_name", fullName)
+      .eq("community_location", communityLocation)
+      .maybeSingle();
+    if (error) throw error;
+    participant = data as JsonRecord | null;
+  }
+
+  const payload = {
+    event_id: eventId,
+    full_name: fullName || null,
+    anonymous_code: anonymousCode || null,
+    phone_number: phoneNumber || null,
+    county,
+    community_location: communityLocation,
+    user_type: cleanString(profile.user_type) || "other",
+    participation_type: cleanString(profile.participation_type) || "other",
+    consent: true,
+    updated_at: nowIso(),
+  };
+
+  if (participant) {
+    const { data, error } = await supabaseAdmin
+      .from("scorecard_participants")
+      .update(payload)
+      .eq("id", cleanString(participant.id))
+      .select("*")
+      .single();
+    if (error) throw error;
+    return data as JsonRecord;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("scorecard_participants")
+    .insert(payload)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as JsonRecord;
+};
+
+const participantScorePair = async (eventId: string, participantId: string) => {
+  const { data, error } = await supabaseAdmin
+    .from("scorecard_surveys")
+    .select("survey_type,coexistence_index,created_at")
+    .eq("event_id", eventId)
+    .eq("participant_id", participantId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  const surveys = (data ?? []) as JsonRecord[];
+  const baseline = surveys.find((survey) => cleanString(survey.survey_type) === "baseline");
+  const followup = surveys.find((survey) => cleanString(survey.survey_type) === "followup");
+  const baselineScore = baseline ? asNumber(baseline.coexistence_index) : null;
+  const followupScore = followup ? asNumber(followup.coexistence_index) : null;
+  const change = baselineScore !== null && followupScore !== null ? Math.round((followupScore - baselineScore) * 100) / 100 : null;
+  return { baselineScore, followupScore, change };
+};
+
+const handleSubmitScorecardSurvey = async (request: Request, eventId: string) => {
+  const event = await selectSingle("events", eventId, "Event");
+  if (event.scorecard_enabled === false) return errorResponse("Impact tracking is not enabled for this event.");
+  const body = await readJson(request);
+  const surveyType = cleanString(body.survey_type);
+  if (!["baseline", "followup"].includes(surveyType)) return errorResponse("survey_type must be baseline or followup.");
+
+  const questions = await getScorecardQuestions(surveyType);
+  const questionMap = new Map(questions.map((question) => [cleanString(question.id), question]));
+  const responses = asArray(body.responses).filter(isRecord);
+  const provided = new Map(responses.map((response) => [cleanString(response.question_id), response]));
+
+  for (const question of questions) {
+    const response = provided.get(cleanString(question.id));
+    if (!response) return errorResponse(`Missing response for: ${cleanString(question.prompt)}`);
+    if (cleanString(question.question_type) === "likert" && !Number.isFinite(asNumber(response.answer_numeric, NaN))) {
+      return errorResponse(`Select a 1-5 score for: ${cleanString(question.prompt)}`);
+    }
+    if (cleanString(question.question_type) === "open" && !cleanString(response.answer_text)) {
+      return errorResponse(`Answer required for: ${cleanString(question.prompt)}`);
+    }
+  }
+
+  const participant = await findOrCreateScorecardParticipant(eventId, isRecord(body.participant) ? body.participant : {});
+  const scores = calculateScorecardScores(questionMap, responses);
+  const { data: survey, error: surveyError } = await supabaseAdmin
+    .from("scorecard_surveys")
+    .insert({
+      event_id: eventId,
+      participant_id: cleanString(participant.id),
+      survey_type: surveyType,
+      category_scores: scores.categoryScores,
+      coexistence_index: scores.coexistenceIndex,
+    })
+    .select("*")
+    .single();
+  if (surveyError) throw surveyError;
+
+  const responseRows = responses
+    .map((response) => {
+      const question = questionMap.get(cleanString(response.question_id));
+      if (!question) return null;
+      const isLikert = cleanString(question.question_type) === "likert";
+      return {
+        survey_id: cleanString((survey as JsonRecord).id),
+        question_id: cleanString(response.question_id),
+        answer_numeric: isLikert ? asNumber(response.answer_numeric) : null,
+        answer_text: isLikert ? null : cleanString(response.answer_text),
+      };
+    })
+    .filter((row): row is JsonRecord => Boolean(row));
+  if (responseRows.length) {
+    const { error } = await supabaseAdmin.from("scorecard_responses").insert(responseRows);
+    if (error) throw error;
+  }
+
+  const scorePair = await participantScorePair(eventId, cleanString(participant.id));
+  return jsonResponse({
+    id: (survey as JsonRecord).id,
+    event_id: eventId,
+    participant_id: participant.id,
+    survey_type: surveyType,
+    category_scores: scores.categoryScores,
+    coexistence_index: scores.coexistenceIndex,
+    baseline_score: scorePair.baselineScore,
+    followup_score: scorePair.followupScore,
+    percentage_change: scorePair.change,
+    created_at: (survey as JsonRecord).created_at,
+  }, 201);
+};
+
+const countByField = (rows: JsonRecord[], field: string) => rows.reduce((acc, row) => {
+  const key = cleanString(row[field]) || "Unknown";
+  acc[key] = asNumber(acc[key]) + 1;
+  return acc;
+}, {} as JsonRecord);
+
+const scorecardDashboardPayload = async (eventId: string) => {
+  const event = await selectSingle("events", eventId, "Event");
+  const { data: participantsData, error: participantsError } = await supabaseAdmin
+    .from("scorecard_participants")
+    .select("*")
+    .eq("event_id", eventId);
+  if (participantsError) throw participantsError;
+  const participants = (participantsData ?? []) as JsonRecord[];
+
+  const { data: surveysData, error: surveysError } = await supabaseAdmin
+    .from("scorecard_surveys")
+    .select("*")
+    .eq("event_id", eventId);
+  if (surveysError) throw surveysError;
+  const surveys = (surveysData ?? []) as JsonRecord[];
+  const baselineCount = surveys.filter((survey) => cleanString(survey.survey_type) === "baseline").length;
+  const followupCount = surveys.filter((survey) => cleanString(survey.survey_type) === "followup").length;
+  const avgIndex = surveys.length
+    ? Math.round((surveys.reduce((sum, survey) => sum + asNumber(survey.coexistence_index), 0) / surveys.length) * 100) / 100
+    : 0;
+
+  const changes: number[] = [];
+  for (const participant of participants) {
+    const scorePair = await participantScorePair(eventId, cleanString(participant.id));
+    if (scorePair.change !== null) changes.push(scorePair.change);
+  }
+  const avgChange = changes.length ? Math.round((changes.reduce((sum, change) => sum + change, 0) / changes.length) * 100) / 100 : 0;
+
+  const categoryValues = new Map<string, number[]>();
+  for (const survey of surveys) {
+    const scores = isRecord(survey.category_scores) ? survey.category_scores : {};
+    for (const [category, value] of Object.entries(scores)) {
+      categoryValues.set(category, [...(categoryValues.get(category) ?? []), asNumber(value)]);
+    }
+  }
+  const categoryAverages: JsonRecord = {};
+  categoryValues.forEach((values, category) => {
+    if (values.length) categoryAverages[category] = Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 100) / 100;
+  });
+
+  const { data: evidence, error: evidenceError } = await supabaseAdmin
+    .from("scorecard_evidence")
+    .select("*")
+    .eq("event_id", eventId)
+    .order("created_at", { ascending: false });
+  if (evidenceError) throw evidenceError;
+
+  const { data: report, error: reportError } = await supabaseAdmin
+    .from("scorecard_reporting_exports")
+    .select("*")
+    .eq("event_id", eventId)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (reportError) throw reportError;
+
+  return {
+    event: {
+      id: event.id,
+      title: event.title,
+      start_time: event.start_time,
+      follow_up_requested_at: event.follow_up_requested_at ?? null,
+    },
+    total_participants: participants.length,
+    baseline_surveys_completed: baselineCount,
+    followup_surveys_completed: followupCount,
+    average_coexistence_index: avgIndex,
+    average_change_from_baseline_to_followup: avgChange,
+    participants_by_county: countByField(participants, "county"),
+    participants_by_community: countByField(participants, "community_location"),
+    participants_by_user_type: countByField(participants, "user_type"),
+    participation_type_counts: countByField(participants, "participation_type"),
+    story_labs_attended: asNumber(countByField(participants, "participation_type")["story lab"]),
+    listening_circles_attended: asNumber(countByField(participants, "participation_type")["listening circle"]),
+    podcast_listeners: asNumber(countByField(participants, "participation_type")["podcast listener"]),
+    category_averages: categoryAverages,
+    evidence: evidence ?? [],
+    reporting_fields: { ...defaultReportingFields, ...(isRecord((report as JsonRecord | null)?.fields) ? (report as JsonRecord).fields as JsonRecord : {}) },
+  };
+};
+
+const handleAdminScorecardEvents = async (request: Request) => {
+  await requireAdminProfile(request);
+  const { data, error } = await supabaseAdmin
+    .from("events")
+    .select("*")
+    .order("start_time", { ascending: false });
+  if (error) throw error;
+  const rows = [];
+  for (const event of (data ?? []) as JsonRecord[]) {
+    const dashboard = await scorecardDashboardPayload(cleanString(event.id));
+    rows.push({
+      id: event.id,
+      title: event.title,
+      start_time: event.start_time,
+      location: event.location,
+      scorecard_enabled: event.scorecard_enabled,
+      scorecard_title: getEventScorecardTitle(event),
+      scorecard_description: getEventScorecardDescription(event),
+      admin_created: event.admin_created,
+      total_participants: dashboard.total_participants,
+      baseline_surveys_completed: dashboard.baseline_surveys_completed,
+      followup_surveys_completed: dashboard.followup_surveys_completed,
+    });
+  }
+  return jsonResponse(rows);
+};
+
+const handleAdminScorecardDashboard = async (request: Request, eventId: string) => {
+  await requireAdminProfile(request);
+  return jsonResponse(await scorecardDashboardPayload(eventId));
+};
+
+const handleAdminPromptScorecardFollowup = async (request: Request, eventId: string) => {
+  await requireAdminProfile(request);
+  const event = await selectSingle("events", eventId, "Event");
+  const followUpRequestedAt = nowIso();
+  const { error: updateError } = await supabaseAdmin
+    .from("events")
+    .update({ follow_up_requested_at: followUpRequestedAt, updated_at: followUpRequestedAt })
+    .eq("id", eventId);
+  if (updateError) throw updateError;
+
+  const { data: registrations, error: registrationsError } = await supabaseAdmin
+    .from("registrations")
+    .select("user_id")
+    .eq("event_id", eventId);
+  if (registrationsError) throw registrationsError;
+  const recipientIds = uniqueStrings(((registrations ?? []) as JsonRecord[]).map((registration) => registration.user_id));
+  if (recipientIds.length) {
+    const title = `${getEventScorecardTitle(event)} follow-up`;
+    const message = `Please complete the follow-up assessment for ${cleanString(event.title)}.`;
+    const notifications = recipientIds.map((userId) => ({
+      user_id: userId,
+      title,
+      message,
+      type: "info",
+      target_type: "event",
+      target_id: eventId,
+      target_route: "EventDetail",
+    }));
+    const { error } = await supabaseAdmin.from("notifications").insert(notifications);
+    if (error) throw error;
+  }
+
+  const { data: participants, error: participantsError } = await supabaseAdmin
+    .from("scorecard_participants")
+    .select("id")
+    .eq("event_id", eventId)
+    .not("phone_number", "is", null);
+  if (participantsError) throw participantsError;
+  return jsonResponse({
+    message: "Follow-up prompt recorded",
+    notified_registrants: recipientIds.length,
+    participants_with_phone: (participants ?? []).length,
+    follow_up_requested_at: followUpRequestedAt,
+  });
+};
+
+const handleAdminScorecardEvidence = async (request: Request, eventId: string) => {
+  const { profile } = await requireAdminProfile(request);
+  await selectSingle("events", eventId, "Event");
+  const body = await readJson(request);
+  const evidenceType = cleanString(body.evidence_type);
+  const url = cleanString(body.url);
+  if (!evidenceType || !url) return errorResponse("Evidence type and URL are required.");
+  const { data, error } = await supabaseAdmin
+    .from("scorecard_evidence")
+    .insert({
+      event_id: eventId,
+      evidence_type: evidenceType,
+      url,
+      notes: body.notes ?? null,
+      created_by_id: cleanString(profile.id),
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return jsonResponse(data, 201);
+};
+
+const handleAdminScorecardReporting = async (request: Request, eventId: string) => {
+  const { profile } = await requireAdminProfile(request);
+  await selectSingle("events", eventId, "Event");
+  const body = await readJson(request);
+  const fields = { ...defaultReportingFields, ...body };
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from("scorecard_reporting_exports")
+    .select("id")
+    .eq("event_id", eventId)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (existingError) throw existingError;
+
+  if (existing) {
+    const { error } = await supabaseAdmin
+      .from("scorecard_reporting_exports")
+      .update({ fields, created_by_id: cleanString(profile.id), updated_at: nowIso() })
+      .eq("id", existing.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabaseAdmin
+      .from("scorecard_reporting_exports")
+      .insert({ event_id: eventId, fields, created_by_id: cleanString(profile.id) });
+    if (error) throw error;
+  }
+
+  return jsonResponse({ message: "Reporting fields saved", reporting_fields: fields });
+};
+
+const handleProgramJourney = async (request: Request, eventId: string) => {
+  const { profile } = await requireProfile(request);
+  const userId = cleanString(profile.id);
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from("program_journeys")
+    .select("*")
+    .eq("event_id", eventId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (existingError) throw existingError;
+  if (existing) return jsonResponse(existing);
+
+  const { data, error } = await supabaseAdmin
+    .from("program_journeys")
+    .insert({ event_id: eventId, user_id: userId, progress_percentage: 0, current_timepoint: "T1" })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return jsonResponse(data, 201);
+};
+
+const handleEventSync = async (request: Request, eventId: string) => {
+  const { profile } = await requireProfile(request);
+  const body = await readJson(request);
+  let checkinsSynced = 0;
+  let observationsSynced = 0;
+
+  for (const item of asArray(body.checkins).filter(isRecord)) {
+    const userId = cleanString(item.user_id) || cleanString(profile.id);
+    const timepoint = cleanString(item.timepoint);
+    if (!userId || !timepoint) continue;
+    const payload = {
+      event_id: eventId,
+      user_id: userId,
+      dog_id: cleanString(item.dog_id) || null,
+      timepoint,
+      who5_answers: item.who5_answers ?? null,
+      pss10_answers: item.pss10_answers ?? null,
+      relationship_answers: item.relationship_answers ?? null,
+      welfare_snapshot: item.welfare_snapshot ?? null,
+    };
+    const { data: existing, error: existingError } = await supabaseAdmin
+      .from("checkin_data")
+      .select("id")
+      .eq("event_id", eventId)
+      .eq("user_id", userId)
+      .eq("timepoint", timepoint)
+      .maybeSingle();
+    if (existingError) throw existingError;
+    if (!existing) {
+      const { error } = await supabaseAdmin.from("checkin_data").insert(payload);
+      if (error) throw error;
+      checkinsSynced += 1;
+    }
+  }
+
+  for (const item of asArray(body.observations).filter(isRecord)) {
+    const behavior = cleanString(item.behavior);
+    if (!behavior) continue;
+    const { error } = await supabaseAdmin.from("live_observations").insert({
+      event_id: eventId,
+      observer_id: cleanString(profile.id),
+      participant_id: cleanString(item.participant_id) || null,
+      dog_id: cleanString(item.dog_id) || null,
+      behavior,
+      intensity: cleanString(item.intensity).toLowerCase() || null,
+      notes: item.notes ?? null,
+      timestamp: cleanString(item.timestamp) || nowIso(),
+      is_offline_sync: asBoolean(item.is_offline_sync, true),
+      synced_at: nowIso(),
+    });
+    if (error) throw error;
+    observationsSynced += 1;
+  }
+
+  return jsonResponse({ message: "Sync successful", checkins_synced: checkinsSynced, observations_synced: observationsSynced });
+};
+
+const handleLiveLog = async (request: Request, eventId: string) => {
+  const { profile } = await requireProfile(request);
+  if (!isAdminProfile(profile) && !["provider", "vet", "facilitator"].includes(cleanString(profile.role))) {
+    throw new Response("Not authorized to log observations", { status: 403 });
+  }
+  const body = await readJson(request);
+  const behavior = cleanString(body.behavior);
+  if (!behavior) return errorResponse("Behavior is required.");
+  const { data, error } = await supabaseAdmin
+    .from("live_observations")
+    .insert({
+      event_id: eventId,
+      observer_id: cleanString(profile.id),
+      participant_id: cleanString(body.participant_id) || null,
+      dog_id: cleanString(body.dog_id) || null,
+      behavior,
+      intensity: cleanString(body.intensity).toLowerCase() || null,
+      notes: body.notes ?? null,
+      timestamp: cleanString(body.timestamp) || nowIso(),
+      is_offline_sync: false,
+      synced_at: nowIso(),
+    })
     .select("*")
     .single();
   if (error) throw error;
@@ -940,6 +2255,70 @@ const handleMyOrders = async (request: Request) => {
     byId.set(cleanString((order as JsonRecord).id), order);
   }
   return jsonResponse(Array.from(byId.values()));
+};
+
+const escapePdfText = (value: unknown) => cleanString(value)
+  .replace(/\\/g, "\\\\")
+  .replace(/\(/g, "\\(")
+  .replace(/\)/g, "\\)");
+
+const simplePdf = (lines: unknown[]) => {
+  const contentLines = lines
+    .map((line, index) => `${index === 0 ? "50 780 Td" : "0 -18 Td"} (${escapePdfText(line)}) Tj`)
+    .join("\n");
+  const stream = `BT\n/F1 12 Tf\n${contentLines}\nET`;
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  for (let index = 0; index < objects.length; index += 1) {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${objects[index]}\nendobj\n`;
+  }
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (let index = 1; index < offsets.length; index += 1) {
+    pdf += `${String(offsets[index]).padStart(10, "0")} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return pdf;
+};
+
+const handleOrderReceipt = async (request: Request, orderId: string) => {
+  const { profile } = await requireProfile(request);
+  const { data: order, error } = await supabaseAdmin
+    .from("orders")
+    .select("*, service:services(*)")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!order) throw new Response("Order not found", { status: 404 });
+
+  const row = order as JsonRecord;
+  const service = isRecord(row.service) ? row.service : {};
+  const userId = cleanString(profile.id);
+  const isOwner = cleanString(row.buyer_id) === userId || cleanString(service.provider_id) === userId;
+  if (!isOwner && !isAdminProfile(profile)) throw new Response("Not authorized", { status: 403 });
+
+  const receipt = simplePdf([
+    "Lovedogs 360 Receipt",
+    `Order ID: ${cleanString(row.id)}`,
+    `Item: ${cleanString(service.title) || "Marketplace item"}`,
+    `Status: ${cleanString(row.status) || "pending"}`,
+    `Amount: ${asNumber(row.amount).toLocaleString()} ${cleanString(service.currency) || "KES"}`,
+    `Commission: ${asNumber(row.commission).toLocaleString()} ${cleanString(service.currency) || "KES"}`,
+    `Seller payout: ${asNumber(row.payout).toLocaleString()} ${cleanString(service.currency) || "KES"}`,
+    `Created: ${cleanString(row.created_at)}`,
+    "",
+    "Thank you for using Lovedogs 360.",
+  ]);
+
+  return fileResponse(receipt, "application/pdf", `receipt_${safeFileSlug(orderId)}.pdf`);
 };
 
 const handleWalletSummary = async (request: Request) => {
@@ -1110,6 +2489,8 @@ const handleSpotlight = async () => {
 
 const handleCommunityMessages = async (request: Request, globalOnly: boolean) => {
   const authUser = await getOptionalAuthUser(request);
+  const userId = cleanString(authUser?.id);
+  const tag = normalizeHashtag(getUrl(request).searchParams.get("tag"));
   const pins = await getActivePins();
   let query = supabaseAdmin
     .from("community_messages")
@@ -1120,16 +2501,65 @@ const handleCommunityMessages = async (request: Request, globalOnly: boolean) =>
   if (globalOnly) query = query.eq("is_global", true);
   const { data, error } = await query;
   if (error) throw error;
-  const messages = await Promise.all((data ?? []).map(async (message) => ({
-    ...message,
-    hashtags: asStringArray((message as JsonRecord).hashtags),
-    author: await fetchAuthor((message as JsonRecord).author_id),
-    reactions: [],
-    poll_results: {},
-    has_voted: null,
-    ...pinMetadata(pins.get(`community:${cleanString((message as JsonRecord).id)}`)),
-  })));
-  if (!authUser) return jsonResponse(sortPinnedFirst(messages as JsonRecord[]));
+  const blockedUserIds = userId ? new Set(await getBlockedRelationshipUserIds(userId)) : new Set<string>();
+  let rows = (data ?? []) as JsonRecord[];
+  if (blockedUserIds.size) {
+    rows = rows.filter((message) => !blockedUserIds.has(cleanString(message.author_id)));
+  }
+  if (tag) {
+    rows = rows.filter((message) => {
+      const tags = uniqueStrings([...asStringArray(message.hashtags), ...extractHashtags(message.content)].map(normalizeHashtag));
+      return tags.includes(tag);
+    });
+  }
+
+  const messageIds = rows.map((message) => cleanString(message.id)).filter(Boolean);
+  const reactionsByMessage = new Map<string, JsonRecord[]>();
+  const pollResultsByMessage = new Map<string, JsonRecord>();
+  const hasVotedByMessage = new Map<string, number | null>();
+
+  if (messageIds.length) {
+    const { data: reactions, error: reactionsError } = await supabaseAdmin
+      .from("chat_reactions")
+      .select("*")
+      .in("message_id", messageIds);
+    if (reactionsError) throw reactionsError;
+    for (const reaction of (reactions ?? []) as JsonRecord[]) {
+      const messageId = cleanString(reaction.message_id);
+      if (!reactionsByMessage.has(messageId)) reactionsByMessage.set(messageId, []);
+      reactionsByMessage.get(messageId)?.push(reaction);
+    }
+
+    const { data: votes, error: votesError } = await supabaseAdmin
+      .from("community_poll_votes")
+      .select("*")
+      .in("message_id", messageIds);
+    if (votesError) throw votesError;
+    for (const vote of (votes ?? []) as JsonRecord[]) {
+      const messageId = cleanString(vote.message_id);
+      const optionId = String(asNumber(vote.option_id));
+      const results = pollResultsByMessage.get(messageId) ?? {};
+      results[optionId] = asNumber(results[optionId]) + 1;
+      pollResultsByMessage.set(messageId, results);
+      if (userId && cleanString(vote.user_id) === userId) {
+        hasVotedByMessage.set(messageId, asNumber(vote.option_id));
+      }
+    }
+  }
+
+  const messages = await Promise.all(rows.map(async (message) => {
+    const messageId = cleanString(message.id);
+    const hashtags = uniqueStrings([...asStringArray(message.hashtags), ...extractHashtags(message.content)].map(normalizeHashtag));
+    return {
+      ...message,
+      hashtags,
+      author: await fetchAuthor(message.author_id),
+      reactions: reactionsByMessage.get(messageId) ?? [],
+      poll_results: pollResultsByMessage.get(messageId) ?? {},
+      has_voted: hasVotedByMessage.get(messageId) ?? null,
+      ...pinMetadata(pins.get(`community:${messageId}`)),
+    };
+  }));
   return jsonResponse(sortPinnedFirst(messages as JsonRecord[]));
 };
 
@@ -1138,6 +2568,7 @@ const handleCreateCommunityMessage = async (request: Request) => {
   const body = await readJson(request);
   const content = cleanString(body.content);
   if (!content) return errorResponse("Message content is required.");
+  const hashtags = uniqueStrings([...asStringArray(body.hashtags), ...extractHashtags(content)].map(normalizeHashtag));
   const { data, error } = await supabaseAdmin
     .from("community_messages")
     .insert({
@@ -1147,7 +2578,7 @@ const handleCreateCommunityMessage = async (request: Request) => {
       longitude: asNullableNumber(body.longitude),
       is_global: asBoolean(body.is_global, true),
       reshare_id: body.reshare_id ?? null,
-      hashtags: asStringArray(body.hashtags),
+      hashtags,
       is_poll: asBoolean(body.is_poll, false),
       poll_options: body.poll_options ?? null,
       updated_at: nowIso(),
@@ -1155,13 +2586,107 @@ const handleCreateCommunityMessage = async (request: Request) => {
     .select("*")
     .single();
   if (error) throw error;
-  return jsonResponse({ ...data, author: await fetchAuthor(profile.id), reactions: [], flag_count: 0, poll_results: {}, has_voted: null }, 201);
+  return jsonResponse({ ...data, hashtags, author: await fetchAuthor(profile.id), reactions: [], flag_count: 0, poll_results: {}, has_voted: null }, 201);
+};
+
+const handleTrendingTags = async () => {
+  const { data, error } = await supabaseAdmin
+    .from("community_messages")
+    .select("hashtags,content")
+    .eq("is_hidden", false)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) throw error;
+
+  const counts = new Map<string, number>();
+  for (const message of (data ?? []) as JsonRecord[]) {
+    const tags = uniqueStrings([...asStringArray(message.hashtags), ...extractHashtags(message.content)].map(normalizeHashtag));
+    for (const tag of tags) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+  }
+
+  return jsonResponse(
+    [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 12)
+      .map(([tag, count]) => ({ tag, count })),
+  );
+};
+
+const handleCommunityReaction = async (request: Request, messageId: string) => {
+  const { profile } = await requireProfile(request);
+  await selectSingle("community_messages", messageId, "Message");
+  const userId = cleanString(profile.id);
+  const body = await readJson(request);
+  const reactionType = cleanString(body.reaction_type) || "heart";
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from("chat_reactions")
+    .select("id")
+    .eq("message_id", messageId)
+    .eq("user_id", userId)
+    .eq("reaction_type", reactionType)
+    .maybeSingle();
+  if (existingError) throw existingError;
+
+  if (existing) {
+    const { error } = await supabaseAdmin.from("chat_reactions").delete().eq("id", existing.id);
+    if (error) throw error;
+    return jsonResponse({ reacted: false });
+  }
+
+  const { error } = await supabaseAdmin
+    .from("chat_reactions")
+    .insert({ message_id: messageId, user_id: userId, reaction_type: reactionType });
+  if (error) throw error;
+  return jsonResponse({ reacted: true });
+};
+
+const handleCommunityVote = async (request: Request, messageId: string) => {
+  const { profile } = await requireProfile(request);
+  await selectSingle("community_messages", messageId, "Message");
+  const body = await readJson(request);
+  const optionId = asNumber(body.option_id, NaN);
+  if (!Number.isFinite(optionId)) return errorResponse("Poll option is required.");
+  const userId = cleanString(profile.id);
+  const payload = { message_id: messageId, user_id: userId, option_id: optionId };
+
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from("community_poll_votes")
+    .select("id")
+    .eq("message_id", messageId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (existingError) throw existingError;
+
+  if (existing) {
+    const { error } = await supabaseAdmin
+      .from("community_poll_votes")
+      .update({ option_id: optionId })
+      .eq("id", existing.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabaseAdmin.from("community_poll_votes").insert(payload);
+    if (error) throw error;
+  }
+
+  return jsonResponse({ voted: true, option_id: optionId });
+};
+
+const handleCommunityFlag = async (request: Request, messageId: string) => {
+  await requireProfile(request);
+  const message = await selectSingle("community_messages", messageId, "Message");
+  const { error } = await supabaseAdmin
+    .from("community_messages")
+    .update({ flag_count: asNumber(message.flag_count) + 1, updated_at: nowIso() })
+    .eq("id", messageId);
+  if (error) throw error;
+  return jsonResponse({ message: "Message flagged" });
 };
 
 const handleDirectMessages = async (request: Request) => {
   const { profile } = await requireProfile(request);
   const userId = cleanString(profile.id);
   if (request.method === "GET") {
+    const blockedUserIds = new Set(await getBlockedRelationshipUserIds(userId));
     const { data, error } = await supabaseAdmin
       .from("direct_messages")
       .select("*")
@@ -1169,7 +2694,11 @@ const handleDirectMessages = async (request: Request) => {
       .order("created_at", { ascending: false })
       .limit(100);
     if (error) throw error;
-    return jsonResponse(await Promise.all((data ?? []).map(async (message) => ({
+    const visibleMessages = ((data ?? []) as JsonRecord[]).filter((message) => {
+      const otherUserId = cleanString(message.sender_id) === userId ? cleanString(message.receiver_id) : cleanString(message.sender_id);
+      return !blockedUserIds.has(otherUserId);
+    });
+    return jsonResponse(await Promise.all(visibleMessages.map(async (message) => ({
       ...message,
       sender: await fetchAuthor((message as JsonRecord).sender_id),
       receiver: await fetchAuthor((message as JsonRecord).receiver_id),
@@ -1181,6 +2710,9 @@ const handleDirectMessages = async (request: Request) => {
   const content = cleanString(body.content);
   if (!receiverId || !content) return errorResponse("Receiver and content are required.");
   if (receiverId === userId) return errorResponse("You cannot message yourself.");
+  if (await isBlockedRelationship(userId, receiverId)) {
+    throw new Response("You cannot message this user.", { status: 403 });
+  }
   const { data, error } = await supabaseAdmin
     .from("direct_messages")
     .insert({ sender_id: userId, receiver_id: receiverId, content })
@@ -1188,6 +2720,67 @@ const handleDirectMessages = async (request: Request) => {
     .single();
   if (error) throw error;
   return jsonResponse({ ...data, sender: await fetchAuthor(userId), receiver: await fetchAuthor(receiverId) }, 201);
+};
+
+const handleDirectMessageRead = async (request: Request, messageId: string) => {
+  const { profile } = await requireProfile(request);
+  const { error } = await supabaseAdmin
+    .from("direct_messages")
+    .update({ read_at: nowIso() })
+    .eq("id", messageId)
+    .eq("receiver_id", cleanString(profile.id));
+  if (error) throw error;
+  return jsonResponse({ message: "Success", read: true });
+};
+
+const handleUserSearch = async (request: Request) => {
+  const { profile } = await requireProfile(request);
+  const query = cleanString(getUrl(request).searchParams.get("q"));
+  if (query.length < 1) return jsonResponse([]);
+  const searchTerm = query.replace(/[%_]/g, "").slice(0, 60);
+  if (!searchTerm) return jsonResponse([]);
+  const userId = cleanString(profile.id);
+  const blockedUserIds = new Set(await getBlockedRelationshipUserIds(userId));
+  const { data, error } = await supabaseAdmin
+    .from("users")
+    .select("id,full_name,profile_image")
+    .ilike("full_name", `%${searchTerm}%`)
+    .is("deleted_at", null)
+    .limit(10);
+  if (error) throw error;
+  return jsonResponse(((data ?? []) as JsonRecord[])
+    .filter((user) => cleanString(user.id) !== userId && !blockedUserIds.has(cleanString(user.id)))
+    .map((user) => ({
+      id: user.id,
+      full_name: cleanString(user.full_name) || "User",
+      profile_image: user.profile_image ?? null,
+    })));
+};
+
+const handleUserBlock = async (request: Request, blockedUserId: string) => {
+  const { profile } = await requireProfile(request);
+  const blockerId = cleanString(profile.id);
+  const targetId = cleanString(blockedUserId);
+  if (!targetId) return errorResponse("User is required.");
+  if (targetId === blockerId) return errorResponse("You cannot block yourself.");
+  await selectSingle("users", targetId, "User");
+
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from("user_blocks")
+    .select("*")
+    .eq("blocker_id", blockerId)
+    .eq("blocked_id", targetId)
+    .maybeSingle();
+  if (existingError) throw existingError;
+  if (existing) return jsonResponse({ message: "User has been blocked successfully", blocked: true });
+
+  const { data, error } = await supabaseAdmin
+    .from("user_blocks")
+    .insert({ blocker_id: blockerId, blocked_id: targetId })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return jsonResponse({ ...data, message: "User has been blocked successfully", blocked: true }, 201);
 };
 
 const handleHeartbeat = async (request: Request) => {
@@ -1332,6 +2925,97 @@ const handleHealthSummary = async (request: Request) => {
     upcoming_due_count: 0,
     overdue_count: 0,
     recent_records: [],
+  });
+};
+
+const numericAnswerValues = (value: unknown): number[] => {
+  if (Array.isArray(value)) {
+    return value.flatMap(numericAnswerValues);
+  }
+  if (isRecord(value)) {
+    return Object.values(value).flatMap(numericAnswerValues);
+  }
+  const number = asNumber(value, NaN);
+  return Number.isFinite(number) ? [number] : [];
+};
+
+const answerSetScore = (value: unknown, invert = false) => {
+  const values = numericAnswerValues(value);
+  if (!values.length) return 0;
+  const maxValue = Math.max(...values, 5);
+  const scale = maxValue <= 5 ? 5 : maxValue <= 10 ? 10 : 100;
+  const score = Math.round((values.reduce((sum, item) => sum + item, 0) / (values.length * scale)) * 100);
+  return invert ? Math.max(0, Math.min(100, 100 - score)) : Math.max(0, Math.min(100, score));
+};
+
+const handleWellnessScore = async (request: Request) => {
+  const { profile } = await requireProfile(request);
+  const { data, error } = await supabaseAdmin
+    .from("checkin_data")
+    .select("*")
+    .eq("user_id", cleanString(profile.id))
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) {
+    return jsonResponse({
+      overall_score: 0,
+      who5_score: 0,
+      pss_score: 0,
+      relationship_score: 0,
+      welfare_score: 0,
+      has_data: false,
+    });
+  }
+
+  const row = data as JsonRecord;
+  const who5 = answerSetScore(row.who5_answers);
+  const pss = answerSetScore(row.pss10_answers);
+  const relationship = answerSetScore(row.relationship_answers);
+  const welfare = answerSetScore(row.welfare_snapshot);
+  const overall = Math.round((who5 * 0.3) + (welfare * 0.3) + (relationship * 0.2) + ((100 - pss) * 0.2));
+  return jsonResponse({
+    overall_score: overall,
+    who5_score: who5,
+    pss_score: pss,
+    relationship_score: relationship,
+    welfare_score: welfare,
+    has_data: true,
+    last_checkin: row.created_at ?? null,
+  });
+};
+
+const normalizeAppPlatform = (platform: unknown) => {
+  const normalized = cleanString(platform).toLowerCase() || "all";
+  return ["android", "ios", "all"].includes(normalized) ? normalized : "all";
+};
+
+const handleLatestAppVersion = async (request: Request) => {
+  const platform = normalizeAppPlatform(getUrl(request).searchParams.get("platform"));
+  const eligiblePlatforms = platform === "all" ? ["all"] : [platform, "all"];
+  const { data, error } = await supabaseAdmin
+    .from("app_versions")
+    .select("*")
+    .eq("is_active", true)
+    .in("platform", eligiblePlatforms)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return jsonResponse(null);
+  const row = data as JsonRecord;
+  return jsonResponse({
+    id: row.id,
+    platform: row.platform,
+    version: row.version,
+    build_number: row.build_number ?? null,
+    download_url: row.download_url ?? row.update_url ?? null,
+    update_url: row.update_url ?? row.download_url ?? null,
+    release_notes: row.release_notes ?? null,
+    is_required: asBoolean(row.is_required, false),
+    is_active: asBoolean(row.is_active, true),
+    created_at: row.created_at ?? null,
   });
 };
 
@@ -1874,6 +3558,58 @@ const getRows = async (table: string, select = "*") => {
   return (data ?? []) as JsonRecord[];
 };
 
+const csvCell = (value: unknown) => {
+  if (value === null || value === undefined) return "";
+  const text = typeof value === "object" ? JSON.stringify(value) : String(value);
+  return `"${text.replace(/"/g, '""')}"`;
+};
+
+const csvExportResponse = (type: string, rows: JsonRecord[]) => {
+  const headerSet = new Set<string>();
+  for (const row of rows) {
+    Object.keys(row).forEach((key) => headerSet.add(key));
+  }
+  const headers = Array.from(headerSet);
+  const csvRows = [
+    headers.map(csvCell).join(","),
+    ...rows.map((row) => headers.map((header) => csvCell(row[header])).join(",")),
+  ];
+  const today = new Date().toISOString().split("T")[0];
+  return fileResponse(`\ufeff${csvRows.join("\r\n")}`, "text/csv; charset=utf-8", `ld360_${safeFileSlug(type)}_${today}.csv`);
+};
+
+const handleAdminExport = async (request: Request) => {
+  await requireAdminProfile(request);
+  const url = getUrl(request);
+  const type = cleanString(url.searchParams.get("type"));
+  const eventId = cleanString(url.searchParams.get("event_id"));
+  const tableByType: Record<string, string> = {
+    users: "users",
+    orders: "orders",
+    registrations: "registrations",
+    events: "events",
+    dogs: "dogs",
+    cases: "case_reports",
+    community: "community_messages",
+    support: "support_tickets",
+    scorecard: "events",
+  };
+  const table = tableByType[type];
+  if (!table) return errorResponse(`Unsupported export type: ${type}`, 400);
+
+  let query = supabaseAdmin.from(table).select("*");
+  if (type === "registrations" && eventId) query = query.eq("event_id", eventId);
+  if (type === "scorecard") {
+    query = query
+      .select("id,title,start_time,location,scorecard_enabled,scorecard_title,scorecard_description,follow_up_requested_at,created_at");
+    if (eventId) query = query.eq("id", eventId);
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+
+  return csvExportResponse(type, (data ?? []) as JsonRecord[]);
+};
+
 const fetchUserFull = async (userId: unknown) => {
   const id = cleanString(userId);
   if (!id) return null;
@@ -1910,6 +3646,46 @@ const pinMetadata = (pin: JsonRecord | undefined | null) => ({
   is_pinned: Boolean(pin),
   pin_priority: pin?.priority ?? null,
 });
+
+const saveContentPin = async (payload: JsonRecord) => {
+  const targetType = cleanString(payload.target_type);
+  const targetId = cleanString(payload.target_id);
+  if (!targetType || !targetId) {
+    throw new Response("target_type and target_id are required.", { status: 400 });
+  }
+
+  const pinPayload = {
+    target_type: targetType,
+    target_id: targetId,
+    title: cleanString(payload.title) || "Pinned content",
+    description: payload.description ?? null,
+    image_url: payload.image_url ?? null,
+    priority: asNumber(payload.priority, 100),
+    is_active: true,
+    expires_at: payload.expires_at ?? null,
+    created_by_id: cleanString(payload.created_by_id) || null,
+    updated_at: nowIso(),
+  };
+
+  const { data: updatedRows, error: updateError } = await supabaseAdmin
+    .from("content_pins")
+    .update(pinPayload)
+    .eq("target_type", targetType)
+    .eq("target_id", targetId)
+    .select("*");
+  if (updateError) throw updateError;
+
+  const updatedPin = ((updatedRows ?? []) as JsonRecord[])[0];
+  if (updatedPin) return updatedPin;
+
+  const { data, error } = await supabaseAdmin
+    .from("content_pins")
+    .insert(pinPayload)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as JsonRecord;
+};
 
 const sortPinnedFirst = (items: JsonRecord[], fallbackDateKey = "created_at") => (
   [...items].sort((a, b) => {
@@ -2462,22 +4238,16 @@ const handleAdminPinsCreate = async (request: Request) => {
   const targetType = cleanString(body.target_type);
   const targetId = cleanString(body.target_id);
   if (!targetType || !targetId) return errorResponse("target_type and target_id are required.");
-  const { data, error } = await supabaseAdmin
-    .from("content_pins")
-    .upsert({
-      target_type: targetType,
-      target_id: targetId,
-      title: cleanString(body.title) || "Pinned content",
-      description: body.description ?? null,
-      image_url: body.image_url ?? null,
-      priority: asNumber(body.priority, 100),
-      is_active: true,
-      created_by_id: cleanString(profile.id),
-      updated_at: nowIso(),
-    }, { onConflict: "target_type,target_id" })
-    .select("*")
-    .single();
-  if (error) throw error;
+  const data = await saveContentPin({
+    target_type: targetType,
+    target_id: targetId,
+    title: cleanString(body.title) || "Pinned content",
+    description: body.description ?? null,
+    image_url: body.image_url ?? null,
+    priority: asNumber(body.priority, 100),
+    expires_at: body.expires_at ?? null,
+    created_by_id: cleanString(profile.id),
+  });
   return jsonResponse(data, 201);
 };
 
@@ -2918,7 +4688,7 @@ const routeRequest = async (request: Request) => {
   if (method === "GET" && path === "/exchange-rates") return handleExchangeRates();
   if (method === "GET" && path === "/my-dogs") return handleMyDogs(request);
   if (method === "POST" && (path === "/dogs" || path === "/dogs/")) return handleCreateDog(request);
-  if (method === "POST" && path === "/dogs/identify") return jsonResponse([]);
+  if (method === "POST" && path === "/dogs/identify") return handleDogIdentify(request);
   if (method === "POST" && path === "/dogs/report-lost") return handleCreateCase(request);
   if (/^\/dogs\/[^/]+\/health-records$/.test(path) && (method === "GET" || method === "POST")) {
     return handleDogHealthRecords(request, firstPathMatch(path, /^\/dogs\/([^/]+)\/health-records$/));
@@ -2931,7 +4701,7 @@ const routeRequest = async (request: Request) => {
   if (/^\/services\/[^/]+\/form-fields$/.test(path) && (method === "GET" || method === "POST")) {
     return handleServiceFormFields(request, firstPathMatch(path, /^\/services\/([^/]+)\/form-fields$/));
   }
-  if (method === "GET" && /^\/services\/[^/]+\/responses$/.test(path)) return jsonResponse([]);
+  if (method === "GET" && /^\/services\/[^/]+\/responses$/.test(path)) return handleServiceResponses(request, firstPathMatch(path, /^\/services\/([^/]+)\/responses$/));
   if (method === "GET" && /^\/services\/[^/]+$/.test(path)) return handleGetService(request, firstPathMatch(path, /^\/services\/([^/]+)$/));
   if (method === "PUT" && /^\/services\/[^/]+$/.test(path)) return handleUpdateService(request, firstPathMatch(path, /^\/services\/([^/]+)$/));
   if (method === "DELETE" && /^\/services\/[^/]+$/.test(path)) return handleDeleteService(request, firstPathMatch(path, /^\/services\/([^/]+)$/));
@@ -2941,9 +4711,12 @@ const routeRequest = async (request: Request) => {
   if (method === "GET" && /^\/cases\/[^/]+\/comments$/.test(path)) return handleCaseComments(request, firstPathMatch(path, /^\/cases\/([^/]+)\/comments$/));
   if (method === "POST" && /^\/cases\/[^/]+\/comments$/.test(path)) return handleCaseComments(request, firstPathMatch(path, /^\/cases\/([^/]+)\/comments$/));
   if (method === "POST" && /^\/cases\/[^/]+\/like$/.test(path)) return handleCaseLike(request, firstPathMatch(path, /^\/cases\/([^/]+)\/like$/));
-  if (method === "GET" && /^\/cases\/[^/]+\/matches$/.test(path)) return jsonResponse([]);
-  if (method === "POST" && /^\/cases\/[^/]+\/matches\/refresh$/.test(path)) return jsonResponse([]);
-  if (method === "POST" && /^\/cases\/[^/]+\/matches\/[^/]+$/.test(path)) return errorResponse("Match updates are not available until pet matching is migrated.", 501);
+  if (method === "GET" && /^\/cases\/[^/]+\/matches$/.test(path)) return handleCaseMatches(request, firstPathMatch(path, /^\/cases\/([^/]+)\/matches$/));
+  if (method === "POST" && /^\/cases\/[^/]+\/matches\/refresh$/.test(path)) return handleRefreshCaseMatches(request, firstPathMatch(path, /^\/cases\/([^/]+)\/matches\/refresh$/));
+  if (method === "POST" && /^\/cases\/[^/]+\/matches\/[^/]+$/.test(path)) {
+    const match = path.match(/^\/cases\/([^/]+)\/matches\/([^/]+)$/);
+    return handleUpdateCaseMatchStatus(request, match?.[1] ?? "", match?.[2] ?? "");
+  }
   if (method === "POST" && /^\/cases\/[^/]+\/flag$/.test(path)) return jsonResponse({ message: "Report submitted successfully. Our moderation team will review this post." });
   if (method === "GET" && /^\/cases\/[^/]+$/.test(path)) return handleGetCase(request, firstPathMatch(path, /^\/cases\/([^/]+)$/));
 
@@ -2953,13 +4726,14 @@ const routeRequest = async (request: Request) => {
   if (method === "GET" && path === "/saved-events") return handleSavedEvents(request);
   if (method === "POST" && /^\/events\/[^/]+\/register$/.test(path)) return handleRegisterEvent(request, firstPathMatch(path, /^\/events\/([^/]+)\/register$/));
   if (method === "POST" && /^\/events\/[^/]+\/save$/.test(path)) return handleSaveEvent(request, firstPathMatch(path, /^\/events\/([^/]+)\/save$/));
-  if (method === "GET" && /^\/events\/[^/]+\/form-fields$/.test(path)) return jsonResponse([]);
-  if (method === "POST" && /^\/events\/[^/]+\/form-fields$/.test(path)) return jsonResponse({ status: "success" });
-  if (method === "GET" && /^\/events\/[^/]+\/responses$/.test(path)) return jsonResponse([]);
-  if (method === "GET" && /^\/events\/[^/]+\/journey$/.test(path)) return jsonResponse(null);
-  if (method === "POST" && /^\/events\/[^/]+\/sync$/.test(path)) return jsonResponse({ synced: true });
-  if (method === "POST" && /^\/events\/[^/]+\/live-log$/.test(path)) return errorResponse("Live observations are not migrated yet.", 501);
-  if (method === "POST" && /^\/events\/[^/]+\/scorecard\/surveys$/.test(path)) return errorResponse("Scorecard surveys are not migrated yet.", 501);
+  if (/^\/events\/[^/]+\/form-fields$/.test(path) && (method === "GET" || method === "POST")) {
+    return handleEventFormFields(request, firstPathMatch(path, /^\/events\/([^/]+)\/form-fields$/));
+  }
+  if (method === "GET" && /^\/events\/[^/]+\/responses$/.test(path)) return handleEventResponses(request, firstPathMatch(path, /^\/events\/([^/]+)\/responses$/));
+  if (method === "GET" && /^\/events\/[^/]+\/journey$/.test(path)) return handleProgramJourney(request, firstPathMatch(path, /^\/events\/([^/]+)\/journey$/));
+  if (method === "POST" && /^\/events\/[^/]+\/sync$/.test(path)) return handleEventSync(request, firstPathMatch(path, /^\/events\/([^/]+)\/sync$/));
+  if (method === "POST" && /^\/events\/[^/]+\/live-log$/.test(path)) return handleLiveLog(request, firstPathMatch(path, /^\/events\/([^/]+)\/live-log$/));
+  if (method === "POST" && /^\/events\/[^/]+\/scorecard\/surveys$/.test(path)) return handleSubmitScorecardSurvey(request, firstPathMatch(path, /^\/events\/([^/]+)\/scorecard\/surveys$/));
   if (method === "GET" && /^\/events\/[^/]+$/.test(path)) return handleGetEvent(firstPathMatch(path, /^\/events\/([^/]+)$/));
 
   if (method === "POST" && path === "/orders") return handleCreateOrder(request);
@@ -2979,7 +4753,7 @@ const routeRequest = async (request: Request) => {
     await markOrderPaid(order);
     return jsonResponse({ message: "Order payment confirmed by admin", status: "paid" });
   }
-  if (method === "GET" && /^\/orders\/[^/]+\/receipt$/.test(path)) return errorResponse("Receipt PDFs are not migrated yet.", 501);
+  if (method === "GET" && /^\/orders\/[^/]+\/receipt$/.test(path)) return handleOrderReceipt(request, firstPathMatch(path, /^\/orders\/([^/]+)\/receipt$/));
   if (method === "POST" && path === "/payments/initiate") return handleInitiatePayment(request);
   if (method === "GET" && /^\/payments\/status\/[^/]+$/.test(path)) return handlePaymentStatus(request, firstPathMatch(path, /^\/payments\/status\/([^/]+)$/));
   if (method === "GET" && path === "/pesapal/callback") return handlePesapalCallback(request);
@@ -3001,22 +4775,22 @@ const routeRequest = async (request: Request) => {
   if (method === "GET" && path === "/chat/global") return handleCommunityMessages(request, true);
   if (method === "GET" && path === "/chat/nearby") return handleCommunityMessages(request, false);
   if (method === "POST" && path === "/chat/message") return handleCreateCommunityMessage(request);
-  if (method === "GET" && path === "/chat/trending-tags") return jsonResponse([]);
-  if (method === "POST" && /^\/chat\/messages\/[^/]+\/flag$/.test(path)) return jsonResponse({ message: "Message flagged" });
-  if (method === "POST" && /^\/chat\/messages\/[^/]+\/react$/.test(path)) return jsonResponse({ message: "Reaction saved" });
-  if (method === "POST" && /^\/chat\/messages\/[^/]+\/vote$/.test(path)) return jsonResponse({ message: "Vote saved" });
-  if ((method === "GET" || method === "POST") && path === "/chat/dms") return handleDirectMessages(request);
-  if (method === "POST" && /^\/chat\/dms\/[^/]+\/read$/.test(path)) return jsonResponse({ message: "Success" });
+  if (method === "GET" && path === "/chat/trending-tags") return handleTrendingTags();
+  if (method === "POST" && /^\/chat\/messages\/[^/]+\/flag$/.test(path)) return handleCommunityFlag(request, firstPathMatch(path, /^\/chat\/messages\/([^/]+)\/flag$/));
+  if (method === "POST" && /^\/chat\/messages\/[^/]+\/react$/.test(path)) return handleCommunityReaction(request, firstPathMatch(path, /^\/chat\/messages\/([^/]+)\/react$/));
+  if (method === "POST" && /^\/chat\/messages\/[^/]+\/vote$/.test(path)) return handleCommunityVote(request, firstPathMatch(path, /^\/chat\/messages\/([^/]+)\/vote$/));
+  if ((method === "GET" || method === "POST") && (path === "/chat/dms" || path === "/chat/dm")) return handleDirectMessages(request);
+  if (method === "POST" && /^\/chat\/dms\/[^/]+\/read$/.test(path)) return handleDirectMessageRead(request, firstPathMatch(path, /^\/chat\/dms\/([^/]+)\/read$/));
   if (method === "POST" && path === "/users/status/heartbeat") return handleHeartbeat(request);
   if (method === "GET" && path === "/users/online") return handleOnlineUsers();
-  if (method === "POST" && /^\/users\/[^/]+\/block$/.test(path)) return jsonResponse({ message: "User has been blocked successfully", blocked: true });
-  if (method === "GET" && path === "/users/search") return jsonResponse([]);
+  if (method === "POST" && /^\/users\/[^/]+\/block$/.test(path)) return handleUserBlock(request, firstPathMatch(path, /^\/users\/([^/]+)\/block$/));
+  if (method === "GET" && path === "/users/search") return handleUserSearch(request);
 
   if (method === "GET" && path === "/health/summary") return handleHealthSummary(request);
-  if (method === "GET" && path === "/health/wellness-score") return jsonResponse(null);
+  if (method === "GET" && path === "/health/wellness-score") return handleWellnessScore(request);
   if (method === "GET" && /^\/health\/advisor\/[^/]+$/.test(path)) return handleHealthAdvisor(request, firstPathMatch(path, /^\/health\/advisor\/([^/]+)$/));
-  if (method === "GET" && path === "/scorecard/questions") return jsonResponse([]);
-  if (method === "GET" && path === "/app/version/latest") return jsonResponse(null);
+  if (method === "GET" && path === "/scorecard/questions") return handleScorecardQuestions(request);
+  if (method === "GET" && path === "/app/version/latest") return handleLatestAppVersion(request);
 
   if (method === "GET" && path === "/admin/analytics") return handleAdminAnalytics(request);
   if (method === "GET" && path === "/admin/stats") return handleAdminAnalytics(request);
@@ -3062,8 +4836,12 @@ const routeRequest = async (request: Request) => {
   if (method === "GET" && path === "/admin/notification-campaigns") return handleNotificationCampaigns(request);
   if (method === "POST" && path === "/admin/notification-campaigns/preview") return handleNotificationPreview(request);
   if (method === "POST" && path === "/admin/notification-campaigns/send") return handleNotificationSend(request);
-  if (method === "GET" && path === "/admin/scorecard/events") return jsonResponse([]);
-  if (method === "GET" && path === "/admin/export") return jsonResponse({ message: "CSV export is not migrated yet." }, 501);
+  if (method === "GET" && path === "/admin/scorecard/events") return handleAdminScorecardEvents(request);
+  if (method === "GET" && /^\/admin\/scorecard\/[^/]+\/dashboard$/.test(path)) return handleAdminScorecardDashboard(request, firstPathMatch(path, /^\/admin\/scorecard\/([^/]+)\/dashboard$/));
+  if (method === "POST" && /^\/admin\/scorecard\/[^/]+\/prompt-followup$/.test(path)) return handleAdminPromptScorecardFollowup(request, firstPathMatch(path, /^\/admin\/scorecard\/([^/]+)\/prompt-followup$/));
+  if (method === "POST" && /^\/admin\/scorecard\/[^/]+\/evidence$/.test(path)) return handleAdminScorecardEvidence(request, firstPathMatch(path, /^\/admin\/scorecard\/([^/]+)\/evidence$/));
+  if (method === "POST" && /^\/admin\/scorecard\/[^/]+\/reporting$/.test(path)) return handleAdminScorecardReporting(request, firstPathMatch(path, /^\/admin\/scorecard\/([^/]+)\/reporting$/));
+  if (method === "GET" && path === "/admin/export") return handleAdminExport(request);
 
   return errorResponse(`Endpoint not migrated to Supabase Edge Functions yet: ${method} ${path}`, 501);
 };

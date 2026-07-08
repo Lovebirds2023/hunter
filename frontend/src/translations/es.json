@@ -582,9 +582,9 @@
             "title": "Exportación de datos",
             "desc": "Descarga datos como hojas de cálculo de Excel para informes y análisis.",
             "registrations_title": "Exportar inscripciones",
-            "registrations_sub": "Todos los datos de inscripción (.xlsx)",
+            "registrations_sub": "Todos los datos de inscripción (.csv)",
             "events_title": "Exportar eventos",
-            "events_sub": "Todos los datos de eventos (.xlsx)"
+            "events_sub": "Todos los datos de eventos (.csv)"
         },
         "actions": {
             "delete_service_title": "Eliminar servicio",

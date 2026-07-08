@@ -582,9 +582,9 @@
             "title": "Uhamishaji wa Data",
             "desc": "Pakua data kama lahajedwali za Excel kwa ajili ya ripoti na uchambuzi.",
             "registrations_title": "Hamisha Usajili",
-            "registrations_sub": "Usajili wote wa matukio (.xlsx)",
+            "registrations_sub": "Usajili wote wa matukio (.csv)",
             "events_title": "Hamisha Matukio",
-            "events_sub": "Data zote za matukio (.xlsx)"
+            "events_sub": "Data zote za matukio (.csv)"
         },
         "actions": {
             "delete_service_title": "Futa Huduma",

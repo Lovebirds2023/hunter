@@ -582,9 +582,9 @@
             "title": "تصدير البيانات",
             "desc": "قم بتحميل البيانات كجداول إكسل للتقارير والتحليل.",
             "registrations_title": "تصدير التسجيلات",
-            "registrations_sub": "كل تسجيلات الفعاليات (.xlsx)",
+            "registrations_sub": "كل تسجيلات الفعاليات (.csv)",
             "events_title": "تصدير الفعاليات",
-            "events_sub": "كل بيانات الفعاليات (.xlsx)"
+            "events_sub": "كل بيانات الفعاليات (.csv)"
         },
         "actions": {
             "delete_service_title": "حذف الخدمة",

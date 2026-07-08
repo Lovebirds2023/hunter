@@ -582,9 +582,9 @@
             "title": "データ・エクスポート",
             "desc": "レポートや分析のために、データをExcel形式でダウンロードできます。",
             "registrations_title": "エントリー情報を出力",
-            "registrations_sub": "全イベントの参加登録データ (.xlsx)",
+            "registrations_sub": "全イベントの参加登録データ (.csv)",
             "events_title": "イベント情報を出力",
-            "events_sub": "全イベントデータ (.xlsx)"
+            "events_sub": "全イベントデータ (.csv)"
         },
         "actions": {
             "delete_service_title": "サービスを削除",

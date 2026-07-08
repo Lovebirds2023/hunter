@@ -582,9 +582,9 @@
             "title": "Datenexport",
             "desc": "Lade Daten als Excel-Dateien für Berichte und Analysen herunter.",
             "registrations_title": "Registrierungen exportieren",
-            "registrations_sub": "Alle Event-Registrierungen (.xlsx)",
+            "registrations_sub": "Alle Event-Registrierungen (.csv)",
             "events_title": "Events exportieren",
-            "events_sub": "Alle Event-Daten (.xlsx)"
+            "events_sub": "Alle Event-Daten (.csv)"
         },
         "actions": {
             "delete_service_title": "Dienstleistung löschen",

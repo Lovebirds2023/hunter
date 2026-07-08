@@ -192,11 +192,11 @@ export const AdminScorecardTab = ({ onBack, initialEventId = null }) => {
                 responseType: 'arraybuffer',
             });
             const exportName = safeExportSlug(selectedEvent?.scorecard_title || selectedEvent?.title || 'impact');
-            const fileName = `${exportName}_impact_${new Date().toISOString().split('T')[0]}.xlsx`;
+            const fileName = `${exportName}_impact_${new Date().toISOString().split('T')[0]}.csv`;
 
             if (Platform.OS === 'web' && typeof window !== 'undefined') {
                 const blob = new Blob([response.data], {
-                    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    type: 'text/csv;charset=utf-8',
                 });
                 const blobUrl = window.URL.createObjectURL(blob);
                 const link = window.document.createElement('a');

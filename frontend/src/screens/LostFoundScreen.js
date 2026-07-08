@@ -6,6 +6,8 @@ import * as ImagePicker from 'expo-image-picker';
 import client from '../api/client';
 import { colors } from '../theme/colors';
 import { getBreedsForPetType, getColorsForPetType } from '../constants/data';
+import { runtimeConfig } from '../config/runtimeConfig';
+import { uploadImagesToSupabase } from '../utils/uploadImages';
 
 const LostFoundScreen = () => {
     const { t } = useTranslation();
@@ -17,6 +19,7 @@ const LostFoundScreen = () => {
     const [breed, setBreed] = useState("");
     const [customBreed, setCustomBreed] = useState("");
     const [color, setColor] = useState("");
+    const [submitting, setSubmitting] = useState(false);
 
     const breedOptions = getBreedsForPetType(petType);
     const colorOptions = getColorsForPetType(petType);
@@ -55,19 +58,17 @@ const LostFoundScreen = () => {
         }
         try {
             const finalBreed = breed === "Other" ? customBreed : breed;
-            const res = await client.post('/dogs/report-lost', {
-                name: "Unidentified",
+            const res = await client.post('/dogs/identify', {
                 breed: finalBreed,
                 color,
                 pet_type: petType,
-                height: 0,
-                weight: 0,
-                body_structure: "Unknown",
-                nose_print_image: image
+                description,
+                nose_print_image: image,
             });
+            const matchCount = Array.isArray(res.data) ? res.data.length : Number(res.data?.matches || 0);
 
-            if (res.data.matches > 0) {
-                setMatchResult(t('lost_found.alerts.matches_found', { count: res.data.matches }));
+            if (matchCount > 0) {
+                setMatchResult(t('lost_found.alerts.matches_found', { count: matchCount }));
                 Alert.alert(t('lost_found.alerts.success_matches'), t('lost_found.alerts.success_matches_desc'));
             } else {
                 setMatchResult(t('lost_found.alerts.matches_none'));
@@ -78,12 +79,50 @@ const LostFoundScreen = () => {
         }
     };
 
+    const submitLostReport = async () => {
+        const finalBreed = breed === "Other" ? customBreed : breed;
+        const locationText = description.trim();
+        if (!locationText) {
+            Alert.alert(t('common.error'), t('lost_found.labels.location_info'));
+            return;
+        }
+
+        const uploadedImages = image
+            ? await uploadImagesToSupabase([image], 'cases', runtimeConfig.storageBuckets.caseEvidence)
+            : [];
+
+        await client.post('/cases', {
+            case_type: 'lost_dog',
+            title: `Lost ${finalBreed ? `${finalBreed} ` : ''}${petLabel}`,
+            description: locationText,
+            location: locationText,
+            image_url: uploadedImages[0] || null,
+            images: uploadedImages,
+            breed: finalBreed,
+            color,
+            pet_type: petType,
+        });
+
+        setMatchResult(null);
+        setDescription("");
+        setImage(null);
+        Alert.alert(t('lost_found.alerts.success_report'), t('lost_found.alerts.success_report_desc'));
+    };
+
     const submitReport = async () => {
-        if (activeTab === 'found') {
-            await identifyPet();
-        } else {
-            // Logic for lost report could be different, but for now we reuse identifying if they have photo
-            Alert.alert(t('lost_found.alerts.success_report'), t('lost_found.alerts.success_report_desc'));
+        if (submitting) return;
+        setSubmitting(true);
+        try {
+            if (activeTab === 'found') {
+                await identifyPet();
+            } else {
+                await submitLostReport();
+            }
+        } catch (e) {
+            if (__DEV__) console.log(e);
+            Alert.alert(t('common.error'), t('lost_found.alerts.error_process'));
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -182,9 +221,10 @@ const LostFoundScreen = () => {
                     />
 
                     <Button
-                        title={activeTab === 'found' ? t('lost_found.identify_button') : t('lost_found.submit_lost')}
+                        title={submitting ? t('common.loading') : (activeTab === 'found' ? t('lost_found.identify_button') : t('lost_found.submit_lost'))}
                         onPress={submitReport}
                         color={colors.primary}
+                        disabled={submitting}
                     />
                     {matchResult && <Text style={styles.result}>{matchResult}</Text>}
                 </View>

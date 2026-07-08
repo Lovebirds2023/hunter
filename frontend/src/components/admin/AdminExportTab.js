@@ -32,11 +32,11 @@ export const AdminExportTab = ({ onBack }) => {
                 responseType: 'arraybuffer'
             });
 
-            const fileName = `ld360_${type}_${new Date().toISOString().split('T')[0]}.xlsx`;
+            const fileName = `ld360_${type}_${new Date().toISOString().split('T')[0]}.csv`;
 
             if (Platform.OS === 'web' && typeof window !== 'undefined') {
                 const blob = new Blob([response.data], {
-                    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    type: 'text/csv;charset=utf-8',
                 });
                 const blobUrl = window.URL.createObjectURL(blob);
                 const link = window.document.createElement('a');
@@ -97,7 +97,7 @@ export const AdminExportTab = ({ onBack }) => {
                         </View>
                         <View style={{ marginLeft: 12 }}>
                             <Text style={{ fontSize: 15, fontWeight: '700', color: ADMIN_COLORS.textPrimary }}>Quick Export</Text>
-                            <Text style={{ fontSize: 12, color: ADMIN_COLORS.textSecondary }}>Choose a dataset to generate an XLSX report</Text>
+                            <Text style={{ fontSize: 12, color: ADMIN_COLORS.textSecondary }}>Choose a dataset to generate a CSV report</Text>
                         </View>
                     </View>
 
@@ -132,7 +132,7 @@ export const AdminExportTab = ({ onBack }) => {
                 <View style={[s.card, { marginTop: 20, backgroundColor: `${ADMIN_COLORS.accent}10`, borderColor: `${ADMIN_COLORS.accent}30` }]}>
                     <Text style={{ color: ADMIN_COLORS.accent, fontSize: 13, fontWeight: '800', marginBottom: 6 }}>NOTE:</Text>
                     <Text style={{ color: ADMIN_COLORS.textSecondary, fontSize: 12, lineHeight: 18 }}>
-                        All reports are generated in Microsoft Excel (.xlsx) format. Exporting large datasets may take a few moments. Ensure you have a stable network connection.
+                        All reports are generated in CSV format for spreadsheet analysis. Exporting large datasets may take a few moments. Ensure you have a stable network connection.
                     </Text>
                 </View>
             </ScrollView>

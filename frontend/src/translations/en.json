@@ -583,9 +583,9 @@
             "title": "Data Export",
             "desc": "Download data as Excel spreadsheets for reporting and analysis.",
             "registrations_title": "Export Registrations",
-            "registrations_sub": "All event registrations (.xlsx)",
+            "registrations_sub": "All event registrations (.csv)",
             "events_title": "Export Events",
-            "events_sub": "All events data (.xlsx)"
+            "events_sub": "All events data (.csv)"
         },
         "actions": {
             "delete_service_title": "Delete Service",

@@ -582,9 +582,9 @@
             "title": "数据导出",
             "desc": "将数据下载为 Excel 表格，用于报告和分析。",
             "registrations_title": "导出报名信息",
-            "registrations_sub": "所有活动报名数据 (.xlsx)",
+            "registrations_sub": "所有活动报名数据 (.csv)",
             "events_title": "导出活动",
-            "events_sub": "所有活动数据 (.xlsx)"
+            "events_sub": "所有活动数据 (.csv)"
         },
         "actions": {
             "delete_service_title": "删除服务",

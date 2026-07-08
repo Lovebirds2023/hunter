@@ -582,9 +582,9 @@
             "title": "Exportação de Dados",
             "desc": "Baixe os dados como planilhas Excel para relatórios e análises.",
             "registrations_title": "Exportar Inscrições",
-            "registrations_sub": "Inscrições em eventos (.xlsx)",
+            "registrations_sub": "Inscrições em eventos (.csv)",
             "events_title": "Exportar Eventos",
-            "events_sub": "Dados dos eventos (.xlsx)"
+            "events_sub": "Dados dos eventos (.csv)"
         },
         "actions": {
             "delete_service_title": "Excluir Serviço",

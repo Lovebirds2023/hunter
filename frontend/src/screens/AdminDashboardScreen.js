@@ -36,7 +36,7 @@ const MANAGEMENT_GRID = [
     { id: 'community', label: 'Moderation', icon: 'chatbubbles', sub: 'Social Monitor', color: ADMIN_COLORS.chart1, badge: 'flagged_posts' },
     { id: 'announcements', label: 'Inbox Broadcasts', icon: 'megaphone', sub: 'Targeted Updates', color: ADMIN_COLORS.chart1 },
     { id: 'support', label: 'Support Desk', icon: 'headset', sub: 'User Help Tickets', color: ADMIN_COLORS.chart5, badge: 'open_tickets' },
-    { id: 'export', label: 'Reporting', icon: 'download', sub: 'XLSX Data Center', color: ADMIN_COLORS.info },
+    { id: 'export', label: 'Reporting', icon: 'download', sub: 'CSV Data Center', color: ADMIN_COLORS.info },
 ];
 
 export default function AdminDashboardScreen({ route }) {

@@ -582,9 +582,9 @@
             "title": "Exportation de données",
             "desc": "Téléchargez les données sous forme de feuilles Excel pour les rapports et l'analyse.",
             "registrations_title": "Exporter les inscriptions",
-            "registrations_sub": "Toutes les inscriptions aux événements (.xlsx)",
+            "registrations_sub": "Toutes les inscriptions aux événements (.csv)",
             "events_title": "Exporter les événements",
-            "events_sub": "Toutes les données des événements (.xlsx)"
+            "events_sub": "Toutes les données des événements (.csv)"
         },
         "actions": {
             "delete_service_title": "Supprimer le service",

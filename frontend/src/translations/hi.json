@@ -582,9 +582,9 @@
             "title": "डेटा निर्यात",
             "desc": "रिपोर्टिंग और विश्लेषण के लिए डेटा को एक्सेल स्प्रेडशीट के रूप में डाउनलोड करें।",
             "registrations_title": "पंजीकरण निर्यात करें",
-            "registrations_sub": "सभी ईवेंट पंजीकरण (.xlsx)",
+            "registrations_sub": "सभी ईवेंट पंजीकरण (.csv)",
             "events_title": "ईवेंट निर्यात करें",
-            "events_sub": "सभी ईवेंट डेटा (.xlsx)"
+            "events_sub": "सभी ईवेंट डेटा (.csv)"
         },
         "actions": {
             "delete_service_title": "सेवा हटाएं",
