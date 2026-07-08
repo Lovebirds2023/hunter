@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     View, Text, FlatList, TouchableOpacity, TextInput, Image,
-    ActivityIndicator, RefreshControl, Alert, Switch
+    ActivityIndicator, RefreshControl, Alert, Switch, Platform
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
@@ -217,11 +217,19 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
         const safeExtension = extension.length <= 5 ? extension : 'jpg';
         const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${safeExtension}`;
         const filePath = `event-posters/${fileName}`;
-        const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+        let body;
+
+        if (Platform.OS === 'web') {
+            const response = await fetch(uri);
+            body = await response.arrayBuffer();
+        } else {
+            const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+            body = decode(base64);
+        }
 
         const { error } = await supabase.storage
             .from(runtimeConfig.storageBuckets.eventImages)
-            .upload(filePath, decode(base64), {
+            .upload(filePath, body, {
                 contentType: `image/${safeExtension === 'jpg' ? 'jpeg' : safeExtension}`,
                 upsert: true,
             });
