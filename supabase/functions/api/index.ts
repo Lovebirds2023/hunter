@@ -49,6 +49,14 @@ const jsonResponse = (body: unknown, status = 200) =>
 
 const errorResponse = (detail: string, status = 400) => jsonResponse({ detail }, status);
 
+const readableErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && cleanString(error.message)) return cleanString(error.message);
+  if (isRecord(error)) {
+    return cleanString(error.message) || cleanString(error.details) || cleanString(error.hint) || fallback;
+  }
+  return fallback;
+};
+
 const fileResponse = (body: string, contentType: string, fileName: string) =>
   new Response(body, {
     status: 200,
@@ -1399,22 +1407,28 @@ const handleCreateEvent = async (request: Request) => {
   };
 
   const { data, error } = await supabaseAdmin.from("events").insert(payload).select("*").single();
-  if (error) throw error;
+  if (error) return errorResponse(`Could not create event: ${readableErrorMessage(error, "Database insert failed.")}`, 400);
 
   let pin: JsonRecord | null = null;
+  let pinError = "";
   if (isAdminProfile(profile)) {
-    pin = await saveContentPin({
-      target_type: "event",
-      target_id: cleanString((data as JsonRecord).id),
-      title,
-      description: body.description ?? null,
-      image_url: body.poster_url ?? null,
-      priority: 150,
-      created_by_id: cleanString(profile.id),
-    });
+    try {
+      pin = await saveContentPin({
+        target_type: "event",
+        target_id: cleanString((data as JsonRecord).id),
+        title,
+        description: body.description ?? null,
+        image_url: body.poster_url ?? null,
+        priority: 150,
+        created_by_id: cleanString(profile.id),
+      });
+    } catch (error) {
+      pinError = readableErrorMessage(error, "Automatic pinning failed.");
+      console.error("Event auto-pin failed", error);
+    }
   }
 
-  return jsonResponse({ ...data, registrant_count: 0, ...pinMetadata(pin) }, 201);
+  return jsonResponse({ ...data, registrant_count: 0, ...pinMetadata(pin), pin_error: pinError || null }, 201);
 };
 
 const handleGetEvent = async (eventId: string) => {
@@ -4429,7 +4443,7 @@ const handleAdminApprove = async (request: Request, itemType: string, itemId: st
         updated_at: nowIso(),
       })
       .eq("id", itemId);
-    if (error) throw error;
+    if (error) return errorResponse(`Could not update listing approval: ${readableErrorMessage(error, "Database update failed.")}`, 400);
     return jsonResponse({ message: isApproved ? "Service approved" : "Service rejected" });
   }
   if (itemType === "report") {
@@ -4437,7 +4451,7 @@ const handleAdminApprove = async (request: Request, itemType: string, itemId: st
       .from("case_reports")
       .update({ is_approved: isApproved, rejection_reason: isApproved ? null : reason, updated_at: nowIso() })
       .eq("id", itemId);
-    if (error) throw error;
+    if (error) return errorResponse(`Could not update report approval: ${readableErrorMessage(error, "Database update failed.")}`, 400);
     return jsonResponse({ message: isApproved ? "Report approved" : "Report rejected" });
   }
   return errorResponse("Unsupported approval item type.");
@@ -4478,7 +4492,7 @@ const handleAdminEvents = async (request: Request) => {
   await requireAdminProfile(request);
   const pins = await getActivePins();
   const { data, error } = await supabaseAdmin.from("events").select("*").order("start_time", { ascending: true });
-  if (error) throw error;
+  if (error) return errorResponse(`Could not load admin events: ${readableErrorMessage(error, "Database query failed.")}`, 400);
   return jsonResponse(await Promise.all((data ?? []).map((event) => adminEventRow(event as JsonRecord, pins))));
 };
 
@@ -4499,14 +4513,14 @@ const handleAdminUpdateEvent = async (request: Request, eventId: string, mode: "
     updates.scorecard_description = body.scorecard_description ?? null;
   }
   const { data, error } = await supabaseAdmin.from("events").update(updates).eq("id", eventId).select("*").single();
-  if (error) throw error;
+  if (error) return errorResponse(`Could not update event: ${readableErrorMessage(error, "Database update failed.")}`, 400);
   return jsonResponse(await adminEventRow(data as JsonRecord));
 };
 
 const handleAdminDeleteEvent = async (request: Request, eventId: string) => {
   await requireAdminProfile(request);
   const { error } = await supabaseAdmin.from("events").delete().eq("id", eventId);
-  if (error) throw error;
+  if (error) return errorResponse(`Could not delete event: ${readableErrorMessage(error, "Database delete failed.")}`, 400);
   return jsonResponse({ message: "Event deleted" });
 };
 

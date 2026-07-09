@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import client from '../../api/client';
 import { adminStyles as s, ADMIN_COLORS } from './AdminStyles';
+import { getApiErrorMessage } from '../../utils/apiErrors';
 
 export const AdminApprovalsTab = ({ onBack }) => {
     const [pending, setPending] = useState({ services: [], reports: [] });
@@ -15,6 +16,7 @@ export const AdminApprovalsTab = ({ onBack }) => {
     const [rejectionReason, setRejectionReason] = useState('');
     const [actioningId, setActioningId] = useState(null);
     const [deleteReasons, setDeleteReasons] = useState({});
+    const [actionError, setActionError] = useState('');
 
     const fetchPending = useCallback(async (silent = false) => {
         if (!silent) setLoading(true);
@@ -42,6 +44,7 @@ export const AdminApprovalsTab = ({ onBack }) => {
         }
 
         setActioningId(itemId);
+        setActionError('');
         try {
             await client.post(`/admin/approve/${itemType}/${itemId}`, {
                 is_approved: isApproved,
@@ -51,7 +54,9 @@ export const AdminApprovalsTab = ({ onBack }) => {
             setRejectionReason('');
             fetchPending(true);
         } catch (e) {
-            Alert.alert('Error', `Failed to ${isApproved ? 'approve' : 'reject'} item.`);
+            const message = getApiErrorMessage(e, `Failed to ${isApproved ? 'approve' : 'reject'} item.`);
+            setActionError(message);
+            Alert.alert('Error', message);
         } finally {
             setActioningId(null);
         }
@@ -76,6 +81,7 @@ export const AdminApprovalsTab = ({ onBack }) => {
                 text: 'Delete', style: 'destructive', onPress: async () => {
                     setActioningId(item.id);
                     try {
+                        setActionError('');
                         await client.delete(path, { data: { reason } });
                         setPending(prev => ({
                             services: itemType === 'service' ? prev.services.filter(row => row.id !== item.id) : prev.services,
@@ -83,7 +89,9 @@ export const AdminApprovalsTab = ({ onBack }) => {
                         }));
                         Alert.alert('Deleted', 'Item removed and user notified.');
                     } catch (e) {
-                        Alert.alert('Error', e.response?.data?.detail || 'Failed to delete item.');
+                        const message = getApiErrorMessage(e, 'Failed to delete item.');
+                        setActionError(message);
+                        Alert.alert('Error', message);
                     } finally {
                         setActioningId(null);
                     }
@@ -138,7 +146,7 @@ export const AdminApprovalsTab = ({ onBack }) => {
                 <TouchableOpacity 
                     style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.successBg, flex: 1 }]}
                     onPress={() => handleAction('service', item.id, true)}
-                    disabled={actioningId === item.id && loading}
+                    disabled={actioningId === item.id}
                 >
                     <Ionicons name="checkmark-circle-outline" size={16} color={ADMIN_COLORS.success} />
                     <Text style={[s.actionBtnText, { color: ADMIN_COLORS.success }]}>Approve</Text>
@@ -227,6 +235,13 @@ export const AdminApprovalsTab = ({ onBack }) => {
                         </Text>
                     </View>
                 </View>
+
+                {actionError ? (
+                    <View style={{ backgroundColor: ADMIN_COLORS.dangerBg, borderColor: ADMIN_COLORS.danger, borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 12 }}>
+                        <Text style={{ color: ADMIN_COLORS.danger, fontWeight: '800', marginBottom: 4 }}>Last approval error</Text>
+                        <Text selectable style={{ color: ADMIN_COLORS.textPrimary, fontSize: 12, lineHeight: 17 }}>{actionError}</Text>
+                    </View>
+                ) : null}
 
                 {/* Section Toggle */}
                 <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15 }}>

@@ -10,6 +10,7 @@ import { Button } from '../components/Button';
 import { useCurrency } from '../context/CurrencyContext';
 import { runtimeConfig } from '../config/runtimeConfig';
 import { uploadImagesToSupabase } from '../utils/uploadImages';
+import { getApiErrorMessage } from '../utils/apiErrors';
 import {
     ImageFrameGuide,
     getImageFrameAspectRatio,
@@ -105,6 +106,7 @@ const CreateServiceScreen = ({ route, navigation }) => {
     const [locationAccuracy, setLocationAccuracy] = useState(service?.location_accuracy_meters || null);
     const [address, setAddress] = useState(service?.address || '');
     const [loading, setLoading] = useState(false);
+    const [submitError, setSubmitError] = useState('');
     const [fetchingLocation, setFetchingLocation] = useState(false);
     const [formFields, setFormFields] = useState([]);
     const draftKey = `ld360:draft:create-service:${service?.id || 'new'}`;
@@ -261,24 +263,35 @@ const CreateServiceScreen = ({ route, navigation }) => {
     };
 
     const handleSubmit = async () => {
+        setSubmitError('');
         if (!title || !description || !price) {
-            Alert.alert(t('common.error'), t('marketplace.create.error_fill'));
+            const message = t('marketplace.create.error_fill');
+            setSubmitError(message);
+            Alert.alert(t('common.error'), message);
             return;
         }
         if (!Number.isFinite(parsedPrice) || numericPrice <= 0) {
-            Alert.alert(t('common.error'), t('marketplace.create.error_price_invalid', { defaultValue: 'Enter a valid listing price.' }));
+            const message = t('marketplace.create.error_price_invalid', { defaultValue: 'Enter a valid listing price.' });
+            setSubmitError(message);
+            Alert.alert(t('common.error'), message);
             return;
         }
         if (isPriceBelowMinimum) {
+            setSubmitError(minimumNotice);
             Alert.alert(t('common.error'), minimumNotice);
             return;
         }
 
         setLoading(true);
         try {
-            const uploadedImages = images.length > 0
-                ? await uploadImagesToSupabase(images, 'services', runtimeConfig.storageBuckets.serviceImages)
-                : [];
+            let uploadedImages = [];
+            try {
+                uploadedImages = images.length > 0
+                    ? await uploadImagesToSupabase(images, 'services', runtimeConfig.storageBuckets.serviceImages)
+                    : [];
+            } catch (uploadError) {
+                throw new Error(`Image upload failed. ${getApiErrorMessage(uploadError, 'Could not upload listing images.')}`);
+            }
             const data = {
                 title,
                 description,
@@ -312,8 +325,9 @@ const CreateServiceScreen = ({ route, navigation }) => {
             navigation.goBack();
         } catch (error) {
             console.error(error);
-            const detail = error.response?.data?.detail;
-            Alert.alert(t('common.error'), detail || (isEditing ? t('marketplace.create.error_update') : t('marketplace.create.error_create')));
+            const message = getApiErrorMessage(error, isEditing ? t('marketplace.create.error_update') : t('marketplace.create.error_create'));
+            setSubmitError(message);
+            Alert.alert(t('common.error'), message);
         } finally {
             setLoading(false);
         }
@@ -593,6 +607,13 @@ const CreateServiceScreen = ({ route, navigation }) => {
                         </View>
                     )}
 
+                    {submitError ? (
+                        <View style={styles.errorPanel}>
+                            <Text style={styles.errorTitle}>Last submit error</Text>
+                            <Text selectable style={styles.errorText}>{submitError}</Text>
+                        </View>
+                    ) : null}
+
                     <Button
                         title={loading ? (isEditing ? t('common.updating') : t('common.creating')) : (isEditing ? t('marketplace.create.title_edit') : t('marketplace.create.title_new'))}
                         onPress={handleSubmit}
@@ -663,6 +684,16 @@ const styles = StyleSheet.create({
         alignItems: 'center'
     },
     imageWrapper: { width: 180, borderRadius: 12, overflow: 'hidden', marginRight: 10, borderWidth: 1, borderColor: '#eee' },
+    errorPanel: {
+        borderWidth: 1,
+        borderColor: COLORS.error,
+        backgroundColor: '#fff5f5',
+        borderRadius: 8,
+        padding: 12,
+        marginTop: 12,
+    },
+    errorTitle: { color: COLORS.error, fontWeight: '700', marginBottom: 4 },
+    errorText: { color: COLORS.text, fontSize: 12, lineHeight: 17 },
     galleryImage: { width: '100%', height: '100%' },
     removeImageBtn: { position: 'absolute', top: 5, right: 5, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 15, padding: 2 },
     imagePlaceholder: { alignItems: 'center' },

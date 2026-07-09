@@ -12,6 +12,7 @@ import { supabase } from '../../../supabase';
 import { runtimeConfig } from '../../config/runtimeConfig';
 import { adminStyles as s, ADMIN_COLORS } from './AdminStyles';
 import { DistributionBar } from './ChartComponents';
+import { getApiErrorMessage } from '../../utils/apiErrors';
 import {
     ImageFrameGuide,
     getImageFrameAspectRatio,
@@ -86,14 +87,6 @@ const hasAdminEventDraftContent = (draft) => {
     );
 };
 
-const requestErrorMessage = (error, fallback) => {
-    const detail = error?.response?.data?.detail;
-    if (typeof detail === 'string' && detail.trim()) return detail.trim();
-    if (Array.isArray(detail) && detail.length > 0) return detail.map(item => item?.msg || item).join('\n');
-    if (typeof error?.message === 'string' && error.message.trim()) return error.message.trim();
-    return fallback;
-};
-
 const toDatetimeLocal = (value) => {
     if (!value) return '';
     const date = new Date(value);
@@ -162,6 +155,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
     const [showCreate, setShowCreate] = useState(false);
     const [creating, setCreating] = useState(false);
     const [form, setForm] = useState(newEventForm());
+    const [createError, setCreateError] = useState('');
     const [posterFrameRatio, setPosterFrameRatio] = useState('16:9');
     const [pinningId, setPinningId] = useState(null);
     const [ticketingEvent, setTicketingEvent] = useState(null);
@@ -276,14 +270,19 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
     };
 
     const handleCreate = async () => {
+        setCreateError('');
         if (!form.title.trim()) {
-            Alert.alert('Required', 'Add an event title.');
+            const message = 'Add an event title.';
+            setCreateError(message);
+            Alert.alert('Required', message);
             return;
         }
         const start = new Date(form.start_time);
         const end = new Date(form.end_time);
         if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
-            Alert.alert('Check dates', 'Use valid start and end times, with the end after the start.');
+            const message = 'Use valid start and end times, with the end after the start.';
+            setCreateError(message);
+            Alert.alert('Check dates', message);
             return;
         }
         let availableSlots = [];
@@ -291,32 +290,47 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
             try {
                 availableSlots = toSlotPayload(form.available_slots);
             } catch {
-                Alert.alert('Check schedule', 'Use valid start and end times for every booking slot.');
+                const message = 'Use valid start and end times for every booking slot.';
+                setCreateError(message);
+                Alert.alert('Check schedule', message);
                 return;
             }
             if (availableSlots.length === 0) {
-                Alert.alert('Add dates', 'Add at least one available date/time slot, or turn booking schedule off.');
+                const message = 'Add at least one available date/time slot, or turn booking schedule off.';
+                setCreateError(message);
+                Alert.alert('Add dates', message);
                 return;
             }
         }
         if (form.tiered_ticketing) {
             if (!form.free_tier_label.trim() || !form.paid_tier_label.trim()) {
-                Alert.alert('Category names required', 'Name both the free and paid registration categories.');
+                const message = 'Name both the free and paid registration categories.';
+                setCreateError(message);
+                Alert.alert('Category names required', message);
                 return;
             }
             if (Number(form.paid_ticket_price || 0) <= 0) {
-                Alert.alert('Paid price required', 'Set a paid ticket price greater than zero.');
+                const message = 'Set a paid ticket price greater than zero.';
+                setCreateError(message);
+                Alert.alert('Paid price required', message);
                 return;
             }
             if (!form.attendee_type_question.trim()) {
-                Alert.alert('Question required', 'Add the justification question for the registration categories.');
+                const message = 'Add the justification question for the registration categories.';
+                setCreateError(message);
+                Alert.alert('Question required', message);
                 return;
             }
         }
 
         setCreating(true);
         try {
-            const posterUrl = await uploadPosterIfNeeded(form.poster_url);
+            let posterUrl = null;
+            try {
+                posterUrl = await uploadPosterIfNeeded(form.poster_url);
+            } catch (uploadError) {
+                throw new Error(`Poster upload failed. ${getApiErrorMessage(uploadError, 'Could not upload the event poster.')}`);
+            }
             const ticketTiers = form.tiered_ticketing ? [
                 {
                     id: 'free',
@@ -336,7 +350,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                 },
             ] : null;
             const baseTicketPrice = form.tiered_ticketing ? Number(form.paid_ticket_price || 0) : Number(form.ticket_price || 0);
-            await client.post('/events', {
+            const res = await client.post('/events', {
                 title: form.title.trim(),
                 description: form.description.trim(),
                 location: form.location.trim(),
@@ -360,10 +374,18 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
             setForm(newEventForm());
             setShowCreate(false);
             await fetchEvents(true);
-            Alert.alert('Created', 'Event created and pinned by default.');
+            if (res.data?.pin_error) {
+                const warning = `Event created, but it could not be pinned automatically: ${res.data.pin_error}`;
+                setCreateError(warning);
+                Alert.alert('Created with pin warning', warning);
+            } else {
+                Alert.alert('Created', 'Event created and pinned by default.');
+            }
         } catch (e) {
             console.error('Create event error:', e);
-            Alert.alert('Event not created', requestErrorMessage(e, 'Failed to create event.'));
+            const message = getApiErrorMessage(e, 'Failed to create event.');
+            setCreateError(message);
+            Alert.alert('Event not created', message);
         } finally {
             setCreating(false);
         }
@@ -893,6 +915,13 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                             </View>
                         )}
                     </View>
+
+                    {createError ? (
+                        <View style={{ backgroundColor: ADMIN_COLORS.dangerBg, borderColor: ADMIN_COLORS.danger, borderWidth: 1, borderRadius: 10, padding: 12, marginTop: 12 }}>
+                            <Text style={{ color: ADMIN_COLORS.danger, fontWeight: '800', marginBottom: 4 }}>Last create error</Text>
+                            <Text selectable style={{ color: ADMIN_COLORS.textPrimary, fontSize: 12, lineHeight: 17 }}>{createError}</Text>
+                        </View>
+                    ) : null}
 
                     <TouchableOpacity style={s.primaryButton} onPress={handleCreate} disabled={creating}>
                         {creating ? <ActivityIndicator color={ADMIN_COLORS.bg} /> : <Ionicons name="calendar-outline" size={18} color={ADMIN_COLORS.bg} />}
