@@ -2267,6 +2267,20 @@ async def create_dog(
     db.add(new_dog)
     db.commit()
     db.refresh(new_dog)
+    try:
+        add_notification(
+            db,
+            current_user.id,
+            "Pet registered successfully",
+            f"{new_dog.name} has been registered successfully.",
+            "approval",
+            target_type="dog",
+            target_id=new_dog.id,
+            target_route="HealthPassport",
+        )
+    except Exception as exc:
+        db.rollback()
+        print(f"Failed to create pet registration notification: {exc}")
     return new_dog
 
 @app.post("/dogs/report-lost")

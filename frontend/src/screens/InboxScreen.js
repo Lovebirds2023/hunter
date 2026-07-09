@@ -89,6 +89,7 @@ export const InboxScreen = ({ navigation }) => {
         if (item.itemType === 'announcement') return "megaphone";
         if (item.itemType === 'direct_message') return "chatbubble-ellipses";
         switch (item.type) {
+            case 'admin_broadcast': return "megaphone";
             case 'rejection': return "close-circle";
             case 'approval': return "checkmark-circle";
             case 'feedback': return "chatbubble-ellipses";
@@ -96,6 +97,8 @@ export const InboxScreen = ({ navigation }) => {
             case 'purchase': return "bag-check";
             case 'sale': return "cash";
             case 'delivery': return "checkmark-done";
+            case 'payment': return "card";
+            case 'event': return "calendar";
             default: return "notifications";
         }
     };
@@ -104,6 +107,7 @@ export const InboxScreen = ({ navigation }) => {
         if (item.itemType === 'announcement') return COLORS.accent;
         if (item.itemType === 'direct_message') return "#3498db";
         switch (item.type) {
+            case 'admin_broadcast': return COLORS.accent;
             case 'rejection': return "#ff4d4d";
             case 'approval': return "#2ecc71";
             case 'feedback': return "#3498db";
@@ -111,6 +115,8 @@ export const InboxScreen = ({ navigation }) => {
             case 'purchase': return "#2E7D32";
             case 'sale': return COLORS.accent;
             case 'delivery': return "#1565C0";
+            case 'payment': return "#2E7D32";
+            case 'event': return COLORS.accent;
             default: return COLORS.primary;
         }
     };
@@ -148,6 +154,8 @@ export const InboxScreen = ({ navigation }) => {
                         params: { eventId: item.target_id },
                     },
                 });
+            } else if (item.itemType === 'notification' && item.target_route === 'HealthPassport' && item.target_id) {
+                navigation.navigate('HealthPassport', { dogId: item.target_id });
             } else if (item.itemType === 'notification' && item.target_route === 'Marketplace') {
                 navigation.navigate('Main', { screen: 'Marketplace' });
             } else if (item.itemType === 'notification' && item.target_route === 'Report') {

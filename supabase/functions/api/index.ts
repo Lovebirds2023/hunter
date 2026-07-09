@@ -444,6 +444,21 @@ const handleCreateDog = async (request: Request) => {
 
   const { data, error } = await supabaseAdmin.from("dogs").insert(payload).select("*").single();
   if (error) throw error;
+  try {
+    await createNotification(
+      profile.id,
+      "Pet registered successfully",
+      `${name} has been registered successfully.`,
+      "approval",
+      {
+        target_type: "dog",
+        target_id: (data as JsonRecord).id,
+        target_route: "HealthPassport",
+      },
+    );
+  } catch (notificationError) {
+    console.warn("Failed to create pet registration notification", notificationError);
+  }
   return jsonResponse(serializeDog(data as JsonRecord), 201);
 };
 
@@ -4807,6 +4822,22 @@ const campaignRecipients = async (payload: JsonRecord) => {
   throw new Response("Unsupported notification target group", { status: 400 });
 };
 
+const defaultCampaignTarget = (payload: JsonRecord) => {
+  const targetGroup = cleanString(payload.target_group);
+  const filters = isRecord(payload.filters) ? payload.filters : {};
+  const eventId = cleanString(filters.event_id);
+  if (targetGroup === "event_registrants" && eventId) {
+    return { target_type: "event", target_id: eventId, target_route: "EventDetail" };
+  }
+  if (["listing_publishers", "product_publishers", "sellers_with_sales"].includes(targetGroup)) {
+    return { target_type: "marketplace", target_id: null, target_route: "Marketplace" };
+  }
+  if (targetGroup === "case_reporters") {
+    return { target_type: "case", target_id: null, target_route: "Report" };
+  }
+  return { target_type: null, target_id: null, target_route: null };
+};
+
 const handleNotificationOptions = async (request: Request) => {
   await requireAdminProfile(request);
   const events = await getRows("events");
@@ -4855,18 +4886,33 @@ const handleNotificationSend = async (request: Request) => {
   const message = cleanString(body.message);
   if (!title || !message) return errorResponse("Title and message are required.");
   const recipients = await campaignRecipients(body);
+  const targetDefaults = defaultCampaignTarget(body);
+  const targetType = cleanString(body.target_type) || targetDefaults.target_type;
+  const targetId = cleanString(body.target_id) || targetDefaults.target_id;
+  const targetRoute = cleanString(body.target_route) || targetDefaults.target_route;
   const { data: campaign, error } = await supabaseAdmin.from("notification_campaigns").insert({
     title,
     message,
     target_group: cleanString(body.target_group) || "role_users",
     filters: isRecord(body.filters) ? body.filters : {},
     type: cleanString(body.type) || "admin_broadcast",
+    target_type: targetType,
+    target_id: targetId,
+    target_route: targetRoute,
     recipient_count: recipients.length,
     created_by_id: cleanString(profile.id),
   }).select("*").single();
   if (error) throw error;
   if (recipients.length) {
-    const notifications = recipients.map((userId) => ({ user_id: userId, title, message, type: "admin_broadcast" }));
+    const notifications = recipients.map((userId) => ({
+      user_id: userId,
+      title,
+      message,
+      type: "admin_broadcast",
+      target_type: targetType,
+      target_id: targetId,
+      target_route: targetRoute,
+    }));
     const { data: inserted, error: notificationError } = await supabaseAdmin.from("notifications").insert(notifications).select("id,user_id");
     if (notificationError) throw notificationError;
     const rows = (inserted ?? []).map((notification) => ({
