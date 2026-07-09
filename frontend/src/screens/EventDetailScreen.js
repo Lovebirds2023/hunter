@@ -26,6 +26,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
     const [isSaved, setIsSaved] = useState(false);
     const [paymentTrackingId, setPaymentTrackingId] = useState(null);
     const [paymentLoading, setPaymentLoading] = useState(false);
+    const [registrationLoading, setRegistrationLoading] = useState(false);
     const [selectedTicketTierId, setSelectedTicketTierId] = useState(null);
     const [selectedBookingSlotId, setSelectedBookingSlotId] = useState(null);
     const [attendeeTypeJustification, setAttendeeTypeJustification] = useState('');
@@ -94,9 +95,34 @@ export const EventDetailScreen = ({ route, navigation }) => {
         }
     };
 
-    const openPaymentUrl = async (url) => {
+    const openCheckoutWindow = () => {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            const checkoutWindow = window.open('', '_blank');
+            if (checkoutWindow) {
+                checkoutWindow.document.title = 'Lovedogs 360 Pesapal Checkout';
+                checkoutWindow.document.body.innerHTML = '<p style="font-family: sans-serif; padding: 24px;">Opening secure Pesapal checkout...</p>';
+            }
+            return checkoutWindow;
+        }
+        return null;
+    };
+
+    const closeCheckoutWindow = (checkoutWindow) => {
+        try {
+            if (checkoutWindow && !checkoutWindow.closed) checkoutWindow.close();
+        } catch {
+            // Ignore browser popup cleanup errors.
+        }
+    };
+
+    const openPaymentUrl = async (url, checkoutWindow = null) => {
         if (!url) return false;
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            if (checkoutWindow && !checkoutWindow.closed) {
+                checkoutWindow.location.href = url;
+                checkoutWindow.focus?.();
+                return true;
+            }
             const opened = window.open(url, '_blank', 'noopener,noreferrer');
             return !!opened;
         }
@@ -106,8 +132,11 @@ export const EventDetailScreen = ({ route, navigation }) => {
         return true;
     };
 
-    const startEventPayment = async (registration) => {
-        if (!registration?.id) return;
+    const startEventPayment = async (registration, checkoutWindow = null) => {
+        if (!registration?.id) {
+            closeCheckoutWindow(checkoutWindow);
+            return;
+        }
         setPaymentLoading(true);
         try {
             const paymentRes = await initiateEventRegistrationPayment(
@@ -118,22 +147,30 @@ export const EventDetailScreen = ({ route, navigation }) => {
             const trackingId = paymentRes.order_tracking_id || paymentRes.OrderTrackingId || null;
             setPaymentTrackingId(trackingId);
             if (paymentRes.redirect_url) {
-                const opened = await openPaymentUrl(paymentRes.redirect_url);
+                const opened = await openPaymentUrl(paymentRes.redirect_url, checkoutWindow);
                 if (opened) {
                     Alert.alert('Payment opened', 'Complete payment in Pesapal, then return here and tap Confirm payment.');
                 } else {
-                    Alert.alert('Error', 'Could not open the Pesapal checkout page.');
+                    Alert.alert('Error', 'Could not open the Pesapal checkout page. Allow pop-ups or tap Pay with Pesapal again.');
                 }
             } else if (paymentRes.payment_success) {
+                closeCheckoutWindow(checkoutWindow);
                 await loadData();
             } else {
+                closeCheckoutWindow(checkoutWindow);
                 Alert.alert('Error', 'Pesapal did not return a checkout link.');
             }
         } catch (error) {
+            closeCheckoutWindow(checkoutWindow);
             Alert.alert('Payment failed', error.response?.data?.detail || 'Could not start payment.');
         } finally {
             setPaymentLoading(false);
         }
+    };
+
+    const handlePayExistingRegistration = () => {
+        const checkoutWindow = openCheckoutWindow();
+        startEventPayment(myRegistration, checkoutWindow);
     };
 
     const verifyEventPayment = async () => {
@@ -191,6 +228,15 @@ export const EventDetailScreen = ({ route, navigation }) => {
             }
         }
 
+        const selectedAmount = selectedTier
+            ? Number(selectedTier.price || 0)
+            : Number(event?.ticket_price || 0);
+        let checkoutWindow = null;
+        if (selectedAmount > 0) {
+            checkoutWindow = openCheckoutWindow();
+        }
+
+        setRegistrationLoading(true);
         try {
             const formattedResponses = Object.keys(formResponses).map(fieldId => ({
                 field_id: fieldId,
@@ -210,13 +256,18 @@ export const EventDetailScreen = ({ route, navigation }) => {
             setModalVisible(false);
             if (registration.payment_status === 'pending') {
                 setMyRegistration(registration);
-                await startEventPayment(registration);
+                await startEventPayment(registration, checkoutWindow);
+                checkoutWindow = null;
             } else {
+                closeCheckoutWindow(checkoutWindow);
                 Alert.alert(t('common.success'), t('event_detail.register_success'));
             }
-            loadData(); // Refresh to show Check-in button
+            await loadData(); // Refresh to show Check-in button
         } catch (error) {
+            closeCheckoutWindow(checkoutWindow);
             Alert.alert(t('common.error'), error.response?.data?.detail || t('event_detail.registration_failed'));
+        } finally {
+            setRegistrationLoading(false);
         }
     };
 
@@ -363,7 +414,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
                                 <View style={styles.paymentActions}>
                                     <TouchableOpacity
                                         style={[styles.paymentBtn, paymentLoading && { opacity: 0.7 }]}
-                                        onPress={() => startEventPayment(myRegistration)}
+                                        onPress={handlePayExistingRegistration}
                                         disabled={paymentLoading}
                                     >
                                         {paymentLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.paymentBtnText}>Pay with Pesapal</Text>}
@@ -599,8 +650,14 @@ export const EventDetailScreen = ({ route, navigation }) => {
                             )}
 
                             <View style={styles.modalActions}>
-                                <TouchableOpacity style={styles.submitBtn} onPress={handleRegister}>
-                                    <Text style={styles.submitBtnText}>{selectedTicketPrice > 0 ? `Continue to payment (${selectedPriceLabel})` : t('event_detail.complete_registration')}</Text>
+                                <TouchableOpacity
+                                    style={[styles.submitBtn, (registrationLoading || paymentLoading) && { opacity: 0.7 }]}
+                                    onPress={handleRegister}
+                                    disabled={registrationLoading || paymentLoading}
+                                >
+                                    {(registrationLoading || paymentLoading)
+                                        ? <ActivityIndicator color="#fff" />
+                                        : <Text style={styles.submitBtnText}>{selectedTicketPrice > 0 ? `Continue to Pesapal payment (${selectedPriceLabel})` : t('event_detail.complete_registration')}</Text>}
                                 </TouchableOpacity>
                                 <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
                                     <Text style={styles.cancelBtnText}>{t('common.cancel')}</Text>
