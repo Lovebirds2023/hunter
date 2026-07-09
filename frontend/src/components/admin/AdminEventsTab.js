@@ -484,6 +484,40 @@ const normalizeSlotsForForm = (slots, startTime, endTime) => {
     return [makeSlot(startTime, endTime, 0)];
 };
 
+const eventToForm = (event) => {
+    const tiers = Array.isArray(event.ticket_tiers) ? event.ticket_tiers : [];
+    const freeTier = tiers.find(t => t.id === 'free') || tiers.find(t => Number(t.price || 0) === 0);
+    const paidTier = tiers.find(t => t.id === 'paid') || tiers.find(t => Number(t.price || 0) > 0);
+    const hasSlots = Array.isArray(event.available_slots) && event.available_slots.length > 0;
+    return {
+        ...newEventForm(),
+        title: event.title || '',
+        description: event.description || '',
+        location: event.location || '',
+        start_time: toDatetimeLocal(event.start_time),
+        end_time: toDatetimeLocal(event.end_time),
+        category: event.category || 'outreach',
+        capacity: String(event.capacity ?? 0),
+        poster_url: event.poster_url || '',
+        images: Array.isArray(event.images) ? event.images : (event.poster_url ? [event.poster_url] : []),
+        ticket_price: String(event.ticket_price ?? 0),
+        currency: event.currency || 'KES',
+        tiered_ticketing: tiers.length > 0,
+        free_tier_label: freeTier?.label || defaultFreeTierLabel,
+        free_tier_description: freeTier?.description || defaultFreeTierDescription,
+        paid_tier_label: paidTier?.label || defaultPaidTierLabel,
+        paid_tier_description: paidTier?.description || defaultPaidTierDescription,
+        paid_ticket_price: String(paidTier?.price ?? event.ticket_price ?? 0),
+        attendee_type_question: event.attendee_type_question || defaultTierQuestion,
+        schedule_enabled: hasSlots,
+        available_slots: hasSlots ? normalizeSlotsForForm(event.available_slots, event.start_time, event.end_time) : [],
+        scorecard_title: event.scorecard_title || defaultScorecardTitle,
+        scorecard_description: event.scorecard_description || defaultScorecardDescription,
+        is_public: Number(event.is_public ?? 1) === 1,
+        scorecard_enabled: event.scorecard_enabled !== false,
+    };
+};
+
 export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -492,6 +526,8 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
     const [creating, setCreating] = useState(false);
     const [form, setForm] = useState(newEventForm());
     const [createError, setCreateError] = useState('');
+    const [editingEvent, setEditingEvent] = useState(null);
+    const [savingEventEdit, setSavingEventEdit] = useState(false);
     const [posterFrameRatio, setPosterFrameRatio] = useState('16:9');
     const [pinningId, setPinningId] = useState(null);
     const [ticketingEvent, setTicketingEvent] = useState(null);
@@ -525,6 +561,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
 
     const restoreAdminEventDraft = useCallback((draft) => {
         if (!hasAdminEventDraftContent(draft)) return;
+        setEditingEvent(null);
         setForm({
             ...newEventForm(),
             ...(draft.form || {}),
@@ -537,8 +574,36 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
         key: 'ld360:draft:admin-event-create',
         data: adminEventDraftData,
         restore: restoreAdminEventDraft,
-        enabled: showCreate && hasAdminEventDraftContent(adminEventDraftData),
+        enabled: showCreate && !editingEvent && hasAdminEventDraftContent(adminEventDraftData),
     });
+
+    const closeEventEditor = () => {
+        setShowCreate(false);
+        setEditingEvent(null);
+        setCreateError('');
+    };
+
+    const openCreateEditor = () => {
+        setEditingEvent(null);
+        setCreateError('');
+        setForm(newEventForm());
+        setPosterFrameRatio('16:9');
+        setShowCreate(true);
+        setTicketingEvent(null);
+        setScorecardEvent(null);
+        setScheduleEvent(null);
+    };
+
+    const openDetailsEditor = (item) => {
+        setEditingEvent(item);
+        setCreateError('');
+        setForm(eventToForm(item));
+        setPosterFrameRatio('16:9');
+        setShowCreate(true);
+        setTicketingEvent(null);
+        setScorecardEvent(null);
+        setScheduleEvent(null);
+    };
 
     const uploadPosterIfNeeded = async (uri) => {
         if (!uri || /^https?:\/\//i.test(uri)) return uri;
@@ -605,58 +670,89 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
         }
     };
 
-    const handleCreate = async () => {
-        setCreateError('');
-        if (!form.title.trim()) {
-            const message = 'Add an event title.';
-            setCreateError(message);
-            Alert.alert('Required', message);
-            return;
+    const buildEventPayload = (sourceForm, posterUrl, start, end, availableSlots) => {
+        const ticketTiers = sourceForm.tiered_ticketing ? [
+            {
+                id: 'free',
+                label: sourceForm.free_tier_label.trim(),
+                price: 0,
+                currency: sourceForm.currency || 'KES',
+                description: sourceForm.free_tier_description.trim(),
+                requires_justification: true,
+            },
+            {
+                id: 'paid',
+                label: sourceForm.paid_tier_label.trim(),
+                price: Number(sourceForm.paid_ticket_price || 0),
+                currency: sourceForm.currency || 'KES',
+                description: sourceForm.paid_tier_description.trim(),
+                requires_justification: true,
+            },
+        ] : null;
+        const baseTicketPrice = sourceForm.tiered_ticketing ? Number(sourceForm.paid_ticket_price || 0) : Number(sourceForm.ticket_price || 0);
+        return {
+            title: sourceForm.title.trim(),
+            description: sourceForm.description.trim(),
+            location: sourceForm.location.trim(),
+            start_time: start.toISOString(),
+            end_time: end.toISOString(),
+            capacity: Number(sourceForm.capacity || 0),
+            poster_url: posterUrl || null,
+            images: posterUrl ? [posterUrl] : [],
+            ticket_price: baseTicketPrice,
+            currency: sourceForm.currency || 'KES',
+            ticket_tiers: ticketTiers,
+            attendee_type_question: sourceForm.tiered_ticketing ? sourceForm.attendee_type_question : null,
+            available_slots: availableSlots,
+            category: sourceForm.category.trim() || 'outreach',
+            is_public: sourceForm.is_public ? 1 : 0,
+            scorecard_enabled: sourceForm.scorecard_enabled,
+            scorecard_title: sourceForm.scorecard_enabled ? (sourceForm.scorecard_title.trim() || defaultScorecardTitle) : null,
+            scorecard_description: sourceForm.scorecard_enabled ? (sourceForm.scorecard_description.trim() || defaultScorecardDescription) : null,
+        };
+    };
+
+    const validateEventForm = (sourceForm) => {
+        if (!sourceForm.title.trim()) {
+            return { message: 'Add an event title.' };
         }
-        const start = parseDateTimeValue(form.start_time);
-        const end = parseDateTimeValue(form.end_time);
+        const start = parseDateTimeValue(sourceForm.start_time);
+        const end = parseDateTimeValue(sourceForm.end_time);
         if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
-            const message = 'Use valid start and end times, with the end after the start.';
-            setCreateError(message);
-            Alert.alert('Check dates', message);
-            return;
+            return { message: 'Use valid start and end times, with the end after the start.', title: 'Check dates' };
         }
         let availableSlots = [];
-        if (form.schedule_enabled) {
+        if (sourceForm.schedule_enabled) {
             try {
-                availableSlots = toSlotPayload(form.available_slots);
+                availableSlots = toSlotPayload(sourceForm.available_slots);
             } catch {
-                const message = 'Use valid start and end times for every booking slot.';
-                setCreateError(message);
-                Alert.alert('Check schedule', message);
-                return;
+                return { message: 'Use valid start and end times for every booking slot.', title: 'Check schedule' };
             }
             if (availableSlots.length === 0) {
-                const message = 'Add at least one available date/time slot, or turn booking schedule off.';
-                setCreateError(message);
-                Alert.alert('Add dates', message);
-                return;
+                return { message: 'Add at least one available date/time slot, or turn booking schedule off.', title: 'Add dates' };
             }
         }
-        if (form.tiered_ticketing) {
-            if (!form.free_tier_label.trim() || !form.paid_tier_label.trim()) {
-                const message = 'Name both the free and paid registration categories.';
-                setCreateError(message);
-                Alert.alert('Category names required', message);
-                return;
+        if (sourceForm.tiered_ticketing) {
+            if (!sourceForm.free_tier_label.trim() || !sourceForm.paid_tier_label.trim()) {
+                return { message: 'Name both the free and paid registration categories.', title: 'Category names required' };
             }
-            if (Number(form.paid_ticket_price || 0) <= 0) {
-                const message = 'Set a paid ticket price greater than zero.';
-                setCreateError(message);
-                Alert.alert('Paid price required', message);
-                return;
+            if (Number(sourceForm.paid_ticket_price || 0) <= 0) {
+                return { message: 'Set a paid ticket price greater than zero.', title: 'Paid price required' };
             }
-            if (!form.attendee_type_question.trim()) {
-                const message = 'Add the justification question for the registration categories.';
-                setCreateError(message);
-                Alert.alert('Question required', message);
-                return;
+            if (!sourceForm.attendee_type_question.trim()) {
+                return { message: 'Add the justification question for the registration categories.', title: 'Question required' };
             }
+        }
+        return { start, end, availableSlots };
+    };
+
+    const handleCreate = async () => {
+        setCreateError('');
+        const validation = validateEventForm(form);
+        if (validation.message) {
+            setCreateError(validation.message);
+            Alert.alert(validation.title || 'Required', validation.message);
+            return;
         }
 
         setCreating(true);
@@ -667,45 +763,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
             } catch (uploadError) {
                 throw new Error(`Poster upload failed. ${getApiErrorMessage(uploadError, 'Could not upload the event poster.')}`);
             }
-            const ticketTiers = form.tiered_ticketing ? [
-                {
-                    id: 'free',
-                    label: form.free_tier_label.trim(),
-                    price: 0,
-                    currency: form.currency || 'KES',
-                    description: form.free_tier_description.trim(),
-                    requires_justification: true,
-                },
-                {
-                    id: 'paid',
-                    label: form.paid_tier_label.trim(),
-                    price: Number(form.paid_ticket_price || 0),
-                    currency: form.currency || 'KES',
-                    description: form.paid_tier_description.trim(),
-                    requires_justification: true,
-                },
-            ] : null;
-            const baseTicketPrice = form.tiered_ticketing ? Number(form.paid_ticket_price || 0) : Number(form.ticket_price || 0);
-            const res = await client.post('/events', {
-                title: form.title.trim(),
-                description: form.description.trim(),
-                location: form.location.trim(),
-                start_time: start.toISOString(),
-                end_time: end.toISOString(),
-                capacity: Number(form.capacity || 0),
-                poster_url: posterUrl || null,
-                images: posterUrl ? [posterUrl] : [],
-                ticket_price: baseTicketPrice,
-                currency: form.currency || 'KES',
-                ticket_tiers: ticketTiers,
-                attendee_type_question: form.tiered_ticketing ? form.attendee_type_question : null,
-                available_slots: availableSlots,
-                category: form.category.trim() || 'outreach',
-                is_public: form.is_public ? 1 : 0,
-                scorecard_enabled: form.scorecard_enabled,
-                scorecard_title: form.scorecard_enabled ? (form.scorecard_title.trim() || defaultScorecardTitle) : null,
-                scorecard_description: form.scorecard_enabled ? (form.scorecard_description.trim() || defaultScorecardDescription) : null,
-            });
+            const res = await client.post('/events', buildEventPayload(form, posterUrl, validation.start, validation.end, validation.availableSlots));
             await clearAdminEventDraft();
             setForm(newEventForm());
             setShowCreate(false);
@@ -724,6 +782,48 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
             Alert.alert('Event not created', message);
         } finally {
             setCreating(false);
+        }
+    };
+
+    const handleSaveEventEdit = async () => {
+        if (!editingEvent) return;
+        setCreateError('');
+        const validation = validateEventForm(form);
+        if (validation.message) {
+            setCreateError(validation.message);
+            Alert.alert(validation.title || 'Required', validation.message);
+            return;
+        }
+
+        setSavingEventEdit(true);
+        try {
+            let posterUrl = null;
+            try {
+                posterUrl = await uploadPosterIfNeeded(form.poster_url);
+            } catch (uploadError) {
+                throw new Error(`Poster upload failed. ${getApiErrorMessage(uploadError, 'Could not upload the event poster.')}`);
+            }
+            const res = await client.put(
+                `/admin/events/${editingEvent.id}`,
+                buildEventPayload(form, posterUrl, validation.start, validation.end, validation.availableSlots),
+            );
+            setEditingEvent(null);
+            setShowCreate(false);
+            await fetchEvents(true);
+            if (res.data?.pin_error) {
+                const warning = `Event updated, but the pinned spotlight copy could not be refreshed: ${res.data.pin_error}`;
+                setCreateError(warning);
+                Alert.alert('Updated with pin warning', warning);
+            } else {
+                Alert.alert('Updated', 'Event changes are saved and will show to users when they refresh.');
+            }
+        } catch (e) {
+            console.error('Update event error:', e);
+            const message = getApiErrorMessage(e, 'Failed to update event.');
+            setCreateError(message);
+            Alert.alert('Event not updated', message);
+        } finally {
+            setSavingEventEdit(false);
         }
     };
 
@@ -990,12 +1090,16 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                 <View style={[s.card, { marginTop: 10, marginBottom: 12, backgroundColor: ADMIN_COLORS.surfaceLight }]}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                         <View style={{ flex: 1 }}>
-                            <Text style={{ fontSize: 16, fontWeight: '800', color: ADMIN_COLORS.textPrimary }}>Create admin event</Text>
+                            <Text style={{ fontSize: 16, fontWeight: '800', color: ADMIN_COLORS.textPrimary }}>
+                                {editingEvent ? 'Edit published event' : 'Create admin event'}
+                            </Text>
                             <Text style={{ fontSize: 12, color: ADMIN_COLORS.textMuted, marginTop: 4 }}>
-                                Posters, paid tickets, forms, pins, and impact tracking are available here.
+                                {editingEvent
+                                    ? 'Admins can update events created by admins or providers. Saved changes update the same event users see.'
+                                    : 'Posters, paid tickets, forms, pins, and impact tracking are available here.'}
                             </Text>
                         </View>
-                        <TouchableOpacity onPress={() => setShowCreate(false)} style={{ padding: 8 }}>
+                        <TouchableOpacity onPress={closeEventEditor} style={{ padding: 8 }}>
                             <Ionicons name="close" size={22} color={ADMIN_COLORS.textMuted} />
                         </TouchableOpacity>
                     </View>
@@ -1019,7 +1123,9 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                         ) : (
                             <View style={{ alignItems: 'center' }}>
                                 <Ionicons name="image-outline" size={34} color={ADMIN_COLORS.info} />
-                                <Text style={{ marginTop: 8, color: ADMIN_COLORS.info, fontWeight: '800' }}>Add event poster</Text>
+                                <Text style={{ marginTop: 8, color: ADMIN_COLORS.info, fontWeight: '800' }}>
+                                    {editingEvent ? 'Change event poster' : 'Add event poster'}
+                                </Text>
                                 <Text style={{ marginTop: 2, color: ADMIN_COLORS.textMuted, fontSize: 11 }}>This appears in upcoming events and spotlight cards</Text>
                             </View>
                         )}
@@ -1279,14 +1385,24 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
 
                     {createError ? (
                         <View style={{ backgroundColor: ADMIN_COLORS.dangerBg, borderColor: ADMIN_COLORS.danger, borderWidth: 1, borderRadius: 10, padding: 12, marginTop: 12 }}>
-                            <Text style={{ color: ADMIN_COLORS.danger, fontWeight: '800', marginBottom: 4 }}>Last create error</Text>
+                            <Text style={{ color: ADMIN_COLORS.danger, fontWeight: '800', marginBottom: 4 }}>
+                                {editingEvent ? 'Last update error' : 'Last create error'}
+                            </Text>
                             <Text selectable style={{ color: ADMIN_COLORS.textPrimary, fontSize: 12, lineHeight: 17 }}>{createError}</Text>
                         </View>
                     ) : null}
 
-                    <TouchableOpacity style={s.primaryButton} onPress={handleCreate} disabled={creating}>
-                        {creating ? <ActivityIndicator color={ADMIN_COLORS.bg} /> : <Ionicons name="calendar-outline" size={18} color={ADMIN_COLORS.bg} />}
-                        <Text style={s.primaryButtonText}>{creating ? 'Creating...' : 'Create, publish, and pin event'}</Text>
+                    <TouchableOpacity
+                        style={s.primaryButton}
+                        onPress={editingEvent ? handleSaveEventEdit : handleCreate}
+                        disabled={creating || savingEventEdit}
+                    >
+                        {(creating || savingEventEdit)
+                            ? <ActivityIndicator color={ADMIN_COLORS.bg} />
+                            : <Ionicons name={editingEvent ? 'save-outline' : 'calendar-outline'} size={18} color={ADMIN_COLORS.bg} />}
+                        <Text style={s.primaryButtonText}>
+                            {savingEventEdit ? 'Saving...' : (creating ? 'Creating...' : (editingEvent ? 'Save event updates' : 'Create, publish, and pin event'))}
+                        </Text>
                     </TouchableOpacity>
                 </View>
             )}
@@ -1569,7 +1685,13 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                     </View>
                     <TouchableOpacity
                         style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.successBg }]}
-                        onPress={() => setShowCreate(prev => !prev)}
+                        onPress={() => {
+                            if (showCreate) {
+                                closeEventEditor();
+                            } else {
+                                openCreateEditor();
+                            }
+                        }}
                     >
                         <Ionicons name={showCreate ? 'close-outline' : 'add-circle-outline'} size={15} color={ADMIN_COLORS.success} />
                         <Text style={[s.actionBtnText, { color: ADMIN_COLORS.success }]}>{showCreate ? 'Close' : 'Create'}</Text>
@@ -1727,6 +1849,14 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                                         <Text style={[s.actionBtnText, { color: item.is_pinned ? ADMIN_COLORS.danger : ADMIN_COLORS.success }]}>
                                             {item.is_pinned ? 'Unpin' : 'Pin'}
                                         </Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg, marginRight: 10 }]}
+                                        onPress={() => openDetailsEditor(item)}
+                                    >
+                                        <Ionicons name="create-outline" size={14} color={ADMIN_COLORS.info} />
+                                        <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>Edit</Text>
                                     </TouchableOpacity>
 
                                     <TouchableOpacity

@@ -5942,6 +5942,90 @@ def admin_delete_event(
     return {"message": "Event deleted"}
 
 
+@app.put("/admin/events/{event_id}", response_model=schemas.EventResponse)
+def admin_update_event_details(
+    event_id: str,
+    event_update: schemas.EventAdminUpdate,
+    db: Session = Depends(database.get_db),
+    admin: models.User = Depends(require_admin)
+):
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    if not event_update.title or not event_update.title.strip():
+        raise HTTPException(status_code=400, detail="Event title is required")
+    if event_update.end_time <= event_update.start_time:
+        raise HTTPException(status_code=400, detail="Use valid start and end times, with the end after the start")
+
+    currency = (event_update.currency or event.currency or "KES").strip().upper()
+    tiers = sanitize_ticket_tiers(event_update.ticket_tiers, currency)
+    ticket_price = max(float(event_update.ticket_price or 0), 0)
+    if tiers:
+        ticket_price = max([ticket_price] + [float(tier.get("price") or 0) for tier in tiers])
+
+    event.title = event_update.title.strip()
+    event.description = event_update.description
+    event.location = event_update.location
+    event.poster_url = event_update.poster_url
+    event.images = event_update.images or ([event_update.poster_url] if event_update.poster_url else [])
+    event.start_time = event_update.start_time
+    event.end_time = event_update.end_time
+    event.capacity = max(int(event_update.capacity or 0), 0)
+    event.ticket_price = ticket_price
+    event.currency = currency
+    event.ticket_tiers = tiers
+    event.attendee_type_question = event_update.attendee_type_question if tiers else None
+    event.available_slots = sanitize_event_available_slots(event_update.available_slots)
+    event.category = event_update.category
+    event.is_public = 1 if int(event_update.is_public or 0) == 1 else 0
+    event.scorecard_enabled = bool(event_update.scorecard_enabled)
+    event.scorecard_title = (event_update.scorecard_title or "").strip() or None
+    event.scorecard_description = (event_update.scorecard_description or "").strip() or None
+    event.updated_at = datetime.utcnow()
+
+    active_pin = db.query(models.ContentPin).filter(
+        models.ContentPin.target_type == "event",
+        models.ContentPin.target_id == event.id,
+        models.ContentPin.is_active == True,
+    ).first()
+    if active_pin:
+        if event.is_public != 1:
+            active_pin.is_active = False
+            active_pin.updated_at = datetime.utcnow()
+        else:
+            ensure_content_pin(
+                db,
+                "event",
+                event.id,
+                admin,
+                title=event.title,
+                description=event.description,
+                image_url=event.poster_url,
+                priority=active_pin.priority or 150,
+                expires_at=active_pin.expires_at,
+                commit=False,
+            )
+
+    add_admin_audit_log(
+        db,
+        admin,
+        "update_event",
+        "event",
+        event_id,
+        f"title={event.title} organizer_id={event.organizer_id} public={event.is_public}",
+    )
+    db.commit()
+    db.refresh(event)
+    event.registrant_count = db.query(models.Registration).filter(
+        models.Registration.event_id == event.id,
+        models.Registration.status.in_(["registered", "checked-in"])
+    ).count()
+    pin = get_active_pin_map(db, "event").get(event.id)
+    event.is_pinned = pin is not None
+    event.pin_priority = pin.priority if pin else None
+    return event
+
+
 @app.put("/admin/events/{event_id}/ticketing", response_model=schemas.EventResponse)
 def admin_update_event_ticketing(
     event_id: str,

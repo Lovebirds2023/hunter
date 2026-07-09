@@ -218,6 +218,9 @@ class EventBase(BaseModel):
 class EventCreate(EventBase):
     pass
 
+class EventAdminUpdate(EventBase):
+    pass
+
 class EventScorecardUpdate(BaseModel):
     scorecard_enabled: Optional[bool] = True
     scorecard_title: Optional[str] = None

@@ -4496,11 +4496,72 @@ const handleAdminEvents = async (request: Request) => {
   return jsonResponse(await Promise.all((data ?? []).map((event) => adminEventRow(event as JsonRecord, pins))));
 };
 
-const handleAdminUpdateEvent = async (request: Request, eventId: string, mode: "ticketing" | "schedule" | "scorecard") => {
-  await requireAdminProfile(request);
+const refreshEventPinFromEvent = async (eventId: string, event: JsonRecord, adminId: string) => {
+  const { data: pin, error } = await supabaseAdmin
+    .from("content_pins")
+    .select("*")
+    .eq("target_type", "event")
+    .eq("target_id", eventId)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (error) throw error;
+  if (!pin) return null;
+
+  if (asNumber(event.is_public, 1) !== 1) {
+    const { error: unpinError } = await supabaseAdmin
+      .from("content_pins")
+      .update({ is_active: false, updated_at: nowIso() })
+      .eq("id", cleanString((pin as JsonRecord).id));
+    if (unpinError) throw unpinError;
+    return null;
+  }
+
+  return saveContentPin({
+    target_type: "event",
+    target_id: eventId,
+    title: event.title,
+    description: event.description,
+    image_url: event.poster_url,
+    priority: (pin as JsonRecord).priority ?? 150,
+    expires_at: (pin as JsonRecord).expires_at ?? null,
+    created_by_id: cleanString((pin as JsonRecord).created_by_id) || adminId,
+  });
+};
+
+const handleAdminUpdateEvent = async (request: Request, eventId: string, mode: "details" | "ticketing" | "schedule" | "scorecard") => {
+  const admin = await requireAdminProfile(request);
   const body = await readJson(request);
   const updates: JsonRecord = { updated_at: nowIso() };
-  if (mode === "ticketing") {
+  if (mode === "details") {
+    const title = cleanString(body.title);
+    if (!title) return errorResponse("Event title is required.");
+    const startTime = cleanString(body.start_time);
+    const endTime = cleanString(body.end_time);
+    if (!startTime || !endTime) return errorResponse("Start and end times are required.");
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+      return errorResponse("Use valid start and end times, with the end after the start.");
+    }
+    updates.title = title;
+    updates.description = body.description ?? null;
+    updates.location = body.location ?? null;
+    updates.poster_url = body.poster_url ?? null;
+    updates.images = asStringArray(body.images);
+    updates.start_time = startTime;
+    updates.end_time = endTime;
+    updates.capacity = Math.max(0, Math.floor(asNumber(body.capacity)));
+    updates.ticket_price = Math.max(0, asNumber(body.ticket_price));
+    updates.currency = cleanString(body.currency) || "KES";
+    updates.ticket_tiers = body.ticket_tiers ?? null;
+    updates.attendee_type_question = body.attendee_type_question ?? null;
+    updates.available_slots = body.available_slots ?? null;
+    updates.category = body.category ?? null;
+    updates.is_public = Number.isFinite(Number(body.is_public)) ? Number(body.is_public) : 1;
+    updates.scorecard_enabled = asBoolean(body.scorecard_enabled, true);
+    updates.scorecard_title = body.scorecard_title ?? null;
+    updates.scorecard_description = body.scorecard_description ?? null;
+  } else if (mode === "ticketing") {
     updates.ticket_price = asNumber(body.ticket_price);
     updates.currency = cleanString(body.currency) || "KES";
     updates.ticket_tiers = body.ticket_tiers ?? [];
@@ -4514,7 +4575,17 @@ const handleAdminUpdateEvent = async (request: Request, eventId: string, mode: "
   }
   const { data, error } = await supabaseAdmin.from("events").update(updates).eq("id", eventId).select("*").single();
   if (error) return errorResponse(`Could not update event: ${readableErrorMessage(error, "Database update failed.")}`, 400);
-  return jsonResponse(await adminEventRow(data as JsonRecord));
+  let pinError = "";
+  if (mode === "details") {
+    try {
+      await refreshEventPinFromEvent(eventId, data as JsonRecord, cleanString(admin.id));
+    } catch (error) {
+      pinError = readableErrorMessage(error, "Pinned spotlight refresh failed.");
+      console.error("Event pin refresh failed", error);
+    }
+  }
+  const pins = await getActivePins();
+  return jsonResponse({ ...await adminEventRow(data as JsonRecord, pins), pin_error: pinError || null });
 };
 
 const handleAdminDeleteEvent = async (request: Request, eventId: string) => {
@@ -5254,6 +5325,7 @@ const routeRequest = async (request: Request) => {
   if (method === "DELETE" && /^\/admin\/dogs\/[^/]+$/.test(path)) return handleAdminDeleteDog(request, firstPathMatch(path, /^\/admin\/dogs\/([^/]+)$/));
   if (method === "GET" && path === "/admin/events") return handleAdminEvents(request);
   if (method === "DELETE" && /^\/admin\/events\/[^/]+$/.test(path)) return handleAdminDeleteEvent(request, firstPathMatch(path, /^\/admin\/events\/([^/]+)$/));
+  if (method === "PUT" && /^\/admin\/events\/[^/]+$/.test(path)) return handleAdminUpdateEvent(request, firstPathMatch(path, /^\/admin\/events\/([^/]+)$/), "details");
   if (method === "PUT" && /^\/admin\/events\/[^/]+\/ticketing$/.test(path)) return handleAdminUpdateEvent(request, firstPathMatch(path, /^\/admin\/events\/([^/]+)\/ticketing$/), "ticketing");
   if (method === "PUT" && /^\/admin\/events\/[^/]+\/schedule$/.test(path)) return handleAdminUpdateEvent(request, firstPathMatch(path, /^\/admin\/events\/([^/]+)\/schedule$/), "schedule");
   if (method === "PUT" && /^\/admin\/events\/[^/]+\/scorecard-settings$/.test(path)) return handleAdminUpdateEvent(request, firstPathMatch(path, /^\/admin\/events\/([^/]+)\/scorecard-settings$/), "scorecard");
