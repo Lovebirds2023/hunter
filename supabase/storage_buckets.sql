@@ -36,10 +36,11 @@ using (
 );
 
 drop policy if exists "Lovedogs anon storage upload" on storage.objects;
-create policy "Lovedogs anon storage upload"
+drop policy if exists "Lovedogs app storage upload" on storage.objects;
+create policy "Lovedogs app storage upload"
 on storage.objects
 for insert
-to anon
+to anon, authenticated
 with check (
   bucket_id in (
     'pet-identity',
@@ -51,10 +52,11 @@ with check (
 );
 
 drop policy if exists "Lovedogs anon storage upsert" on storage.objects;
-create policy "Lovedogs anon storage upsert"
+drop policy if exists "Lovedogs app storage upsert" on storage.objects;
+create policy "Lovedogs app storage upsert"
 on storage.objects
 for update
-to anon
+to anon, authenticated
 using (
   bucket_id in (
     'pet-identity',

@@ -36,8 +36,8 @@ const newEventForm = () => {
         title: '',
         description: '',
         location: '',
-        start_time: start.toISOString().slice(0, 16),
-        end_time: end.toISOString().slice(0, 16),
+        start_time: toLocalDatetimeValue(start),
+        end_time: toLocalDatetimeValue(end),
         category: 'outreach',
         capacity: '0',
         poster_url: '',
@@ -68,6 +68,342 @@ const defaultPaidTierDescription = 'Paid registration for organizations, teams, 
 const defaultScorecardTitle = 'Community Impact Assessment';
 const defaultScorecardDescription = 'Collect baseline and follow-up data for M&E, outcome tracking, and partner reporting.';
 
+const pad2 = (value) => String(value).padStart(2, '0');
+
+const toLocalDateKey = (date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+
+const toLocalDatetimeValue = (date) => `${toLocalDateKey(date)}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+
+const parseDateKey = (dateKey) => {
+    const [year, month, day] = String(dateKey || '').split('-').map(Number);
+    if (!year || !month || !day) return new Date();
+    return new Date(year, month - 1, day);
+};
+
+const formatShortDate = (dateKey) => {
+    const date = parseDateKey(dateKey);
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+};
+
+const formatReadableDate = (dateKey) => {
+    const date = parseDateKey(dateKey);
+    return date.toLocaleDateString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    });
+};
+
+const getDatePart = (value) => {
+    if (!value) return toLocalDateKey(new Date());
+    const text = String(value);
+    const match = text.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) return match[1];
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? toLocalDateKey(new Date()) : toLocalDateKey(date);
+};
+
+const getTimePart = (value, fallback = '09:00') => {
+    if (!value) return fallback;
+    const text = String(value);
+    const match = text.match(/T([^Z+-]*)/);
+    if (match) return match[1].slice(0, 5);
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return fallback;
+    return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+};
+
+const normalizeClockTime = (value, fallback = '09:00') => {
+    const match = String(value || '').trim().match(/^(\d{1,2}):(\d{2})/);
+    if (!match) return fallback;
+    const hours = Number(match[1]);
+    const minutes = Number(match[2]);
+    if (Number.isNaN(hours) || Number.isNaN(minutes) || hours > 23 || minutes > 59) return fallback;
+    return `${pad2(hours)}:${pad2(minutes)}`;
+};
+
+const combineDateTime = (dateKey, time, fallback = '09:00') => `${dateKey}T${normalizeClockTime(time, fallback)}`;
+
+const combineDateTimeRaw = (dateKey, time) => `${dateKey}T${time}`;
+
+const parseDateTimeValue = (value) => {
+    const text = String(value || '');
+    const match = text.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{1,2}):(\d{2})/);
+    if (match) {
+        return new Date(
+            Number(match[1]),
+            Number(match[2]) - 1,
+            Number(match[3]),
+            Number(match[4]),
+            Number(match[5]),
+        );
+    }
+    return new Date(value);
+};
+
+const buildMonthCells = (monthDate) => {
+    const year = monthDate.getFullYear();
+    const month = monthDate.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const cells = [];
+
+    for (let index = 0; index < firstDay; index += 1) cells.push(null);
+    for (let day = 1; day <= daysInMonth; day += 1) cells.push(new Date(year, month, day));
+    while (cells.length % 7 !== 0) cells.push(null);
+
+    return cells;
+};
+
+const DateCalendar = ({ selectedDates = [], onDatePress, multi = false }) => {
+    const initialDate = parseDateKey(selectedDates[0] || toLocalDateKey(new Date()));
+    const [monthDate, setMonthDate] = useState(new Date(initialDate.getFullYear(), initialDate.getMonth(), 1));
+    const selectedSet = useMemo(() => new Set(selectedDates), [selectedDates]);
+    const cells = useMemo(() => buildMonthCells(monthDate), [monthDate]);
+
+    const shiftMonth = (delta) => {
+        setMonthDate(prev => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
+    };
+
+    return (
+        <View style={{ backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 12, padding: 10, borderWidth: 1, borderColor: ADMIN_COLORS.surfaceBorder }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <TouchableOpacity onPress={() => shiftMonth(-1)} style={{ padding: 8 }}>
+                    <Ionicons name="chevron-back" size={18} color={ADMIN_COLORS.textSecondary} />
+                </TouchableOpacity>
+                <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800' }}>
+                    {monthDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+                </Text>
+                <TouchableOpacity onPress={() => shiftMonth(1)} style={{ padding: 8 }}>
+                    <Ionicons name="chevron-forward" size={18} color={ADMIN_COLORS.textSecondary} />
+                </TouchableOpacity>
+            </View>
+            <View style={{ flexDirection: 'row' }}>
+                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+                    <Text key={`${day}-${index}`} style={{ width: `${100 / 7}%`, textAlign: 'center', color: ADMIN_COLORS.textMuted, fontSize: 11, fontWeight: '800' }}>
+                        {day}
+                    </Text>
+                ))}
+            </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 }}>
+                {cells.map((date, index) => {
+                    const dateKey = date ? toLocalDateKey(date) : '';
+                    const isSelected = selectedSet.has(dateKey);
+                    return (
+                        <View key={dateKey || `empty-${index}`} style={{ width: `${100 / 7}%`, padding: 3 }}>
+                            {date ? (
+                                <TouchableOpacity
+                                    onPress={() => onDatePress(dateKey)}
+                                    style={{
+                                        aspectRatio: 1,
+                                        borderRadius: 10,
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        backgroundColor: isSelected ? ADMIN_COLORS.info : ADMIN_COLORS.surface,
+                                        borderWidth: 1,
+                                        borderColor: isSelected ? ADMIN_COLORS.info : ADMIN_COLORS.surfaceBorder,
+                                    }}
+                                >
+                                    <Text style={{ color: isSelected ? '#fff' : ADMIN_COLORS.textPrimary, fontWeight: isSelected ? '800' : '600' }}>
+                                        {date.getDate()}
+                                    </Text>
+                                    {multi && isSelected && (
+                                        <Ionicons name="checkmark-circle" size={12} color="#fff" style={{ position: 'absolute', top: 3, right: 3 }} />
+                                    )}
+                                </TouchableOpacity>
+                            ) : (
+                                <View style={{ aspectRatio: 1 }} />
+                            )}
+                        </View>
+                    );
+                })}
+            </View>
+        </View>
+    );
+};
+
+const DateTimeCalendarField = ({ label, value, onChange, fallbackTime = '09:00' }) => {
+    const [showCalendar, setShowCalendar] = useState(false);
+    const dateKey = getDatePart(value);
+    const time = getTimePart(value, fallbackTime);
+
+    const selectDate = (nextDateKey) => {
+        onChange(combineDateTime(nextDateKey, time, fallbackTime));
+        setShowCalendar(false);
+    };
+
+    return (
+        <View>
+            <Text style={s.inputLabel}>{label}</Text>
+            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                <TouchableOpacity
+                    onPress={() => setShowCalendar(prev => !prev)}
+                    style={{
+                        flex: 1,
+                        minHeight: 48,
+                        borderRadius: 10,
+                        paddingHorizontal: 12,
+                        backgroundColor: ADMIN_COLORS.surface,
+                        borderWidth: 1,
+                        borderColor: ADMIN_COLORS.surfaceBorder,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                    }}
+                >
+                    <Ionicons name="calendar-outline" size={18} color={ADMIN_COLORS.info} />
+                    <Text style={{ marginLeft: 8, color: ADMIN_COLORS.textPrimary, fontWeight: '700', flexShrink: 1 }}>
+                        {formatReadableDate(dateKey)}
+                    </Text>
+                </TouchableOpacity>
+                <TextInput
+                    style={[s.textInput, {
+                        width: 88,
+                        backgroundColor: ADMIN_COLORS.surface,
+                        borderRadius: 10,
+                        paddingHorizontal: 10,
+                        borderWidth: 1,
+                        borderColor: ADMIN_COLORS.surfaceBorder,
+                        textAlign: 'center',
+                    }]}
+                    placeholder="09:00"
+                    keyboardType="numbers-and-punctuation"
+                    value={time}
+                    onChangeText={(nextTime) => onChange(combineDateTimeRaw(dateKey, nextTime))}
+                    onBlur={() => onChange(combineDateTime(dateKey, time, fallbackTime))}
+                />
+            </View>
+            {showCalendar && (
+                <View style={{ marginTop: 8 }}>
+                    <DateCalendar selectedDates={[dateKey]} onDatePress={selectDate} />
+                </View>
+            )}
+        </View>
+    );
+};
+
+const MultiDateSlotPicker = ({ startValue, endValue, onAddSlots }) => {
+    const [selectedDates, setSelectedDates] = useState([]);
+    const [startTime, setStartTime] = useState(getTimePart(startValue, '09:00'));
+    const [endTime, setEndTime] = useState(getTimePart(endValue, '10:00'));
+    const [label, setLabel] = useState('Available slot');
+    const [capacity, setCapacity] = useState('');
+    const [location, setLocation] = useState('');
+    const [notes, setNotes] = useState('');
+
+    const toggleDate = (dateKey) => {
+        setSelectedDates(prev => (
+            prev.includes(dateKey)
+                ? prev.filter(item => item !== dateKey)
+                : [...prev, dateKey].sort()
+        ));
+    };
+
+    const addSelectedSlots = () => {
+        if (selectedDates.length === 0) {
+            Alert.alert('Select dates', 'Choose one or more dates from the calendar.');
+            return;
+        }
+
+        const normalizedStart = normalizeClockTime(startTime, '09:00');
+        const normalizedEnd = normalizeClockTime(endTime, '10:00');
+        const baseLabel = label.trim() || 'Available slot';
+
+        const slots = selectedDates.map((dateKey, index) => ({
+            id: `slot_${Date.now()}_${index + 1}`,
+            label: selectedDates.length > 1 ? `${baseLabel} - ${formatShortDate(dateKey)}` : baseLabel,
+            start_time: `${dateKey}T${normalizedStart}`,
+            end_time: `${dateKey}T${normalizedEnd}`,
+            capacity,
+            location,
+            notes,
+        }));
+
+        if (slots.some(slot => parseDateTimeValue(slot.end_time) <= parseDateTimeValue(slot.start_time))) {
+            Alert.alert('Check times', 'The end time should be after the start time for each selected date.');
+            return;
+        }
+
+        onAddSlots(slots);
+        setSelectedDates([]);
+    };
+
+    return (
+        <View style={{ backgroundColor: ADMIN_COLORS.infoBg, borderRadius: 12, padding: 10, marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <Ionicons name="calendar-number-outline" size={16} color={ADMIN_COLORS.info} />
+                <Text style={{ marginLeft: 6, color: ADMIN_COLORS.textPrimary, fontWeight: '800' }}>
+                    Add several booking dates
+                </Text>
+            </View>
+            <DateCalendar selectedDates={selectedDates} onDatePress={toggleDate} multi />
+            <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 11, marginTop: 8 }}>
+                {selectedDates.length > 0
+                    ? `${selectedDates.length} date${selectedDates.length === 1 ? '' : 's'} selected`
+                    : 'Tap dates to check them, then add them as booking slots.'}
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                <View style={{ flex: 1 }}>
+                    <Text style={s.inputLabel}>Start</Text>
+                    <TextInput
+                        style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
+                        keyboardType="numbers-and-punctuation"
+                        value={startTime}
+                        onChangeText={setStartTime}
+                        onBlur={() => setStartTime(prev => normalizeClockTime(prev, '09:00'))}
+                    />
+                </View>
+                <View style={{ flex: 1 }}>
+                    <Text style={s.inputLabel}>End</Text>
+                    <TextInput
+                        style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
+                        keyboardType="numbers-and-punctuation"
+                        value={endTime}
+                        onChangeText={setEndTime}
+                        onBlur={() => setEndTime(prev => normalizeClockTime(prev, '10:00'))}
+                    />
+                </View>
+            </View>
+            <Text style={s.inputLabel}>Slot label</Text>
+            <TextInput
+                style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
+                value={label}
+                onChangeText={setLabel}
+            />
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+                <View style={{ flex: 1 }}>
+                    <Text style={s.inputLabel}>Capacity</Text>
+                    <TextInput
+                        style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
+                        keyboardType="numeric"
+                        value={capacity}
+                        onChangeText={setCapacity}
+                    />
+                </View>
+                <View style={{ flex: 2 }}>
+                    <Text style={s.inputLabel}>Location</Text>
+                    <TextInput
+                        style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
+                        value={location}
+                        onChangeText={setLocation}
+                    />
+                </View>
+            </View>
+            <Text style={s.inputLabel}>Notes</Text>
+            <TextInput
+                style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12, minHeight: 58, textAlignVertical: 'top' }]}
+                multiline
+                value={notes}
+                onChangeText={setNotes}
+            />
+            <TouchableOpacity style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.info, alignSelf: 'flex-start', marginTop: 10 }]} onPress={addSelectedSlots}>
+                <Ionicons name="add-circle-outline" size={15} color="#fff" />
+                <Text style={[s.actionBtnText, { color: '#fff' }]}>Add selected dates</Text>
+            </TouchableOpacity>
+        </View>
+    );
+};
+
 const hasAdminEventDraftContent = (draft) => {
     const form = draft?.form || {};
     return (
@@ -91,7 +427,7 @@ const toDatetimeLocal = (value) => {
     if (!value) return '';
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return String(value).slice(0, 16);
-    return date.toISOString().slice(0, 16);
+    return toLocalDatetimeValue(date);
 };
 
 const makeSlot = (startTime, endTime, index = 0) => ({
@@ -111,8 +447,8 @@ const toSlotPayload = (slots = []) => {
         if (!hasContent) return;
         if (!slot.start_time || !slot.end_time) throw new Error('Missing slot time');
 
-        const start = new Date(slot.start_time);
-        const end = new Date(slot.end_time);
+        const start = parseDateTimeValue(slot.start_time);
+        const end = parseDateTimeValue(slot.end_time);
         if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
             throw new Error('Invalid slot time');
         }
@@ -277,8 +613,8 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
             Alert.alert('Required', message);
             return;
         }
-        const start = new Date(form.start_time);
-        const end = new Date(form.end_time);
+        const start = parseDateTimeValue(form.start_time);
+        const end = parseDateTimeValue(form.end_time);
         if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
             const message = 'Use valid start and end times, with the end after the start.';
             setCreateError(message);
@@ -521,6 +857,17 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
         }));
     };
 
+    const addFormSlots = (slots) => {
+        setForm(prev => ({
+            ...prev,
+            schedule_enabled: true,
+            available_slots: [
+                ...(prev.available_slots || []),
+                ...slots,
+            ],
+        }));
+    };
+
     const removeFormSlot = (index) => {
         setForm(prev => ({
             ...prev,
@@ -547,6 +894,10 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
             ...prev,
             makeSlot(scheduleEvent?.start_time, scheduleEvent?.end_time, prev.length),
         ]);
+    };
+
+    const addScheduleSlots = (slots) => {
+        setScheduleSlots(prev => [...prev, ...slots]);
     };
 
     const removeScheduleSlot = (index) => {
@@ -679,8 +1030,6 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                         ['description', 'Description'],
                         ['location', 'Location'],
                         ['category', 'Category'],
-                        ['start_time', 'Start time, e.g. 2026-07-01T10:00'],
-                        ['end_time', 'End time, e.g. 2026-07-01T12:00'],
                     ].map(([key, label]) => (
                         <View key={key}>
                             <Text style={s.inputLabel}>{label}</Text>
@@ -698,6 +1047,19 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                             />
                         </View>
                     ))}
+
+                    <DateTimeCalendarField
+                        label="Start time"
+                        value={form.start_time}
+                        fallbackTime="09:00"
+                        onChange={(value) => setForm(prev => ({ ...prev, start_time: value }))}
+                    />
+                    <DateTimeCalendarField
+                        label="End time"
+                        value={form.end_time}
+                        fallbackTime="11:00"
+                        onChange={(value) => setForm(prev => ({ ...prev, end_time: value }))}
+                    />
 
                     <View style={{ backgroundColor: ADMIN_COLORS.surface, borderRadius: 12, padding: 12, marginTop: 12 }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -720,6 +1082,11 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                         </View>
                         {form.schedule_enabled && (
                             <View style={{ marginTop: 12 }}>
+                                <MultiDateSlotPicker
+                                    startValue={form.start_time}
+                                    endValue={form.end_time}
+                                    onAddSlots={addFormSlots}
+                                />
                                 {(form.available_slots || []).map((slot, index) => (
                                     <View key={slot.id || index} style={{ backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 12, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: ADMIN_COLORS.surfaceBorder }}>
                                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
@@ -734,24 +1101,18 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                                             value={slot.label}
                                             onChangeText={(value) => updateFormSlot(index, 'label', value)}
                                         />
-                                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                                            <View style={{ flex: 1 }}>
-                                                <Text style={s.inputLabel}>Starts</Text>
-                                                <TextInput
-                                                    style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12 }]}
-                                                    value={slot.start_time}
-                                                    onChangeText={(value) => updateFormSlot(index, 'start_time', value)}
-                                                />
-                                            </View>
-                                            <View style={{ flex: 1 }}>
-                                                <Text style={s.inputLabel}>Ends</Text>
-                                                <TextInput
-                                                    style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12 }]}
-                                                    value={slot.end_time}
-                                                    onChangeText={(value) => updateFormSlot(index, 'end_time', value)}
-                                                />
-                                            </View>
-                                        </View>
+                                        <DateTimeCalendarField
+                                            label="Starts"
+                                            value={slot.start_time}
+                                            fallbackTime="09:00"
+                                            onChange={(value) => updateFormSlot(index, 'start_time', value)}
+                                        />
+                                        <DateTimeCalendarField
+                                            label="Ends"
+                                            value={slot.end_time}
+                                            fallbackTime="10:00"
+                                            onChange={(value) => updateFormSlot(index, 'end_time', value)}
+                                        />
                                         <View style={{ flexDirection: 'row', gap: 8 }}>
                                             <View style={{ flex: 1 }}>
                                                 <Text style={s.inputLabel}>Slot capacity</Text>
@@ -1091,6 +1452,11 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                     </View>
 
                     <View style={{ backgroundColor: ADMIN_COLORS.surface, borderRadius: 12, padding: 12, marginTop: 12 }}>
+                        <MultiDateSlotPicker
+                            startValue={toDatetimeLocal(scheduleEvent.start_time)}
+                            endValue={toDatetimeLocal(scheduleEvent.end_time)}
+                            onAddSlots={addScheduleSlots}
+                        />
                         {scheduleSlots.map((slot, index) => (
                             <View key={slot.id || index} style={{ backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 12, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: ADMIN_COLORS.surfaceBorder }}>
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
@@ -1105,24 +1471,18 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                                     value={slot.label}
                                     onChangeText={(value) => updateScheduleSlot(index, 'label', value)}
                                 />
-                                <View style={{ flexDirection: 'row', gap: 8 }}>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={s.inputLabel}>Starts</Text>
-                                        <TextInput
-                                            style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12 }]}
-                                            value={slot.start_time}
-                                            onChangeText={(value) => updateScheduleSlot(index, 'start_time', value)}
-                                        />
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={s.inputLabel}>Ends</Text>
-                                        <TextInput
-                                            style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12 }]}
-                                            value={slot.end_time}
-                                            onChangeText={(value) => updateScheduleSlot(index, 'end_time', value)}
-                                        />
-                                    </View>
-                                </View>
+                                <DateTimeCalendarField
+                                    label="Starts"
+                                    value={slot.start_time}
+                                    fallbackTime="09:00"
+                                    onChange={(value) => updateScheduleSlot(index, 'start_time', value)}
+                                />
+                                <DateTimeCalendarField
+                                    label="Ends"
+                                    value={slot.end_time}
+                                    fallbackTime="10:00"
+                                    onChange={(value) => updateScheduleSlot(index, 'end_time', value)}
+                                />
                                 <View style={{ flexDirection: 'row', gap: 8 }}>
                                     <View style={{ flex: 1 }}>
                                         <Text style={s.inputLabel}>Capacity</Text>
