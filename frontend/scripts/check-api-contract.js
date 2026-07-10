@@ -10,6 +10,7 @@ const appVersionMigration = read('supabase/migrations/20260708131000_app_version
 const eventConsentMigration = read('supabase/migrations/20260710120000_event_photo_consent.sql');
 const adminExport = read('frontend/src/components/admin/AdminExportTab.js');
 const adminScorecard = read('frontend/src/components/admin/AdminScorecardTab.js');
+const adminEvents = read('frontend/src/components/admin/AdminEventsTab.js');
 const adminAnnouncements = read('frontend/src/components/admin/AdminAnnouncementsTab.js');
 const adminCommunity = read('frontend/src/components/admin/AdminCommunityTab.js');
 const adminDashboard = read('frontend/src/screens/AdminDashboardScreen.js');
@@ -242,6 +243,12 @@ for (const snippet of ['const nextHidden = !Boolean(message.is_hidden)', 'is_hid
 
 if (!adminCommunity.includes("res.data?.is_hidden")) {
   failures.push('Admin community moderation UI must use the backend hide/show state.');
+}
+
+for (const snippet of ['const ScheduleGenerator', 'Until Dec 31', '2-day event', 'Replace schedule', 'onApplyEventRange']) {
+  if (!adminEvents.includes(snippet)) {
+    failures.push(`Admin events must keep the bulk schedule generator control: ${snippet}`);
+  }
 }
 
 for (const snippet of ['const openPriorityQueue', 'onPress={openPriorityQueue}']) {

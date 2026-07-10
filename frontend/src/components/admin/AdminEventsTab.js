@@ -282,6 +282,422 @@ const DateTimeCalendarField = ({ label, value, onChange, fallbackTime = '09:00' 
     );
 };
 
+const DateCalendarField = ({ label, value, onChange }) => {
+    const [showCalendar, setShowCalendar] = useState(false);
+
+    const selectDate = (nextDateKey) => {
+        onChange(nextDateKey);
+        setShowCalendar(false);
+    };
+
+    return (
+        <View style={{ flex: 1 }}>
+            <Text style={s.inputLabel}>{label}</Text>
+            <TouchableOpacity
+                onPress={() => setShowCalendar(prev => !prev)}
+                style={{
+                    minHeight: 48,
+                    borderRadius: 10,
+                    paddingHorizontal: 12,
+                    backgroundColor: ADMIN_COLORS.surface,
+                    borderWidth: 1,
+                    borderColor: ADMIN_COLORS.surfaceBorder,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                }}
+            >
+                <Ionicons name="calendar-outline" size={18} color={ADMIN_COLORS.info} />
+                <Text style={{ marginLeft: 8, color: ADMIN_COLORS.textPrimary, fontWeight: '700', flexShrink: 1 }}>
+                    {formatReadableDate(value)}
+                </Text>
+            </TouchableOpacity>
+            {showCalendar && (
+                <View style={{ marginTop: 8 }}>
+                    <DateCalendar selectedDates={[value]} onDatePress={selectDate} />
+                </View>
+            )}
+        </View>
+    );
+};
+
+const WEEKDAY_OPTIONS = [
+    { key: 0, short: 'Sun', label: 'Sunday' },
+    { key: 1, short: 'Mon', label: 'Monday' },
+    { key: 2, short: 'Tue', label: 'Tuesday' },
+    { key: 3, short: 'Wed', label: 'Wednesday' },
+    { key: 4, short: 'Thu', label: 'Thursday' },
+    { key: 5, short: 'Fri', label: 'Friday' },
+    { key: 6, short: 'Sat', label: 'Saturday' },
+];
+
+const addDays = (date, days) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+
+const endOfYearDateKey = (dateKey) => {
+    const date = parseDateKey(dateKey);
+    return toLocalDateKey(new Date(date.getFullYear(), 11, 31));
+};
+
+const normalizeMonthDay = (value, fallback = 1) => {
+    const day = Math.floor(Number(value));
+    if (!Number.isFinite(day)) return String(fallback);
+    return String(Math.max(1, Math.min(31, day)));
+};
+
+const rangeDateKeys = (startDateKey, endDateKey, maxDays = 400) => {
+    const start = parseDateKey(startDateKey);
+    const end = parseDateKey(endDateKey);
+    if (end < start) return [];
+    const dates = [];
+    for (let cursor = start; cursor <= end && dates.length < maxDays; cursor = addDays(cursor, 1)) {
+        dates.push(toLocalDateKey(cursor));
+    }
+    return dates;
+};
+
+const generatedSlotLabel = (baseLabel, dateKey, count) => (
+    count > 1 ? `${baseLabel} - ${formatShortDate(dateKey)}` : baseLabel
+);
+
+const generateScheduleSlots = ({
+    mode,
+    startDateKey,
+    endDateKey,
+    startTime,
+    endTime,
+    weekdays,
+    monthlyDay,
+    label,
+    capacity,
+    location,
+    notes,
+}) => {
+    const normalizedStart = normalizeClockTime(startTime, '09:00');
+    const normalizedEnd = normalizeClockTime(endTime, '10:00');
+    const baseLabel = label.trim() || 'Available slot';
+    const selectedWeekdays = new Set(weekdays);
+    const targetMonthlyDay = Number(normalizeMonthDay(monthlyDay, 1));
+
+    const dates = rangeDateKeys(startDateKey, endDateKey).filter((dateKey) => {
+        const date = parseDateKey(dateKey);
+        if (mode === 'weekly') return selectedWeekdays.has(date.getDay());
+        if (mode === 'monthly') return date.getDate() === targetMonthlyDay;
+        return true;
+    });
+
+    return dates.map((dateKey, index) => ({
+        id: `slot_${Date.now()}_${index + 1}`,
+        label: generatedSlotLabel(baseLabel, dateKey, dates.length),
+        start_time: `${dateKey}T${normalizedStart}`,
+        end_time: `${dateKey}T${normalizedEnd}`,
+        capacity,
+        location,
+        notes,
+    }));
+};
+
+const ScheduleGenerator = ({
+    startValue,
+    endValue,
+    existingCount = 0,
+    onAddSlots,
+    onReplaceSlots,
+    onApplyEventRange,
+}) => {
+    const initialStartDate = getDatePart(startValue);
+    const initialEndDate = getDatePart(endValue);
+    const [mode, setMode] = useState('range');
+    const [rangeStart, setRangeStart] = useState(initialStartDate);
+    const [rangeEnd, setRangeEnd] = useState(initialEndDate < initialStartDate ? initialStartDate : initialEndDate);
+    const [startTime, setStartTime] = useState(getTimePart(startValue, '09:00'));
+    const [endTime, setEndTime] = useState(getTimePart(endValue, '10:00'));
+    const [weekdays, setWeekdays] = useState([parseDateKey(initialStartDate).getDay()]);
+    const [monthlyDay, setMonthlyDay] = useState(String(parseDateKey(initialStartDate).getDate()));
+    const [label, setLabel] = useState('Available slot');
+    const [capacity, setCapacity] = useState('');
+    const [location, setLocation] = useState('');
+    const [notes, setNotes] = useState('');
+
+    const generatedSlots = useMemo(() => generateScheduleSlots({
+        mode,
+        startDateKey: rangeStart,
+        endDateKey: rangeEnd,
+        startTime,
+        endTime,
+        weekdays,
+        monthlyDay,
+        label,
+        capacity,
+        location,
+        notes,
+    }), [capacity, endTime, label, location, mode, monthlyDay, notes, rangeEnd, rangeStart, startTime, weekdays]);
+
+    const previewSlots = generatedSlots.slice(0, 5);
+    const rangeIsBackwards = parseDateKey(rangeEnd) < parseDateKey(rangeStart);
+    const normalizedStart = normalizeClockTime(startTime, '09:00');
+    const normalizedEnd = normalizeClockTime(endTime, '10:00');
+    const hasInvalidTime = parseDateTimeValue(`${rangeStart}T${normalizedEnd}`) <= parseDateTimeValue(`${rangeStart}T${normalizedStart}`);
+
+    const toggleWeekday = (weekday) => {
+        setWeekdays(prev => (
+            prev.includes(weekday)
+                ? prev.filter(item => item !== weekday)
+                : [...prev, weekday].sort()
+        ));
+    };
+
+    const validateGeneratedSlots = () => {
+        if (rangeIsBackwards) {
+            Alert.alert('Check date range', 'The schedule end date must be after the start date.');
+            return false;
+        }
+        if (hasInvalidTime) {
+            Alert.alert('Check times', 'The end time should be after the start time for generated slots.');
+            return false;
+        }
+        if (mode === 'weekly' && weekdays.length === 0) {
+            Alert.alert('Choose days', 'Select at least one weekday for the recurring schedule.');
+            return false;
+        }
+        if (generatedSlots.length === 0) {
+            Alert.alert('No dates generated', 'Change the date range or recurrence settings to generate at least one slot.');
+            return false;
+        }
+        return true;
+    };
+
+    const addGeneratedSlots = () => {
+        if (!validateGeneratedSlots()) return;
+        onAddSlots(generatedSlots);
+    };
+
+    const replaceGeneratedSlots = () => {
+        if (!validateGeneratedSlots()) return;
+        if (existingCount > 0) {
+            Alert.alert(
+                'Replace schedule?',
+                `This will replace ${existingCount} existing slot${existingCount === 1 ? '' : 's'} with ${generatedSlots.length} generated slot${generatedSlots.length === 1 ? '' : 's'}.`,
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Replace', style: 'destructive', onPress: () => onReplaceSlots(generatedSlots) },
+                ],
+            );
+            return;
+        }
+        onReplaceSlots(generatedSlots);
+    };
+
+    const applyEventRange = () => {
+        if (!onApplyEventRange) return;
+        if (rangeIsBackwards || hasInvalidTime) {
+            validateGeneratedSlots();
+            return;
+        }
+        onApplyEventRange({
+            startDateKey: rangeStart,
+            endDateKey: rangeEnd,
+            startTime: normalizedStart,
+            endTime: normalizedEnd,
+        });
+    };
+
+    const quickSelectWeekdays = (nextWeekdays) => setWeekdays(nextWeekdays);
+
+    return (
+        <View style={{ backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: ADMIN_COLORS.surfaceBorder }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <Ionicons name="repeat-outline" size={17} color={ADMIN_COLORS.success} />
+                <Text style={{ marginLeft: 6, color: ADMIN_COLORS.textPrimary, fontWeight: '900' }}>
+                    Schedule generator
+                </Text>
+            </View>
+            <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 11, lineHeight: 16, marginBottom: 10 }}>
+                Generate many booking dates at once for multi-day events, weekly programs, monthly clinics, or a schedule through the rest of the year.
+            </Text>
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                {[
+                    ['range', 'Every day'],
+                    ['weekly', 'Selected weekdays'],
+                    ['monthly', 'Monthly'],
+                ].map(([key, title]) => (
+                    <TouchableOpacity
+                        key={key}
+                        style={[s.filterChip, mode === key && s.filterChipActive]}
+                        onPress={() => setMode(key)}
+                    >
+                        <Text style={[s.filterChipText, mode === key && s.filterChipTextActive]}>{title}</Text>
+                    </TouchableOpacity>
+                ))}
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+                <DateCalendarField label="From" value={rangeStart} onChange={setRangeStart} />
+                <DateCalendarField label="To" value={rangeEnd} onChange={setRangeEnd} />
+            </View>
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                <TouchableOpacity style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg }]} onPress={() => setRangeEnd(endOfYearDateKey(rangeStart))}>
+                    <Ionicons name="calendar-outline" size={14} color={ADMIN_COLORS.info} />
+                    <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>Until Dec 31</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.successBg }]}
+                    onPress={() => {
+                        const start = parseDateKey(rangeStart);
+                        setRangeEnd(toLocalDateKey(addDays(start, 1)));
+                    }}
+                >
+                    <Ionicons name="albums-outline" size={14} color={ADMIN_COLORS.success} />
+                    <Text style={[s.actionBtnText, { color: ADMIN_COLORS.success }]}>2-day event</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.successBg }]}
+                    onPress={() => {
+                        const start = parseDateKey(rangeStart);
+                        setRangeEnd(toLocalDateKey(addDays(start, 2)));
+                    }}
+                >
+                    <Ionicons name="albums-outline" size={14} color={ADMIN_COLORS.success} />
+                    <Text style={[s.actionBtnText, { color: ADMIN_COLORS.success }]}>3-day event</Text>
+                </TouchableOpacity>
+            </View>
+
+            {mode === 'weekly' && (
+                <View style={{ marginTop: 10 }}>
+                    <Text style={s.inputLabel}>Repeat on</Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>
+                        {WEEKDAY_OPTIONS.map(day => {
+                            const active = weekdays.includes(day.key);
+                            return (
+                                <TouchableOpacity
+                                    key={day.key}
+                                    style={[s.filterChip, active && s.filterChipActive]}
+                                    onPress={() => toggleWeekday(day.key)}
+                                >
+                                    <Text style={[s.filterChipText, active && s.filterChipTextActive]}>{day.short}</Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                        <TouchableOpacity style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg }]} onPress={() => quickSelectWeekdays([1, 2, 3, 4, 5])}>
+                            <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>Weekdays</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg }]} onPress={() => quickSelectWeekdays([0, 6])}>
+                            <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>Weekends</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg }]} onPress={() => quickSelectWeekdays([0, 1, 2, 3, 4, 5, 6])}>
+                            <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>All days</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
+
+            {mode === 'monthly' && (
+                <View style={{ marginTop: 10 }}>
+                    <Text style={s.inputLabel}>Day of month</Text>
+                    <TextInput
+                        style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12 }]}
+                        keyboardType="numeric"
+                        value={monthlyDay}
+                        onChangeText={setMonthlyDay}
+                        onBlur={() => setMonthlyDay(prev => normalizeMonthDay(prev, 1))}
+                    />
+                </View>
+            )}
+
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                <View style={{ flex: 1 }}>
+                    <Text style={s.inputLabel}>Start</Text>
+                    <TextInput
+                        style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12 }]}
+                        keyboardType="numbers-and-punctuation"
+                        value={startTime}
+                        onChangeText={setStartTime}
+                        onBlur={() => setStartTime(prev => normalizeClockTime(prev, '09:00'))}
+                    />
+                </View>
+                <View style={{ flex: 1 }}>
+                    <Text style={s.inputLabel}>End</Text>
+                    <TextInput
+                        style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12 }]}
+                        keyboardType="numbers-and-punctuation"
+                        value={endTime}
+                        onChangeText={setEndTime}
+                        onBlur={() => setEndTime(prev => normalizeClockTime(prev, '10:00'))}
+                    />
+                </View>
+            </View>
+
+            <Text style={s.inputLabel}>Slot label</Text>
+            <TextInput
+                style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12 }]}
+                value={label}
+                onChangeText={setLabel}
+            />
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+                <View style={{ flex: 1 }}>
+                    <Text style={s.inputLabel}>Capacity</Text>
+                    <TextInput
+                        style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12 }]}
+                        keyboardType="numeric"
+                        value={capacity}
+                        onChangeText={setCapacity}
+                    />
+                </View>
+                <View style={{ flex: 2 }}>
+                    <Text style={s.inputLabel}>Location</Text>
+                    <TextInput
+                        style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12 }]}
+                        value={location}
+                        onChangeText={setLocation}
+                    />
+                </View>
+            </View>
+            <Text style={s.inputLabel}>Notes</Text>
+            <TextInput
+                style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12, minHeight: 58, textAlignVertical: 'top' }]}
+                multiline
+                value={notes}
+                onChangeText={setNotes}
+            />
+
+            <View style={{ backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, padding: 10, marginTop: 10 }}>
+                <Text style={{ color: rangeIsBackwards || hasInvalidTime ? ADMIN_COLORS.danger : ADMIN_COLORS.textPrimary, fontWeight: '900' }}>
+                    Preview: {rangeIsBackwards || hasInvalidTime ? 'fix dates/times' : `${generatedSlots.length} slot${generatedSlots.length === 1 ? '' : 's'}`}
+                </Text>
+                {previewSlots.map(slot => (
+                    <Text key={slot.id} style={{ color: ADMIN_COLORS.textSecondary, fontSize: 11, marginTop: 4 }}>
+                        {formatReadableDate(getDatePart(slot.start_time))} - {getTimePart(slot.start_time)} to {getTimePart(slot.end_time)}
+                    </Text>
+                ))}
+                {generatedSlots.length > previewSlots.length && (
+                    <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 11, marginTop: 4 }}>
+                        +{generatedSlots.length - previewSlots.length} more dates
+                    </Text>
+                )}
+            </View>
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                <TouchableOpacity style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.successBg }]} onPress={addGeneratedSlots}>
+                    <Ionicons name="add-circle-outline" size={15} color={ADMIN_COLORS.success} />
+                    <Text style={[s.actionBtnText, { color: ADMIN_COLORS.success }]}>Add generated dates</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.warningBg }]} onPress={replaceGeneratedSlots}>
+                    <Ionicons name="swap-horizontal-outline" size={15} color={ADMIN_COLORS.warning} />
+                    <Text style={[s.actionBtnText, { color: ADMIN_COLORS.warning }]}>Replace schedule</Text>
+                </TouchableOpacity>
+                {onApplyEventRange && (
+                    <TouchableOpacity style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg }]} onPress={applyEventRange}>
+                        <Ionicons name="time-outline" size={15} color={ADMIN_COLORS.info} />
+                        <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>Use as event dates</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
+        </View>
+    );
+};
+
 const MultiDateSlotPicker = ({ startValue, endValue, onAddSlots }) => {
     const [selectedDates, setSelectedDates] = useState([]);
     const [startTime, setStartTime] = useState(getTimePart(startValue, '09:00'));
@@ -968,6 +1384,22 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
         }));
     };
 
+    const replaceFormSlots = (slots) => {
+        setForm(prev => ({
+            ...prev,
+            schedule_enabled: true,
+            available_slots: slots,
+        }));
+    };
+
+    const applyFormScheduleRange = ({ startDateKey, endDateKey, startTime, endTime }) => {
+        setForm(prev => ({
+            ...prev,
+            start_time: combineDateTime(startDateKey, startTime, '09:00'),
+            end_time: combineDateTime(endDateKey, endTime, '10:00'),
+        }));
+    };
+
     const removeFormSlot = (index) => {
         setForm(prev => ({
             ...prev,
@@ -998,6 +1430,10 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
 
     const addScheduleSlots = (slots) => {
         setScheduleSlots(prev => [...prev, ...slots]);
+    };
+
+    const replaceScheduleSlots = (slots) => {
+        setScheduleSlots(slots);
     };
 
     const removeScheduleSlot = (index) => {
@@ -1188,6 +1624,14 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                         </View>
                         {form.schedule_enabled && (
                             <View style={{ marginTop: 12 }}>
+                                <ScheduleGenerator
+                                    startValue={form.start_time}
+                                    endValue={form.end_time}
+                                    existingCount={(form.available_slots || []).length}
+                                    onAddSlots={addFormSlots}
+                                    onReplaceSlots={replaceFormSlots}
+                                    onApplyEventRange={applyFormScheduleRange}
+                                />
                                 <MultiDateSlotPicker
                                     startValue={form.start_time}
                                     endValue={form.end_time}
@@ -1568,6 +2012,13 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                     </View>
 
                     <View style={{ backgroundColor: ADMIN_COLORS.surface, borderRadius: 12, padding: 12, marginTop: 12 }}>
+                        <ScheduleGenerator
+                            startValue={toDatetimeLocal(scheduleEvent.start_time)}
+                            endValue={toDatetimeLocal(scheduleEvent.end_time)}
+                            existingCount={scheduleSlots.length}
+                            onAddSlots={addScheduleSlots}
+                            onReplaceSlots={replaceScheduleSlots}
+                        />
                         <MultiDateSlotPicker
                             startValue={toDatetimeLocal(scheduleEvent.start_time)}
                             endValue={toDatetimeLocal(scheduleEvent.end_time)}
