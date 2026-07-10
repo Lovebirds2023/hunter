@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Alert, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Alert, Modal, TextInput, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS, SPACING } from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,6 +31,7 @@ export const DogDetailsScreen = ({ route, navigation }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [editForm, setEditForm] = useState(buildEditForm(initialDog));
 
     const setField = (field, value) => {
@@ -105,33 +106,25 @@ export const DogDetailsScreen = ({ route, navigation }) => {
     };
 
     const deleteDog = async () => {
-        if (deleting) return;
+        if (deleting || !dog?.id) return;
         setDeleting(true);
         try {
             await client.delete(`/dogs/${dog.id}`);
+            setDeleteModalVisible(false);
             Alert.alert(t('common.success'), t('dog_details.deleted', { defaultValue: 'Pet deleted successfully.' }));
             navigation.goBack();
         } catch (e) {
             if (__DEV__) console.log('Error deleting pet', e);
-            Alert.alert(t('common.error'), t('dog_details.delete_error', { defaultValue: 'Could not delete this pet.' }));
+            const message = e?.response?.data?.detail || t('dog_details.delete_error', { defaultValue: 'Could not delete this pet.' });
+            Alert.alert(t('common.error'), message);
         } finally {
             setDeleting(false);
         }
     };
 
     const confirmDeleteDog = () => {
-        Alert.alert(
-            t('dog_details.delete_title', { defaultValue: 'Delete pet?' }),
-            t('dog_details.delete_message', { name: dog.name, defaultValue: `Delete ${dog.name}? This cannot be undone.` }),
-            [
-                { text: t('common.cancel'), style: 'cancel' },
-                {
-                    text: t('common.delete', { defaultValue: 'Delete' }),
-                    style: 'destructive',
-                    onPress: deleteDog,
-                },
-            ],
-        );
+        if (deleting) return;
+        setDeleteModalVisible(true);
     };
 
     const renderHealthRecord = ({ item }) => (
@@ -262,6 +255,32 @@ export const DogDetailsScreen = ({ route, navigation }) => {
                     </View>
                 </View>
             </Modal>
+
+            <Modal visible={deleteModalVisible} animationType="fade" transparent onRequestClose={() => !deleting && setDeleteModalVisible(false)}>
+                <View style={styles.modalOverlay}>
+                    <View style={styles.deleteModalContent}>
+                        <View style={styles.deleteIconCircle}>
+                            <Ionicons name="trash-outline" size={30} color={COLORS.error || '#B3261E'} />
+                        </View>
+                        <Text style={styles.modalTitle}>{t('dog_details.delete_title', { defaultValue: 'Delete pet?' })}</Text>
+                        <Text style={styles.deleteMessage}>
+                            {t('dog_details.delete_message', { name: dog.name, defaultValue: `Delete ${dog.name}? This cannot be undone.` })}
+                        </Text>
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity style={styles.cancelBtn} onPress={() => setDeleteModalVisible(false)} disabled={deleting}>
+                                <Text style={styles.btnText}>{t('common.cancel')}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.deleteBtn, deleting && styles.disabledBtn]} onPress={deleteDog} disabled={deleting}>
+                                {deleting ? (
+                                    <ActivityIndicator color="white" />
+                                ) : (
+                                    <Text style={[styles.btnText, { color: 'white' }]}>{t('common.delete', { defaultValue: 'Delete' })}</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 };
@@ -310,5 +329,10 @@ const styles = StyleSheet.create({
     modalButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
     cancelBtn: { padding: 12, borderRadius: 8, flex: 1, marginRight: 10, backgroundColor: '#eee', alignItems: 'center' },
     saveBtn: { padding: 12, borderRadius: 8, flex: 1, marginLeft: 10, backgroundColor: COLORS.primary, alignItems: 'center' },
+    deleteBtn: { padding: 12, borderRadius: 8, flex: 1, marginLeft: 10, backgroundColor: COLORS.error || '#B3261E', alignItems: 'center' },
+    disabledBtn: { opacity: 0.7 },
+    deleteModalContent: { width: '100%', maxWidth: 420, alignSelf: 'center', backgroundColor: 'white', borderRadius: 15, padding: 20, alignItems: 'center' },
+    deleteIconCircle: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#FCEEEE', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+    deleteMessage: { fontSize: 15, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 21, marginBottom: 10 },
     btnText: { fontWeight: 'bold' },
 });
