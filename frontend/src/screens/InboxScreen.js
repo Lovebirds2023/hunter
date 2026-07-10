@@ -160,6 +160,12 @@ export const InboxScreen = ({ navigation }) => {
                 navigation.navigate('Main', { screen: 'Marketplace' });
             } else if (item.itemType === 'notification' && item.target_route === 'Report') {
                 navigation.navigate('Main', { screen: 'Report' });
+            } else if (item.itemType === 'notification' && item.target_route === 'Events') {
+                navigation.navigate('Main', { screen: 'Events' });
+            } else if (item.itemType === 'notification' && item.target_route === 'Community') {
+                navigation.navigate('Main', { screen: 'Community' });
+            } else if (item.itemType === 'notification' && item.target_route === 'Profile') {
+                navigation.navigate('Main', { screen: 'Profile' });
             }
         };
 

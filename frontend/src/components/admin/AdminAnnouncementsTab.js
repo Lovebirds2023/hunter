@@ -21,7 +21,7 @@ const emptyOptions = {
 const newBroadcastForm = () => ({
     title: '',
     message: '',
-    target_group: 'event_registrants',
+    target_group: 'all_users',
     role: 'buyer',
     event_id: '',
     registration_status: 'all',
@@ -41,6 +41,7 @@ const setIfSpecific = (filters, key, value) => {
 
 const groupIcon = (group) => {
     switch (group) {
+        case 'all_users': return 'megaphone-outline';
         case 'event_registrants': return 'calendar-number-outline';
         case 'case_reporters': return 'alert-circle-outline';
         case 'listing_publishers':

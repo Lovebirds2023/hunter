@@ -31,8 +31,9 @@ export const AdminCommunityTab = ({ onBack }) => {
 
     const handleToggleHide = async (id, currentHidden) => {
         try {
-            await client.post(`/admin/community/${id}/hide`);
-            setPosts(prev => prev.map(p => p.id === id ? { ...p, is_hidden: !currentHidden } : p));
+            const res = await client.post(`/admin/community/${id}/hide`);
+            const nextHidden = typeof res.data?.is_hidden === 'boolean' ? res.data.is_hidden : !currentHidden;
+            setPosts(prev => prev.map(p => p.id === id ? { ...p, is_hidden: nextHidden } : p));
         } catch (e) {
             Alert.alert('Error', 'Failed to toggle visibility');
         }

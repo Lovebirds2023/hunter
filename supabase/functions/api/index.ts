@@ -543,10 +543,7 @@ const isMissingRelationError = (error: unknown) => {
   return code === "42P01" || message.includes("does not exist");
 };
 
-const handleDeleteDog = async (request: Request, dogId: string) => {
-  const { profile } = await requireProfile(request);
-  await ensureDogAccess(dogId, profile);
-
+const deleteDogWithRelations = async (dogId: string) => {
   const updateDogReference = async (table: string) => {
     const { error } = await supabaseAdmin.from(table).update({ dog_id: null }).eq("dog_id", dogId);
     if (error && !isMissingRelationError(error)) throw error;
@@ -567,6 +564,12 @@ const handleDeleteDog = async (request: Request, dogId: string) => {
 
   const { error } = await supabaseAdmin.from("dogs").delete().eq("id", dogId);
   if (error) throw error;
+};
+
+const handleDeleteDog = async (request: Request, dogId: string) => {
+  const { profile } = await requireProfile(request);
+  await ensureDogAccess(dogId, profile);
+  await deleteDogWithRelations(dogId);
   return jsonResponse({ message: "Pet deleted successfully" });
 };
 
@@ -1587,6 +1590,9 @@ const handleRegisterEvent = async (request: Request, eventId: string) => {
   const { profile } = await requireProfile(request);
   const event = await selectSingle("events", eventId, "Event");
   const body = await readJson(request);
+  if (typeof body.photo_consent !== "boolean") {
+    return errorResponse("Answer the required photo and documentation consent question before continuing.");
+  }
   const ticketTiers = asArray(event.ticket_tiers).filter(isRecord);
   const selectedTierId = cleanString(body.ticket_tier_id);
   const selectedTier = selectedTierId
@@ -1620,6 +1626,7 @@ const handleRegisterEvent = async (request: Request, eventId: string) => {
     ticket_tier_id: selectedTier ? cleanString(selectedTier.id) : null,
     ticket_tier_label: selectedTier ? cleanString(selectedTier.label) : null,
     attendee_type_justification: body.attendee_type_justification ?? null,
+    photo_consent: body.photo_consent,
     booking_slot_id: selectedSlot ? cleanString(selectedSlot.id) : null,
     booking_slot_label: selectedSlot ? cleanString(selectedSlot.label) : null,
     booking_start_time: selectedSlot ? cleanString(selectedSlot.start_time) || null : null,
@@ -1728,6 +1735,7 @@ const handleEventResponses = async (request: Request, eventId: string) => {
       ticket_tier_id: registration.ticket_tier_id,
       ticket_tier_label: registration.ticket_tier_label,
       attendee_type_justification: registration.attendee_type_justification,
+      photo_consent: registration.photo_consent ?? null,
       booking_slot_id: registration.booking_slot_id,
       booking_slot_label: registration.booking_slot_label,
       booking_start_time: registration.booking_start_time,
@@ -2439,6 +2447,38 @@ const handleMyOrders = async (request: Request) => {
     };
   }));
   return jsonResponse(rows);
+};
+
+const handleCancelOrder = async (request: Request, orderId: string) => {
+  const { profile } = await requireProfile(request);
+  const order = await selectSingle("orders", orderId, "Order");
+  if (cleanString(order.buyer_id) !== cleanString(profile.id) && !isAdminProfile(profile)) {
+    throw new Response("Not authorized", { status: 403 });
+  }
+  if (normalizeStatus(order.status) !== "pending") {
+    return errorResponse(`Only unpaid pending orders can be cancelled. Current status: ${cleanString(order.status) || "unknown"}.`);
+  }
+  const { error } = await supabaseAdmin
+    .from("orders")
+    .update({ status: "cancelled", updated_at: nowIso() })
+    .eq("id", orderId);
+  if (error) throw error;
+  if (isAdminProfile(profile)) {
+    try {
+      const service = await selectSingle("services", cleanString(order.service_id), "Service");
+      const recipientIds = uniqueStrings([order.buyer_id, service.provider_id]).filter((id) => id !== cleanString(profile.id));
+      await Promise.all(recipientIds.map((userId) => createNotification(
+        userId,
+        "Order cancelled by admin",
+        `Admin cancelled the pending unpaid order for '${cleanString(service.title) || "a marketplace item"}'.`,
+        "order",
+        { target_type: "marketplace", target_id: service.id, target_route: "Marketplace" },
+      )));
+    } catch (notificationError) {
+      console.warn("Failed to create admin order cancellation notification", notificationError);
+    }
+  }
+  return jsonResponse({ message: "Order cancelled", status: "cancelled" });
 };
 
 const escapePdfText = (value: unknown) => cleanString(value)
@@ -4413,6 +4453,14 @@ const handleAdminCompleteOrder = async (request: Request, orderId: string) => {
   if (normalizeStatus(order.status) !== "paid") return errorResponse(`Order must be in 'paid' status to mark as completed. Current status: ${order.status}`);
   const { error } = await supabaseAdmin.from("orders").update({ status: "completed", updated_at: nowIso() }).eq("id", orderId);
   if (error) throw error;
+  const service = await selectSingle("services", cleanString(order.service_id), "Service");
+  await createNotification(
+    service.provider_id,
+    "Order marked delivered",
+    `Admin marked '${cleanString(service.title) || "your marketplace order"}' as delivered. The seller payout is now ready for request or settlement.`,
+    "order",
+    { target_type: "marketplace", target_id: service.id, target_route: "Marketplace" },
+  );
   return jsonResponse({ message: "Order marked as completed. Seller earnings are ready for payout request.", status: "completed" });
 };
 
@@ -4432,6 +4480,13 @@ const handleAdminSettleOrder = async (request: Request, orderId: string) => {
   if (txError) throw txError;
   const { error } = await supabaseAdmin.from("orders").update({ status: "settled", updated_at: nowIso() }).eq("id", orderId);
   if (error) throw error;
+  await createNotification(
+    service.provider_id,
+    "Seller payout settled",
+    `Admin approved and settled KES ${asNumber(order.payout).toLocaleString()} for '${cleanString(service.title) || "your marketplace order"}'.`,
+    "payout",
+    { target_type: "marketplace", target_id: service.id, target_route: "Marketplace" },
+  );
   return jsonResponse({ message: `Payout of KES ${asNumber(order.payout).toLocaleString()} approved and settled for provider.`, status: "settled", payout_amount: asNumber(order.payout) });
 };
 
@@ -4647,17 +4702,34 @@ const handleAdminServices = async (request: Request) => {
 
 const handleAdminDeleteService = async (request: Request, serviceId: string) => {
   await requireAdminProfile(request);
+  const body = await readJson(request);
+  const reason = cleanString(body.reason) || "Removed by admin";
+  const service = await selectSingle("services", serviceId, "Service");
   const orderCount = await countRows("orders", "service_id", serviceId);
   if (orderCount > 0) {
     const { error } = await supabaseAdmin
       .from("services")
-      .update({ is_published: false, admin_approved: false, rejection_reason: "Deleted by admin", updated_at: nowIso() })
+      .update({ is_published: false, admin_approved: false, rejection_reason: reason, updated_at: nowIso() })
       .eq("id", serviceId);
     if (error) throw error;
+    await createNotification(
+      service.provider_id,
+      "Marketplace listing removed",
+      `Admin removed '${cleanString(service.title) || "your listing"}' from public view. Reason: ${reason}`,
+      "moderation",
+      { target_type: "marketplace", target_id: serviceId, target_route: "Marketplace" },
+    );
     return jsonResponse({ message: "Listing removed from public view. Order history was retained.", archived: true, order_count: orderCount });
   }
   const { error } = await supabaseAdmin.from("services").delete().eq("id", serviceId);
   if (error) throw error;
+  await createNotification(
+    service.provider_id,
+    "Marketplace listing deleted",
+    `Admin deleted '${cleanString(service.title) || "your listing"}'. Reason: ${reason}`,
+    "moderation",
+    { target_type: "marketplace", target_id: null, target_route: "Marketplace" },
+  );
   return jsonResponse({ message: "Marketplace listing deleted", archived: false });
 };
 
@@ -4688,6 +4760,7 @@ const handleAdminApprove = async (request: Request, itemType: string, itemId: st
   const isApproved = Boolean(body.is_approved);
   const reason = cleanString(body.rejection_reason) || null;
   if (itemType === "service") {
+    const service = await selectSingle("services", itemId, "Service");
     const { error } = await supabaseAdmin
       .from("services")
       .update({
@@ -4698,14 +4771,33 @@ const handleAdminApprove = async (request: Request, itemType: string, itemId: st
       })
       .eq("id", itemId);
     if (error) return errorResponse(`Could not update listing approval: ${readableErrorMessage(error, "Database update failed.")}`, 400);
+    await createNotification(
+      service.provider_id,
+      isApproved ? "Marketplace listing approved" : "Marketplace listing rejected",
+      isApproved
+        ? `Your listing '${cleanString(service.title) || "Marketplace item"}' was approved and is now visible on the platform.`
+        : `Your listing '${cleanString(service.title) || "Marketplace item"}' was rejected. Reason: ${reason || "Admin review"}`,
+      isApproved ? "approval" : "rejection",
+      { target_type: "marketplace", target_id: itemId, target_route: "Marketplace" },
+    );
     return jsonResponse({ message: isApproved ? "Service approved" : "Service rejected" });
   }
   if (itemType === "report") {
+    const report = await selectSingle("case_reports", itemId, "Report");
     const { error } = await supabaseAdmin
       .from("case_reports")
       .update({ is_approved: isApproved, rejection_reason: isApproved ? null : reason, updated_at: nowIso() })
       .eq("id", itemId);
     if (error) return errorResponse(`Could not update report approval: ${readableErrorMessage(error, "Database update failed.")}`, 400);
+    await createNotification(
+      report.author_id,
+      isApproved ? "Case report approved" : "Case report rejected",
+      isApproved
+        ? `Your report '${cleanString(report.title) || "Case report"}' was approved and is visible to the community.`
+        : `Your report '${cleanString(report.title) || "Case report"}' was rejected. Reason: ${reason || "Admin review"}`,
+      isApproved ? "approval" : "rejection",
+      { target_type: "case", target_id: itemId, target_route: isApproved ? "CaseDetail" : "Report" },
+    );
     return jsonResponse({ message: isApproved ? "Report approved" : "Report rejected" });
   }
   return errorResponse("Unsupported approval item type.");
@@ -4713,8 +4805,18 @@ const handleAdminApprove = async (request: Request, itemType: string, itemId: st
 
 const handleAdminCasesDelete = async (request: Request, reportId: string) => {
   await requireAdminProfile(request);
+  const body = await readJson(request);
+  const reason = cleanString(body.reason) || "Removed by admin";
+  const report = await selectSingle("case_reports", reportId, "Report");
   const { error } = await supabaseAdmin.from("case_reports").delete().eq("id", reportId);
   if (error) throw error;
+  await createNotification(
+    report.author_id,
+    "Case report deleted",
+    `Admin deleted your report '${cleanString(report.title) || "Case report"}'. Reason: ${reason}`,
+    "moderation",
+    { target_type: "case", target_id: null, target_route: "Report" },
+  );
   return jsonResponse({ message: "Case report deleted" });
 };
 
@@ -4730,8 +4832,17 @@ const handleAdminDogs = async (request: Request) => {
 
 const handleAdminDeleteDog = async (request: Request, dogId: string) => {
   await requireAdminProfile(request);
-  const { error } = await supabaseAdmin.from("dogs").delete().eq("id", dogId);
-  if (error) throw error;
+  const body = await readJson(request);
+  const reason = cleanString(body.reason) || "Removed by admin";
+  const dog = await selectSingle("dogs", dogId, "Pet");
+  await deleteDogWithRelations(dogId);
+  await createNotification(
+    dog.owner_id,
+    "Pet registry entry deleted",
+    `Admin deleted '${cleanString(dog.name) || "your pet"}' from the pet registry. Reason: ${reason}`,
+    "moderation",
+    { target_type: "dog", target_id: null, target_route: "Profile" },
+  );
   return jsonResponse({ message: "Pet registry entry deleted" });
 };
 
@@ -4844,8 +4955,27 @@ const handleAdminUpdateEvent = async (request: Request, eventId: string, mode: "
 
 const handleAdminDeleteEvent = async (request: Request, eventId: string) => {
   await requireAdminProfile(request);
+  const body = await readJson(request);
+  const reason = cleanString(body.reason) || "Removed by admin";
+  const event = await selectSingle("events", eventId, "Event");
+  const { data: registrations, error: registrationError } = await supabaseAdmin
+    .from("registrations")
+    .select("user_id")
+    .eq("event_id", eventId);
+  if (registrationError) throw registrationError;
   const { error } = await supabaseAdmin.from("events").delete().eq("id", eventId);
   if (error) return errorResponse(`Could not delete event: ${readableErrorMessage(error, "Database delete failed.")}`, 400);
+  const recipientIds = uniqueStrings([
+    event.organizer_id,
+    ...((registrations ?? []) as JsonRecord[]).map((registration) => registration.user_id),
+  ]);
+  await Promise.all(recipientIds.map((userId) => createNotification(
+    userId,
+    "Event deleted",
+    `Admin deleted '${cleanString(event.title) || "an event"}'. Reason: ${reason}`,
+    "event",
+    { target_type: "event", target_id: null, target_route: "Events" },
+  )));
   return jsonResponse({ message: "Event deleted" });
 };
 
@@ -4918,8 +5048,10 @@ const handleAdminSupportReply = async (request: Request, ticketId: string) => {
 
 const handleAdminSupportResolve = async (request: Request, ticketId: string) => {
   await requireAdminProfile(request);
+  const ticket = await selectSingle("support_tickets", ticketId, "Support ticket");
   const { error } = await supabaseAdmin.from("support_tickets").update({ status: "resolved", updated_at: nowIso() }).eq("id", ticketId);
   if (error) throw error;
+  await createNotification(ticket.user_id, "Support ticket resolved", "Admin marked your support ticket as resolved.", "support");
   return jsonResponse({ message: "Ticket resolved" });
 };
 
@@ -4939,15 +5071,36 @@ const handleAdminCommunity = async (request: Request) => {
 
 const handleAdminCommunityHide = async (request: Request, postId: string) => {
   await requireAdminProfile(request);
-  const { error } = await supabaseAdmin.from("community_messages").update({ is_hidden: true, updated_at: nowIso() }).eq("id", postId);
+  const message = await selectSingle("community_messages", postId, "Community post");
+  const nextHidden = !Boolean(message.is_hidden);
+  const { error } = await supabaseAdmin.from("community_messages").update({ is_hidden: nextHidden, updated_at: nowIso() }).eq("id", postId);
   if (error) throw error;
-  return jsonResponse({ message: "Community post hidden" });
+  await createNotification(
+    message.author_id,
+    nextHidden ? "Community post hidden" : "Community post restored",
+    nextHidden
+      ? "Admin hid one of your community posts after review."
+      : "Admin restored one of your community posts after review.",
+    "moderation",
+    { target_type: "community", target_id: null, target_route: "Community" },
+  );
+  return jsonResponse({ message: nextHidden ? "Community post hidden" : "Community post restored", is_hidden: nextHidden });
 };
 
 const handleAdminCommunityDelete = async (request: Request, postId: string) => {
   await requireAdminProfile(request);
+  const body = await readJson(request);
+  const reason = cleanString(body.reason) || "Removed by admin";
+  const message = await selectSingle("community_messages", postId, "Community post");
   const { error } = await supabaseAdmin.from("community_messages").delete().eq("id", postId);
   if (error) throw error;
+  await createNotification(
+    message.author_id,
+    "Community post deleted",
+    `Admin deleted one of your community posts. Reason: ${reason}`,
+    "moderation",
+    { target_type: "community", target_id: null, target_route: "Community" },
+  );
   return jsonResponse({ message: "Community post deleted" });
 };
 
@@ -5008,6 +5161,14 @@ const handlePinnableContent = async (request: Request) => {
 const campaignRecipients = async (payload: JsonRecord) => {
   const targetGroup = cleanString(payload.target_group);
   const filters = isRecord(payload.filters) ? payload.filters : {};
+  if (targetGroup === "all_users") {
+    const { data, error } = await supabaseAdmin
+      .from("users")
+      .select("id")
+      .is("deleted_at", null);
+    if (error) throw error;
+    return (data ?? []).map((row) => cleanString((row as JsonRecord).id)).filter(Boolean);
+  }
   if (targetGroup === "event_registrants" && filters.event_id) {
     let query = supabaseAdmin.from("registrations").select("user_id").eq("event_id", cleanString(filters.event_id));
     if (filters.registration_status && cleanString(filters.registration_status) !== "all") query = query.eq("status", cleanString(filters.registration_status));
@@ -5082,6 +5243,7 @@ const handleNotificationOptions = async (request: Request) => {
   const events = await getRows("events");
   return jsonResponse({
     target_groups: [
+      { id: "all_users", label: "All users", description: "Send to every active Lovedogs 360 user inbox." },
       { id: "event_registrants", label: "Event registrants" },
       { id: "role_users", label: "Users by role" },
       { id: "case_reporters", label: "Case reporters" },
@@ -5529,15 +5691,7 @@ const routeRequest = async (request: Request) => {
 
   if (method === "POST" && path === "/orders") return handleCreateOrder(request);
   if (method === "GET" && path === "/my-orders") return handleMyOrders(request);
-  if (method === "POST" && /^\/orders\/[^/]+\/cancel$/.test(path)) {
-    const orderId = firstPathMatch(path, /^\/orders\/([^/]+)\/cancel$/);
-    const { profile } = await requireProfile(request);
-    let query = supabaseAdmin.from("orders").update({ status: "cancelled", updated_at: nowIso() }).eq("id", orderId);
-    if (!isAdminProfile(profile)) query = query.eq("buyer_id", cleanString(profile.id));
-    const { error } = await query;
-    if (error) throw error;
-    return jsonResponse({ message: "Order cancelled", status: "cancelled" });
-  }
+  if (method === "POST" && /^\/orders\/[^/]+\/cancel$/.test(path)) return handleCancelOrder(request, firstPathMatch(path, /^\/orders\/([^/]+)\/cancel$/));
   if (method === "POST" && /^\/orders\/[^/]+\/pay$/.test(path)) {
     await requireAdminProfile(request);
     const order = await selectSingle("orders", firstPathMatch(path, /^\/orders\/([^/]+)\/pay$/), "Order");

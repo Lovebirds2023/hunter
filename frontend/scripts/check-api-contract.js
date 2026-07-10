@@ -7,9 +7,12 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'u
 const edgeApi = read('supabase/functions/api/index.ts');
 const karmaMigration = read('supabase/migrations/20260708130000_karma_transactions.sql');
 const appVersionMigration = read('supabase/migrations/20260708131000_app_versions_admin_columns.sql');
+const eventConsentMigration = read('supabase/migrations/20260710120000_event_photo_consent.sql');
 const adminExport = read('frontend/src/components/admin/AdminExportTab.js');
 const adminScorecard = read('frontend/src/components/admin/AdminScorecardTab.js');
 const adminAnnouncements = read('frontend/src/components/admin/AdminAnnouncementsTab.js');
+const adminCommunity = read('frontend/src/components/admin/AdminCommunityTab.js');
+const adminDashboard = read('frontend/src/screens/AdminDashboardScreen.js');
 const apiClient = read('frontend/src/api/client.js');
 const authContext = read('frontend/src/context/AuthContext.js');
 
@@ -165,6 +168,12 @@ for (const snippet of ['restoreExpiredSuspension', 'requireActiveProfile', 'Acco
   }
 }
 
+for (const snippet of ['const deleteDogWithRelations', 'await deleteDogWithRelations(dogId)']) {
+  if (!edgeApi.includes(snippet)) {
+    failures.push(`Pet deletion must use the shared related-record cleanup path: ${snippet}`);
+  }
+}
+
 for (const snippet of ['calculateKarmaRedemption', 'body.karma_points_to_redeem', 'awardKarma']) {
   if (!edgeApi.includes(snippet)) {
     failures.push(`Missing karma migration behavior: ${snippet}`);
@@ -173,6 +182,7 @@ for (const snippet of ['calculateKarmaRedemption', 'body.karma_points_to_redeem'
 
 for (const snippet of [
   'filters.registration_status',
+  'targetGroup === "all_users"',
   'targetGroup === "case_reporters"',
   'targetGroup === "listing_publishers"',
   'targetGroup === "product_publishers"',
@@ -186,9 +196,57 @@ for (const snippet of [
   }
 }
 
-for (const snippet of ["typeof item === 'string'", 'const id = optionValue(item)']) {
+for (const snippet of [
+  "typeof item === 'string'",
+  'const id = optionValue(item)',
+  "target_group: 'all_users'",
+  "case 'all_users': return 'megaphone-outline'",
+]) {
   if (!adminAnnouncements.includes(snippet)) {
     failures.push(`Admin broadcast filters must support string and object options: ${snippet}`);
+  }
+}
+
+for (const snippet of [
+  'typeof body.photo_consent !== "boolean"',
+  'photo_consent: body.photo_consent',
+  'photo_consent: registration.photo_consent',
+]) {
+  if (!edgeApi.includes(snippet)) {
+    failures.push(`Missing event photo consent behavior: ${snippet}`);
+  }
+}
+
+for (const snippet of [
+  'Marketplace listing approved',
+  'Marketplace listing rejected',
+  'Event deleted',
+  'Support ticket resolved',
+  'Community post restored',
+  'Community post deleted',
+  'Pet registry entry deleted',
+  'Order marked delivered',
+  'Order cancelled by admin',
+  'Seller payout settled',
+]) {
+  if (!edgeApi.includes(snippet)) {
+    failures.push(`Missing admin user notification behavior: ${snippet}`);
+  }
+}
+
+for (const snippet of ['const nextHidden = !Boolean(message.is_hidden)', 'is_hidden: nextHidden']) {
+  if (!edgeApi.includes(snippet)) {
+    failures.push(`Community moderation hide/show must toggle real backend visibility: ${snippet}`);
+  }
+}
+
+if (!adminCommunity.includes("res.data?.is_hidden")) {
+  failures.push('Admin community moderation UI must use the backend hide/show state.');
+}
+
+for (const snippet of ['const openPriorityQueue', 'onPress={openPriorityQueue}']) {
+  if (!adminDashboard.includes(snippet)) {
+    failures.push(`Admin notification header button must open an actionable admin queue: ${snippet}`);
   }
 }
 
@@ -208,6 +266,10 @@ for (const snippet of ['add column if not exists download_url', 'add column if n
   if (!appVersionMigration.includes(snippet)) {
     failures.push(`Missing app_versions admin column migration: ${snippet}`);
   }
+}
+
+if (!eventConsentMigration.includes('photo_consent boolean')) {
+  failures.push('Missing registrations.photo_consent migration.');
 }
 
 for (const [label, source] of [

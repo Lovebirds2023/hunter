@@ -30,6 +30,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
     const [selectedTicketTierId, setSelectedTicketTierId] = useState(null);
     const [selectedBookingSlotId, setSelectedBookingSlotId] = useState(null);
     const [attendeeTypeJustification, setAttendeeTypeJustification] = useState('');
+    const [photoConsent, setPhotoConsent] = useState(null);
 
     const [myRegistration, setMyRegistration] = useState(null);
 
@@ -220,6 +221,11 @@ export const EventDetailScreen = ({ route, navigation }) => {
             }
         }
 
+        if (photoConsent === null) {
+            Alert.alert('Photo consent required', 'Please answer the photo and documentation consent question before continuing.');
+            return;
+        }
+
         // Validate custom fields
         for (const field of formFields) {
             if (field.is_required && !formResponses[field.id]) {
@@ -250,6 +256,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
                 share_phone: sharePhone,
                 ticket_tier_id: selectedTier?.id || null,
                 attendee_type_justification: ticketTiers.length > 0 ? attendeeTypeJustification.trim() : null,
+                photo_consent: photoConsent,
                 booking_slot_id: selectedBookingSlot?.id || null,
                 form_responses: formattedResponses
             });
@@ -474,7 +481,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
                 </View>
 
                 {/* Organizer/Admin Actions */}
-                {user?.role === 'admin' && (
+                {['admin', 'super_admin'].includes(user?.role) && (
                     <View style={styles.adminSection}>
                         <Text style={styles.adminTitle}>{t('event_detail.organizer_tools')}</Text>
                         <TouchableOpacity style={styles.adminBtn} onPress={() => navigation.navigate('EventFormBuilder', { eventId: event.id, eventTitle: event.title })}>
@@ -580,6 +587,32 @@ export const EventDetailScreen = ({ route, navigation }) => {
                                     />
                                 </View>
                                 {sharePhone && <Text style={styles.optionalText}>{t('event_detail.your_phone')}: {user?.phone_number || t('event_detail.phone_not_provided')}</Text>}
+                            </View>
+
+                            <View style={styles.profileSection}>
+                                <Text style={styles.sectionTitle}>Photo and documentation consent</Text>
+                                <Text style={styles.questionLabel}>
+                                    Do you consent to Lovedogs 360 taking and using photos or videos of you during this event for documentation, reporting, and promotion of our activities? <Text style={{ color: 'red' }}>*</Text>
+                                </Text>
+                                <View style={styles.consentOptionRow}>
+                                    <TouchableOpacity
+                                        style={[styles.consentOption, photoConsent === true && styles.selectedConsentOption]}
+                                        onPress={() => setPhotoConsent(true)}
+                                    >
+                                        <Ionicons name={photoConsent === true ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={photoConsent === true ? '#fff' : COLORS.primary} />
+                                        <Text style={[styles.consentOptionText, photoConsent === true && styles.selectedConsentText]}>Yes, I consent</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.consentOption, photoConsent === false && styles.selectedNoConsentOption]}
+                                        onPress={() => setPhotoConsent(false)}
+                                    >
+                                        <Ionicons name={photoConsent === false ? 'close-circle' : 'ellipse-outline'} size={20} color={photoConsent === false ? '#fff' : '#8a4b00'} />
+                                        <Text style={[styles.consentOptionText, photoConsent === false && styles.selectedConsentText]}>No, I do not consent</Text>
+                                    </TouchableOpacity>
+                                </View>
+                                <Text style={styles.consentHelpText}>
+                                    You can still register if you choose no. This answer helps our team respect your preference during documentation.
+                                </Text>
                             </View>
 
                             <View style={styles.profileSection}>
@@ -891,6 +924,13 @@ const styles = StyleSheet.create({
     questionLabel: { fontSize: 16, color: '#333', marginBottom: 8, fontWeight: '500' },
     textInput: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, fontSize: 16, backgroundColor: '#f9f9f9', color: '#333' },
     pickerContainer: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, backgroundColor: '#f9f9f9', overflow: 'hidden' },
+    consentOptionRow: { gap: 10 },
+    consentOption: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: '#ddd', borderRadius: 12, padding: 12, backgroundColor: '#fff' },
+    selectedConsentOption: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+    selectedNoConsentOption: { backgroundColor: '#8a4b00', borderColor: '#8a4b00' },
+    consentOptionText: { color: '#333', fontWeight: '800', flex: 1 },
+    selectedConsentText: { color: '#fff' },
+    consentHelpText: { marginTop: 8, color: '#777', fontSize: 12, lineHeight: 17 },
     modalActions: { marginTop: 20, marginBottom: 40 },
     submitBtn: { backgroundColor: '#D4AF37', padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 12 },
     submitBtnText: { color: 'white', fontSize: 18, fontWeight: 'bold' },

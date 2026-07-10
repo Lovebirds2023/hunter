@@ -107,6 +107,18 @@ export default function AdminDashboardScreen({ route }) {
         );
     }
 
+    const openPriorityQueue = () => {
+        if ((stats?.open_tickets || 0) > 0) {
+            setActiveTab('support');
+            return;
+        }
+        if ((stats?.flagged_posts || 0) > 0) {
+            setActiveTab('community');
+            return;
+        }
+        setActiveTab('announcements');
+    };
+
     // Header component
     const Header = ({ title = "Admin Command", showBack = false }) => (
         <View style={s.header}>
@@ -123,7 +135,7 @@ export default function AdminDashboardScreen({ route }) {
                     </View>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <TouchableOpacity style={s.headerBadge}>
+                    <TouchableOpacity style={s.headerBadge} onPress={openPriorityQueue}>
                         <Ionicons name="notifications-outline" size={22} color={ADMIN_COLORS.textPrimary} />
                         {(stats?.open_tickets > 0 || stats?.flagged_posts > 0) && <View style={s.notificationDot} />}
                     </TouchableOpacity>

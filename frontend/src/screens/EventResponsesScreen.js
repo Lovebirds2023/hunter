@@ -11,7 +11,7 @@ const EventResponsesScreen = ({ route, navigation }) => {
     const { t } = useTranslation();
     const { eventId, eventTitle } = route.params;
     const { userInfo } = useContext(AuthContext);
-    const isAdmin = userInfo?.role === 'admin';
+    const isAdmin = ['admin', 'super_admin'].includes(userInfo?.role);
 
     const [responses, setResponses] = useState([]);
     const [formFields, setFormFields] = useState([]);
@@ -75,6 +75,11 @@ const EventResponsesScreen = ({ route, navigation }) => {
 
     const renderResponseItem = ({ item, index }) => {
         const bookingTime = formatBookingTime(item);
+        const photoConsentLabel = item.photo_consent === true
+            ? 'Consent given'
+            : item.photo_consent === false
+                ? 'No consent'
+                : 'Not answered';
         return (
             <View style={styles.card}>
                 <View style={styles.cardHeader}>
@@ -135,6 +140,18 @@ const EventResponsesScreen = ({ route, navigation }) => {
                         </Text>
                     </View>
                 )}
+
+                <View style={[styles.consentBox, item.photo_consent === false && styles.noConsentBox]}>
+                    <Ionicons
+                        name={item.photo_consent === true ? 'camera-outline' : item.photo_consent === false ? 'camera-reverse-outline' : 'help-circle-outline'}
+                        size={17}
+                        color={item.photo_consent === true ? '#0f7a39' : item.photo_consent === false ? '#8a4b00' : '#777'}
+                    />
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.consentLabel}>Photo/documentation consent</Text>
+                        <Text style={styles.consentValue}>{photoConsentLabel}</Text>
+                    </View>
+                </View>
 
                 <View style={styles.responsesContainer}>
                     {formFields.length > 0 ? (
@@ -211,6 +228,10 @@ const styles = StyleSheet.create({
     bookingRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', marginBottom: 10 },
     bookingTime: { fontSize: 12, color: '#6d5b12', marginTop: 3 },
     paymentLine: { fontSize: 12, color: '#6d5b12', fontWeight: '700', marginTop: 4, textTransform: 'capitalize' },
+    consentBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#e6f6ed', borderWidth: 1, borderColor: '#bde8cc', padding: 10, borderRadius: 8, marginBottom: 12 },
+    noConsentBox: { backgroundColor: '#fff4e6', borderColor: '#f0c28c' },
+    consentLabel: { fontSize: 11, color: '#555', fontWeight: '800', textTransform: 'uppercase' },
+    consentValue: { fontSize: 14, color: '#1A1A1A', fontWeight: '900', marginTop: 2 },
     responsesContainer: { backgroundColor: '#fafafa', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#eee' },
     qaRow: { marginBottom: 12 },
     questionText: { fontSize: 12, color: '#666', fontWeight: '600', marginBottom: 4 },
