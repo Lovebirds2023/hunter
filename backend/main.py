@@ -2430,7 +2430,10 @@ def list_services(
     radius: Optional[float] = 50.0, # default 50km
     db: Session = Depends(database.get_db)
 ):
-    query = db.query(models.Service).filter(models.Service.is_published == True)
+    query = db.query(models.Service).filter(
+        models.Service.is_published == True,
+        models.Service.admin_approved == True,
+    )
     if item_type:
         query = query.filter(models.Service.item_type == item_type)
     
@@ -2474,6 +2477,7 @@ def create_service(
     if latitude is None:
         location_accuracy = None
     is_published = service.is_published if service.is_published is not None else True
+    admin_approved = is_admin_user(current_user)
 
     new_service = models.Service(
         id=str(uuid.uuid4()),
@@ -2495,7 +2499,8 @@ def create_service(
         slots_available=service.slots_available,
         is_busy=service.is_busy,
         images=service.images,
-        admin_approved=True if is_published else is_admin_user(current_user),
+        admin_approved=admin_approved,
+        rejection_reason=None,
     )
     db.add(new_service)
 
@@ -2523,8 +2528,12 @@ def get_service_detail(service_id: str, db: Session = Depends(database.get_db), 
     if not service:
         raise HTTPException(status_code=404, detail="Service not found")
     
-    if not service.is_published and service.provider_id != current_user.id and current_user.role != models.UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Service is not published")
+    if (
+        (not service.is_published or not service.admin_approved)
+        and service.provider_id != current_user.id
+        and not is_admin_user(current_user)
+    ):
+        raise HTTPException(status_code=403, detail="Service is pending admin approval or is not published")
         
     return service
 
@@ -2542,7 +2551,7 @@ def save_service_form_fields(
     service = db.query(models.Service).filter(models.Service.id == service_id).first()
     if not service:
         raise HTTPException(status_code=404, detail="Service not found")
-    if service.provider_id != current_user.id and current_user.role != models.UserRole.ADMIN:
+    if service.provider_id != current_user.id and not is_admin_user(current_user):
         raise HTTPException(status_code=403, detail="Not authorized")
 
     # Sync fields
@@ -2564,7 +2573,7 @@ def get_service_responses(
     service = db.query(models.Service).filter(models.Service.id == service_id).first()
     if not service:
         raise HTTPException(status_code=404, detail="Service not found")
-    if service.provider_id != current_user.id and current_user.role != models.UserRole.ADMIN:
+    if service.provider_id != current_user.id and not is_admin_user(current_user):
         raise HTTPException(status_code=403, detail="Not authorized")
 
     orders = db.query(models.Order).filter(models.Order.service_id == service_id).all()
@@ -3153,8 +3162,8 @@ def create_order(
     if not service:
         raise HTTPException(status_code=404, detail="Service not found")
 
-    if not service.is_published:
-        raise HTTPException(status_code=400, detail="This marketplace item is not available for purchase")
+    if not service.is_published or not service.admin_approved:
+        raise HTTPException(status_code=400, detail="This marketplace item is pending admin approval or is not available for purchase")
 
     if service.item_type == "products":
         if service.stock_count is not None and service.stock_count <= 0:
@@ -4608,8 +4617,9 @@ def update_service(
             update_data["location_accuracy_meters"] = None
     if "location_accuracy_meters" in update_data:
         update_data["location_accuracy_meters"] = normalize_location_accuracy(update_data["location_accuracy_meters"])
-    if update_data.get("is_published") is True:
-        update_data["admin_approved"] = True
+    if "is_published" in update_data:
+        is_publishing = bool(update_data.get("is_published"))
+        update_data["admin_approved"] = is_admin_user(current_user) if is_publishing else False
         update_data["rejection_reason"] = None
 
     for key, value in update_data.items():
@@ -5459,6 +5469,7 @@ class ApprovalRequest(BaseModel):
 @app.get("/admin/pending-approvals")
 def admin_list_pending(db: Session = Depends(database.get_db), admin: models.User = Depends(require_admin)):
     pending_services = db.query(models.Service).filter(
+        models.Service.is_published == True,
         models.Service.admin_approved == False,
         models.Service.rejection_reason.is_(None),
     ).order_by(models.Service.title.asc()).all()
@@ -5682,6 +5693,7 @@ def admin_pinnable_content(db: Session = Depends(database.get_db), admin: models
     events = db.query(models.Event).order_by(models.Event.start_time.desc()).limit(50).all()
     services = db.query(models.Service).filter(
         models.Service.is_published == True,
+        models.Service.admin_approved == True,
     ).order_by(models.Service.title.asc()).limit(50).all()
     cases = db.query(models.CaseReport).filter(
         models.CaseReport.is_approved == True,
@@ -5840,6 +5852,7 @@ def admin_analytics(db: Session = Depends(database.get_db), admin: models.User =
 
     # --- Pending approvals count ---
     pending_services = db.query(models.Service).filter(
+        models.Service.is_published == True,
         models.Service.admin_approved == False,
         models.Service.rejection_reason.is_(None),
     ).count()

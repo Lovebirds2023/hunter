@@ -629,6 +629,7 @@ const handleListServices = async (request: Request) => {
     .from("services")
     .select("*")
     .eq("is_published", true)
+    .eq("admin_approved", true)
     .order("title", { ascending: true });
   if (itemType) query = query.eq("item_type", itemType);
 
@@ -647,6 +648,7 @@ const handleCreateService = async (request: Request) => {
   const title = cleanString(body.title);
   if (!title) return errorResponse("Title is required.");
   const isPublished = asBoolean(body.is_published, true);
+  const isAdmin = isAdminProfile(profile);
 
   const payload = {
     provider_id: cleanString(profile.id),
@@ -667,7 +669,8 @@ const handleCreateService = async (request: Request) => {
     slots_available: asNullableNumber(body.slots_available),
     is_busy: asBoolean(body.is_busy, false),
     images: asStringArray(body.images),
-    admin_approved: isPublished ? true : isAdminProfile(profile),
+    admin_approved: isAdmin,
+    rejection_reason: null,
     updated_at: nowIso(),
   };
 
@@ -700,8 +703,12 @@ const handleGetService = async (request: Request, serviceId: string) => {
   const service = await selectSingle("services", serviceId, "Service");
   const authUser = await getOptionalAuthUser(request);
   const profile = authUser ? await getProfile(authUser.id) : null;
-  if (!service.is_published && cleanString(service.provider_id) !== cleanString(profile?.id) && !isAdminProfile(profile)) {
-    throw new Response("Service is not published", { status: 403 });
+  if (
+    (!service.is_published || !service.admin_approved) &&
+    cleanString(service.provider_id) !== cleanString(profile?.id) &&
+    !isAdminProfile(profile)
+  ) {
+    throw new Response("Service is pending admin approval or is not published", { status: 403 });
   }
   const pins = await getActivePins();
   return jsonResponse(await serializeService(service, pins.get(`service:${serviceId}`)));
@@ -735,8 +742,9 @@ const handleUpdateService = async (request: Request, serviceId: string) => {
   ];
   const updates: JsonRecord = { updated_at: nowIso() };
   for (const key of allowed) if (key in body) updates[key] = key === "images" ? asStringArray(body[key]) : body[key];
-  if (asBoolean(updates.is_published, false)) {
-    updates.admin_approved = true;
+  if ("is_published" in updates) {
+    const isPublishing = asBoolean(updates.is_published, false);
+    updates.admin_approved = isPublishing ? isAdminProfile(profile) : false;
     updates.rejection_reason = null;
   }
 
@@ -2323,7 +2331,7 @@ const handleCreateOrder = async (request: Request) => {
   const body = await readJson(request);
   const serviceId = cleanString(body.service_id);
   const service = await selectSingle("services", serviceId, "Service");
-  if (!service.is_published) return errorResponse("This marketplace item is not available for purchase.");
+  if (!service.is_published || !service.admin_approved) return errorResponse("This marketplace item is pending admin approval or is not available for purchase.");
   if (cleanString(service.item_type) === "products") {
     if (service.stock_count !== null && service.stock_count !== undefined && asNumber(service.stock_count) <= 0) {
       return errorResponse("This product is out of stock");
@@ -2656,9 +2664,9 @@ const isPinTargetVisible = async (pin: JsonRecord) => {
   }
 
   if (targetType === "service") {
-    const { data, error } = await supabaseAdmin.from("services").select("is_published").eq("id", targetId).maybeSingle();
+    const { data, error } = await supabaseAdmin.from("services").select("is_published,admin_approved").eq("id", targetId).maybeSingle();
     if (error) throw error;
-    return Boolean((data as JsonRecord | null)?.is_published);
+    return Boolean((data as JsonRecord | null)?.is_published) && Boolean((data as JsonRecord | null)?.admin_approved);
   }
 
   if (targetType === "case") {
@@ -3979,7 +3987,7 @@ const handleAdminAnalytics = async (request: Request) => {
     new_paid_orders_prev_30d: paidOrders.filter((order) => inRange(order, sixtyDaysAgo, thirtyDaysAgo)).length,
     revenue_30d: paidOrders.filter((order) => inRange(order, thirtyDaysAgo)).reduce((sum, order) => sum + asNumber(order.amount), 0),
     revenue_prev_30d: paidOrders.filter((order) => inRange(order, sixtyDaysAgo, thirtyDaysAgo)).reduce((sum, order) => sum + asNumber(order.amount), 0),
-    pending_services: services.filter((service) => !service.admin_approved && !service.rejection_reason).length,
+    pending_services: services.filter((service) => service.is_published && !service.admin_approved && !service.rejection_reason).length,
     pending_reports: cases.filter((report) => !report.is_approved && !report.rejection_reason).length,
     open_tickets: tickets.filter((ticket) => supportStatusKey(ticket.status) !== "resolved").length,
     flagged_posts: messages.filter((message) => asNumber(message.flag_count) > 0).length,
@@ -4656,7 +4664,7 @@ const handleAdminDeleteService = async (request: Request, serviceId: string) => 
 const handleAdminPendingApprovals = async (request: Request) => {
   await requireAdminProfile(request);
   const [services, reports] = await Promise.all([
-    supabaseAdmin.from("services").select("*").eq("admin_approved", false).is("rejection_reason", null).order("title", { ascending: true }),
+    supabaseAdmin.from("services").select("*").eq("is_published", true).eq("admin_approved", false).is("rejection_reason", null).order("title", { ascending: true }),
     supabaseAdmin.from("case_reports").select("*").eq("is_approved", false).is("rejection_reason", null).order("created_at", { ascending: false }),
   ]);
   if (services.error) throw services.error;
@@ -4986,7 +4994,7 @@ const handlePinnableContent = async (request: Request) => {
     ...pinMetadata(pins.get(`${type}:${cleanString(item.id)}`)),
   });
   const publishedEvents = events.filter((item) => asNumber(item.is_public, 1) === 1);
-  const publishedServices = services.filter((item) => Boolean(item.is_published));
+  const publishedServices = services.filter((item) => Boolean(item.is_published) && Boolean(item.admin_approved));
   const publishedCases = cases.filter((item) => Boolean(item.is_approved));
   const visibleCommunity = community.filter((item) => !Boolean(item.is_hidden));
   return jsonResponse({

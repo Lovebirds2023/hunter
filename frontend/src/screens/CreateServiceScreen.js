@@ -314,13 +314,31 @@ const CreateServiceScreen = ({ route, navigation }) => {
             };
 
             if (isEditing) {
-                await client.put(`/services/${service.id}`, data);
+                const res = await client.put(`/services/${service.id}`, data);
                 await clearDraft();
-                Alert.alert(t('common.success'), t('marketplace.create.success_update'));
+                if (isPublished && res.data?.admin_approved === false) {
+                    Alert.alert(
+                        t('common.success'),
+                        t('marketplace.create.pending_approval', {
+                            defaultValue: 'Your listing was submitted and is waiting for admin approval before it appears on the platform.',
+                        }),
+                    );
+                } else {
+                    Alert.alert(t('common.success'), t('marketplace.create.success_update'));
+                }
             } else {
-                await client.post('/services', data);
+                const res = await client.post('/services', data);
                 await clearDraft();
-                Alert.alert(t('common.success'), t('marketplace.create.success_create', { type: itemType === 'services' ? t('marketplace.create.services') : t('marketplace.create.products') }));
+                if (isPublished && res.data?.admin_approved === false) {
+                    Alert.alert(
+                        t('common.success'),
+                        t('marketplace.create.pending_approval', {
+                            defaultValue: 'Your listing was submitted and is waiting for admin approval before it appears on the platform.',
+                        }),
+                    );
+                } else {
+                    Alert.alert(t('common.success'), t('marketplace.create.success_create', { type: itemType === 'services' ? t('marketplace.create.services') : t('marketplace.create.products') }));
+                }
             }
             navigation.goBack();
         } catch (error) {
