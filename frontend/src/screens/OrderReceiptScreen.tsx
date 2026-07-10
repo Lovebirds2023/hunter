@@ -196,6 +196,16 @@ export const OrderReceiptScreen = ({ route, navigation }: any) => {
                 } else {
                     Alert.alert(t('common.error'), t('checkout.payment_open_error'));
                 }
+            } else if (paymentRes.payment_success) {
+                if (checkoutWindow && !checkoutWindow.closed) {
+                    checkoutWindow.close();
+                }
+                setPaymentTrackingId(paymentRes.order_tracking_id || paymentRes.OrderTrackingId || null);
+                setStep('success');
+                Alert.alert(
+                    t('common.success'),
+                    t('checkout.payment_already_confirmed', { defaultValue: 'Payment is already confirmed. Your receipt is ready.' })
+                );
             } else {
                 throw new Error(t('checkout.no_payment_url'));
             }

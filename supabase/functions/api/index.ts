@@ -2340,29 +2340,23 @@ const handleMyOrders = async (request: Request) => {
     .order("created_at", { ascending: false });
   if (buyerError) throw buyerError;
 
-  const { data: providerServices, error: serviceError } = await supabaseAdmin
-    .from("services")
-    .select("id")
-    .eq("provider_id", userId);
-  if (serviceError) throw serviceError;
-
-  const serviceIds = (providerServices ?? []).map((service) => cleanString((service as JsonRecord).id)).filter(Boolean);
-  let providerOrders: unknown[] = [];
-  if (serviceIds.length) {
-    const { data, error } = await supabaseAdmin
-      .from("orders")
-      .select("*, service:services(*)")
-      .in("service_id", serviceIds)
-      .order("created_at", { ascending: false });
-    if (error) throw error;
-    providerOrders = data ?? [];
-  }
-
-  const byId = new Map<string, unknown>();
-  for (const order of [...(buyerOrders ?? []), ...providerOrders]) {
-    byId.set(cleanString((order as JsonRecord).id), order);
-  }
-  return jsonResponse(Array.from(byId.values()));
+  const rows = await Promise.all(((buyerOrders ?? []) as JsonRecord[]).map(async (order) => {
+    const service = isRecord(order.service) ? order.service : {};
+    const provider = await fetchUserFull(service.provider_id);
+    const serviceImages = asStringArray(service.images);
+    return {
+      id: order.id,
+      service_title: cleanString(service.title) || "Unknown",
+      service_image: service.image_url ?? serviceImages[0] ?? null,
+      provider_name: cleanString(provider?.full_name) || "Unknown",
+      amount: asNumber(order.amount),
+      discount_amount: asNumber(order.discount_amount),
+      karma_points_redeemed: asNumber(order.karma_points_redeemed),
+      status: cleanString(order.status) || "pending",
+      created_at: order.created_at ?? null,
+    };
+  }));
+  return jsonResponse(rows);
 };
 
 const escapePdfText = (value: unknown) => cleanString(value)
@@ -2412,6 +2406,7 @@ const handleOrderReceipt = async (request: Request, orderId: string) => {
   const userId = cleanString(profile.id);
   const isOwner = cleanString(row.buyer_id) === userId || cleanString(service.provider_id) === userId;
   if (!isOwner && !isAdminProfile(profile)) throw new Response("Not authorized", { status: 403 });
+  if (!isPaidOrderStatus(row.status)) return errorResponse("Receipt only available for paid orders");
 
   const receipt = simplePdf([
     "Lovedogs 360 Receipt",
@@ -2429,38 +2424,78 @@ const handleOrderReceipt = async (request: Request, orderId: string) => {
   return fileResponse(receipt, "application/pdf", `receipt_${safeFileSlug(orderId)}.pdf`);
 };
 
-const handleWalletSummary = async (request: Request) => {
-  const { profile } = await requireProfile(request);
-  const userId = cleanString(profile.id);
+const getPayoutDestination = (profile: JsonRecord, methodValue?: unknown) => {
+  const method = (cleanString(methodValue) || cleanString(profile.payment_method)).toLowerCase();
+  if (method === "mpesa") return cleanString(profile.mpesa_phone_number);
+  if (method === "card") return "Pesapal card/bank payout";
+  return "";
+};
+
+const getProviderServiceIds = async (userId: string) => {
   const { data: providerServices, error: serviceError } = await supabaseAdmin
     .from("services")
     .select("id")
     .eq("provider_id", userId);
   if (serviceError) throw serviceError;
+  return (providerServices ?? []).map((service) => cleanString((service as JsonRecord).id)).filter(Boolean);
+};
 
-  const serviceIds = (providerServices ?? []).map((service) => cleanString((service as JsonRecord).id)).filter(Boolean);
-  if (!serviceIds.length) {
-    return jsonResponse({
-      pending_balance: 0,
-      available_balance: 0,
-      total_earnings: 0,
-      currency: cleanString(profile.preferred_currency) || "KES",
-    });
+const buildProviderWalletSummary = async (profile: JsonRecord) => {
+  const userId = cleanString(profile.id);
+  const serviceIds = await getProviderServiceIds(userId);
+  let totalEarned = 0;
+  let inEscrow = 0;
+  let availableGross = 0;
+  let settled = 0;
+
+  if (serviceIds.length) {
+    const { data, error } = await supabaseAdmin
+      .from("orders")
+      .select("payout,status")
+      .in("service_id", serviceIds)
+      .in("status", ["paid", "completed", "settled"]);
+    if (error) throw error;
+    for (const order of (data ?? []) as JsonRecord[]) {
+      const payout = asNumber(order.payout);
+      const status = normalizeStatus(order.status);
+      totalEarned += payout;
+      if (status === "paid") inEscrow += payout;
+      if (status === "completed") availableGross += payout;
+      if (status === "settled") settled += payout;
+    }
   }
 
-  const { data, error } = await supabaseAdmin
-    .from("orders")
-    .select("payout,status")
-    .in("service_id", serviceIds);
-  if (error) throw error;
-  const paid = (data ?? []).filter((order) => ["paid", "completed", "settled"].includes(cleanString((order as JsonRecord).status)));
-  const pending = paid.reduce((sum, order) => sum + asNumber((order as JsonRecord).payout), 0);
-  return jsonResponse({
-    pending_balance: pending,
-    available_balance: 0,
-    total_earnings: pending,
+  const { data: pendingWithdrawals, error: withdrawalError } = await supabaseAdmin
+    .from("transactions")
+    .select("amount")
+    .eq("user_id", userId)
+    .eq("type", "withdrawal")
+    .eq("status", "pending");
+  if (withdrawalError) throw withdrawalError;
+  const pendingWithdrawal = (pendingWithdrawals ?? []).reduce((sum, tx) => sum + asNumber((tx as JsonRecord).amount), 0);
+  const available = Math.max(availableGross - pendingWithdrawal, 0);
+  const paymentMethod = cleanString(profile.payment_method).toLowerCase() || null;
+
+  return {
     currency: cleanString(profile.preferred_currency) || "KES",
-  });
+    total_earned: Math.round(totalEarned * 100) / 100,
+    in_escrow: Math.round(inEscrow * 100) / 100,
+    available: Math.round(available * 100) / 100,
+    available_before_pending_withdrawals: Math.round(availableGross * 100) / 100,
+    pending_withdrawal: Math.round(pendingWithdrawal * 100) / 100,
+    settled: Math.round(settled * 100) / 100,
+    withdrawable: Math.round(available * 100) / 100,
+    payment_method: paymentMethod,
+    payout_destination: getPayoutDestination(profile, paymentMethod),
+    pending_balance: Math.round(totalEarned * 100) / 100,
+    available_balance: Math.round(available * 100) / 100,
+    total_earnings: Math.round(totalEarned * 100) / 100,
+  };
+};
+
+const handleWalletSummary = async (request: Request) => {
+  const { profile } = await requireProfile(request);
+  return jsonResponse(await buildProviderWalletSummary(profile));
 };
 
 const handleCreateSupportTicket = async (request: Request) => {
@@ -4334,6 +4369,72 @@ const serializeWithdrawal = async (tx: JsonRecord) => {
   };
 };
 
+const getWithdrawalsForUser = async (userId: string) => {
+  const { data, error } = await supabaseAdmin
+    .from("transactions")
+    .select("*")
+    .eq("type", "withdrawal")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(25);
+  if (error) throw error;
+  return Promise.all(((data ?? []) as JsonRecord[]).map((tx) => serializeWithdrawal(tx)));
+};
+
+const handleMyEarnings = async (request: Request) => {
+  const { profile } = await requireProfile(request);
+  const userId = cleanString(profile.id);
+  const serviceIds = await getProviderServiceIds(userId);
+  const wallet = await buildProviderWalletSummary(profile);
+  if (!serviceIds.length) {
+    return jsonResponse({
+      wallet,
+      earnings: [],
+      withdrawals: await getWithdrawalsForUser(userId),
+    });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("orders")
+    .select("*, service:services(*)")
+    .in("service_id", serviceIds)
+    .in("status", ["paid", "completed", "settled"])
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+
+  const earnings = await Promise.all(((data ?? []) as JsonRecord[]).map(async (order) => {
+    const service = isRecord(order.service) ? order.service : {};
+    const buyer = await fetchUserFull(order.buyer_id);
+    const status = normalizeStatus(order.status);
+    const escrowStatus = status === "paid"
+      ? "in_escrow"
+      : status === "completed"
+        ? "available"
+        : status === "settled"
+          ? "settled"
+          : "unknown";
+    return {
+      id: order.id,
+      service_title: cleanString(service.title) || "Unknown",
+      buyer_name: cleanString(buyer?.full_name) || "Unknown",
+      gross_amount: asNumber(order.amount),
+      commission: asNumber(order.commission),
+      payout: asNumber(order.payout),
+      discount_amount: asNumber(order.discount_amount),
+      karma_points_redeemed: asNumber(order.karma_points_redeemed),
+      order_status: cleanString(order.status) || "pending",
+      escrow_status: escrowStatus,
+      created_at: order.created_at ?? null,
+    };
+  }));
+
+  return jsonResponse({
+    wallet,
+    earnings,
+    withdrawals: await getWithdrawalsForUser(userId),
+  });
+};
+
 const handleWithdrawals = async (request: Request, admin = false) => {
   const { profile } = admin ? await requireAdminProfile(request) : await requireProfile(request);
   let query = supabaseAdmin.from("transactions").select("*").eq("type", "withdrawal").order("created_at", { ascending: false });
@@ -4357,11 +4458,14 @@ const handleRequestWithdrawal = async (request: Request) => {
   const { profile } = await requireProfile(request);
   const body = await readJson(request);
   const userId = cleanString(profile.id);
-  const available = await providerCompletedPayout(userId);
+  const wallet = await buildProviderWalletSummary(profile);
+  const available = asNumber(wallet.withdrawable ?? wallet.available);
+  if (asNumber(wallet.pending_withdrawal) > 0) return errorResponse("You already have a pending payout request.");
   const amount = Math.round(asNumber(body.amount, available) * 100) / 100;
-  const method = cleanString(body.method) || cleanString(profile.payment_method);
-  const destination = method === "mpesa" ? cleanString(profile.mpesa_phone_number) : method ? "Pesapal card/bank payout" : "";
+  const method = (cleanString(body.method) || cleanString(profile.payment_method)).toLowerCase();
+  const destination = getPayoutDestination(profile, method);
   if (amount <= 0 || amount > available) return errorResponse("Payout request exceeds completed seller earnings.");
+  if (Math.abs(amount - available) > 0.01) return errorResponse("Request the full ready-for-payout amount for now.");
   if (!["mpesa", "card"].includes(method)) return errorResponse("Set a payout method first.");
   if (method === "mpesa" && !destination) return errorResponse("Add your M-Pesa phone number before requesting payout.");
 
@@ -4374,7 +4478,50 @@ const handleRequestWithdrawal = async (request: Request) => {
     destination,
   }).select("*").single();
   if (error) throw error;
-  return jsonResponse({ message: "Payout request submitted", withdrawal_id: data.id, amount, status: "pending", withdrawal: await serializeWithdrawal(data as JsonRecord) });
+  await createNotification(userId, "Payout Requested", `Your KES ${amount.toLocaleString()} seller payout request is pending admin processing.`, "payout");
+  return jsonResponse({
+    message: "Payout request submitted",
+    withdrawal_id: data.id,
+    amount,
+    status: "pending",
+    withdrawal: await serializeWithdrawal(data as JsonRecord),
+    wallet: await buildProviderWalletSummary(profile),
+  });
+};
+
+const settleCompletedOrdersForWithdrawal = async (sellerId: string, withdrawalAmount: number) => {
+  const serviceIds = await getProviderServiceIds(sellerId);
+  if (!serviceIds.length) {
+    throw new Response("Payout request amount does not match completed seller earnings.", { status: 400 });
+  }
+  const { data, error } = await supabaseAdmin
+    .from("orders")
+    .select("id,payout,status,created_at")
+    .in("service_id", serviceIds)
+    .eq("status", "completed")
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+
+  let remaining = Math.round(withdrawalAmount * 100) / 100;
+  const orderIds: string[] = [];
+  for (const order of (data ?? []) as JsonRecord[]) {
+    const payout = Math.round(asNumber(order.payout) * 100) / 100;
+    if (payout <= remaining + 0.01) {
+      orderIds.push(cleanString(order.id));
+      remaining = Math.round((remaining - payout) * 100) / 100;
+    }
+    if (Math.abs(remaining) <= 0.01) break;
+  }
+
+  if (Math.abs(remaining) > 0.01 || !orderIds.length) {
+    throw new Response("Payout request amount does not match completed seller earnings.", { status: 400 });
+  }
+
+  const { error: updateError } = await supabaseAdmin
+    .from("orders")
+    .update({ status: "settled", updated_at: nowIso() })
+    .in("id", orderIds);
+  if (updateError) throw updateError;
 };
 
 const handleCompleteWithdrawal = async (request: Request, withdrawalId: string) => {
@@ -4382,9 +4529,19 @@ const handleCompleteWithdrawal = async (request: Request, withdrawalId: string) 
   const tx = await selectSingle("transactions", withdrawalId, "Payout request");
   if (cleanString(tx.type) !== "withdrawal") return notFound("Payout request");
   if (normalizeStatus(tx.status) !== "pending") return errorResponse(`Payout request is already ${tx.status}`);
+  const seller = await fetchUserFull(tx.user_id);
+  if (!seller) return notFound("Seller");
+  await settleCompletedOrdersForWithdrawal(cleanString(tx.user_id), asNumber(tx.amount));
   const { error } = await supabaseAdmin.from("transactions").update({ status: "completed", processed_at: nowIso() }).eq("id", withdrawalId);
   if (error) throw error;
-  return jsonResponse({ message: "Payout request marked as completed", withdrawal_id: withdrawalId, status: "completed" });
+  const destination = cleanString(tx.destination) || getPayoutDestination(seller, tx.payout_method) || "configured payout destination";
+  await createNotification(cleanString(tx.user_id), "Payout Completed", `Your KES ${asNumber(tx.amount).toLocaleString()} seller payout to ${destination} has been marked as paid.`, "payout");
+  return jsonResponse({
+    message: "Payout request marked as completed",
+    withdrawal_id: withdrawalId,
+    status: "completed",
+    wallet: await buildProviderWalletSummary(seller),
+  });
 };
 
 const serializeAdminService = async (service: JsonRecord) => {
@@ -5314,7 +5471,7 @@ const routeRequest = async (request: Request) => {
   if (method === "POST" && /^\/event-registrations\/[^/]+\/payment\/initiate$/.test(path)) return handleInitiateEventPayment(request, firstPathMatch(path, /^\/event-registrations\/([^/]+)\/payment\/initiate$/));
   if (method === "GET" && /^\/event-registrations\/[^/]+\/payment\/status$/.test(path)) return handleEventPaymentStatus(request, firstPathMatch(path, /^\/event-registrations\/([^/]+)\/payment\/status$/));
   if (method === "GET" && path === "/wallet/summary") return handleWalletSummary(request);
-  if (method === "GET" && path === "/my-earnings") return handleWalletSummary(request);
+  if (method === "GET" && path === "/my-earnings") return handleMyEarnings(request);
   if (method === "POST" && path === "/withdrawals/request") return handleRequestWithdrawal(request);
   if (method === "GET" && path === "/withdrawals") return handleWithdrawals(request, false);
 
