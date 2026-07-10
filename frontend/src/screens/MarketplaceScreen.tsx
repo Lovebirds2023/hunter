@@ -54,6 +54,63 @@ const toRatingNumber = (value: any) => {
     return Number.isFinite(rating) ? rating : 0;
 };
 
+const eventTicketPrice = (event: any) => {
+    const tierPrices = Array.isArray(event.ticket_tiers)
+        ? event.ticket_tiers
+            .map((tier: any) => Number(tier?.price))
+            .filter((price: number) => Number.isFinite(price))
+        : [];
+    if (tierPrices.length > 0) return Math.min(...tierPrices);
+    const price = Number(event.ticket_price || 0);
+    return Number.isFinite(price) ? price : 0;
+};
+
+const eventPriceLabel = (event: any) => {
+    const tierPrices = Array.isArray(event.ticket_tiers)
+        ? event.ticket_tiers
+            .map((tier: any) => Number(tier?.price))
+            .filter((price: number) => Number.isFinite(price))
+        : [];
+    const hasFree = tierPrices.some((price: number) => price <= 0);
+    const hasPaid = tierPrices.some((price: number) => price > 0);
+    if (hasFree && hasPaid) return 'FREE + PAID';
+    if (hasFree && !hasPaid) return 'FREE';
+    const price = eventTicketPrice(event);
+    if (price <= 0) return 'FREE';
+    return null;
+};
+
+const eventRemainingSlots = (event: any) => {
+    const capacity = Number(event.capacity || 0);
+    if (!Number.isFinite(capacity) || capacity <= 0) return null;
+    const registered = Number(event.registrant_count || event.registration_count || 0);
+    return Math.max(0, capacity - (Number.isFinite(registered) ? registered : 0));
+};
+
+const eventToMarketplaceItem = (event: any) => ({
+    ...event,
+    id: `event-${event.id}`,
+    event_id: event.id,
+    source_type: 'event',
+    item_type: 'services',
+    category: 'events & programs',
+    image_url: event.poster_url || (Array.isArray(event.images) ? event.images[0] : null),
+    price: eventTicketPrice(event),
+    price_label: eventPriceLabel(event),
+    currency: event.currency || 'KES',
+    slots_available: eventRemainingSlots(event),
+    is_busy: false,
+    is_published: Number(event.is_public ?? 1) === 1,
+    location_landmark: event.location || '',
+    address: event.location || '',
+    provider: {
+        full_name: event.organizer?.full_name || 'Event organizer',
+        profile_image: event.organizer?.profile_image || null,
+        average_rating: 0,
+        total_ratings: 0,
+    },
+});
+
 export const MarketplaceScreen = ({ navigation }: any) => {
     const { t } = useTranslation();
     const { userInfo } = useAuth();
@@ -75,6 +132,13 @@ export const MarketplaceScreen = ({ navigation }: any) => {
             return;
         }
         navigation.navigate(screen, params);
+    };
+
+    const navigateEventDetail = (eventId: string) => {
+        navigation.navigate('Events', {
+            screen: 'EventDetail',
+            params: { eventId },
+        });
     };
 
     useEffect(() => {
@@ -140,8 +204,21 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                 params.lon = userLocation.coords.longitude;
             }
 
-            const response = await client.get(url, { params });
-            setServices(response.data);
+            const serviceRequest = client.get(url, { params });
+            const eventRequest = activeTab === 'services' ? client.get('/events') : Promise.resolve({ data: [] });
+            const [serviceResult, eventResult] = await Promise.allSettled([serviceRequest, eventRequest]);
+
+            if (serviceResult.status === 'rejected' && eventResult.status === 'rejected') {
+                throw serviceResult.reason;
+            }
+
+            const serviceItems = serviceResult.status === 'fulfilled' && Array.isArray(serviceResult.value.data)
+                ? serviceResult.value.data.map((item: any) => ({ ...item, source_type: item.source_type || 'listing' }))
+                : [];
+            const eventItems = eventResult.status === 'fulfilled' && Array.isArray(eventResult.value.data)
+                ? eventResult.value.data.map(eventToMarketplaceItem)
+                : [];
+            setServices([...serviceItems, ...eventItems]);
         } catch (error) {
             console.error(error);
             Alert.alert(t('common.error'), t('marketplace.empty.title', { type: activeTab }));
@@ -154,9 +231,22 @@ export const MarketplaceScreen = ({ navigation }: any) => {
         return services.filter(item => {
             const matchesTab = item.item_type === activeTab;
             const matchesCategory = selectedCategory === 'all' || item.category?.toLowerCase() === selectedCategory.toLowerCase();
-            const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                item.description?.toLowerCase().includes(searchQuery.toLowerCase());
+            const searchableText = [
+                item.title,
+                item.description,
+                item.location_landmark,
+                item.address,
+                item.provider?.full_name,
+            ].filter(Boolean).join(' ').toLowerCase();
+            const matchesSearch = searchableText.includes(searchQuery.toLowerCase());
             return matchesTab && matchesCategory && matchesSearch;
+        }).sort((a, b) => {
+            if (!!a.is_pinned !== !!b.is_pinned) return a.is_pinned ? -1 : 1;
+            if (a.is_pinned && b.is_pinned) return (b.pin_priority || 0) - (a.pin_priority || 0);
+            if (a.source_type === 'event' && b.source_type === 'event') {
+                return new Date(a.start_time || 0).getTime() - new Date(b.start_time || 0).getTime();
+            }
+            return 0;
         });
     }, [services, activeTab, selectedCategory, searchQuery]);
 
@@ -183,12 +273,14 @@ export const MarketplaceScreen = ({ navigation }: any) => {
     );
 
     const getMarketplaceTypeLabel = (item: any) => {
-        const price = formatCurrency(convertPrice(item.price, item.currency || 'KES', preferredCurrency), preferredCurrency);
-        return [item.category || t('marketplace.general'), price].filter(Boolean).join(' | ');
+        const price = item.price_label || formatCurrency(convertPrice(item.price, item.currency || 'KES', preferredCurrency), preferredCurrency);
+        const label = item.source_type === 'event' ? t('navigation.events') : (item.category || t('marketplace.general'));
+        return [label, price].filter(Boolean).join(' | ');
     };
 
     const renderCard = ({ item, index }: any) => {
-        const isOwner = item.provider_id === userId;
+        const isEventListing = item.source_type === 'event';
+        const isOwner = !isEventListing && item.provider_id === userId;
         const isClosest = index === 0 && userLocation && item.distance !== undefined;
         const remainingCount = item.item_type === 'products' ? item.stock_count : item.slots_available;
         const hasTrackedAvailability = remainingCount !== null && remainingCount !== undefined;
@@ -207,6 +299,10 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                 Alert.alert(t('marketplace.unavailable'), t('marketplace.unavailable_msg'));
                 return;
             }
+            if (isEventListing) {
+                navigateEventDetail(item.event_id);
+                return;
+            }
             navigateAppScreen('OrderReceipt', { service: item });
         };
 
@@ -223,7 +319,7 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                             colors={[COLORS.primary, COLORS.primaryDark]}
                             style={[styles.cardImage, styles.placeholderImage]}
                         >
-                            <Ionicons name={item.item_type === 'products' ? 'cube' : 'hand-left'} size={48} color={COLORS.accent} />
+                            <Ionicons name={isEventListing ? 'calendar' : (item.item_type === 'products' ? 'cube' : 'hand-left')} size={48} color={COLORS.accent} />
                         </LinearGradient>
                     )}
 
@@ -274,7 +370,7 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                         style={styles.priceOverlay}
                     >
                         <Text style={styles.priceText}>
-                            {formatCurrency(convertPrice(item.price, item.currency || 'KES', preferredCurrency), preferredCurrency)}
+                            {item.price_label || formatCurrency(convertPrice(item.price, item.currency || 'KES', preferredCurrency), preferredCurrency)}
                         </Text>
                     </LinearGradient>
                 </View>
@@ -303,7 +399,11 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                             onPress={handleBookPress}
                         >
                             <Text style={[styles.actionBtnText, isUnavailable && { color: '#888' }]}>
-                                {isUnavailable ? t('marketplace.unavailable') : (item.item_type === 'products' ? t('marketplace.actions.buy_now') : t('marketplace.actions.book_now'))}
+                                {isUnavailable
+                                    ? t('marketplace.unavailable')
+                                    : (isEventListing
+                                        ? t('marketplace.actions.view_event', { defaultValue: 'View event' })
+                                        : (item.item_type === 'products' ? t('marketplace.actions.buy_now') : t('marketplace.actions.book_now')))}
                             </Text>
                         </TouchableOpacity>
                     </View>
@@ -421,10 +521,16 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                             <MarketplaceWebMap
                                 reports={filteredItems}
                                 userLocation={mapUserLocation}
-                                onReportPress={(item: any) => navigateAppScreen('OrderReceipt', { service: item })}
+                                onReportPress={(item: any) => (
+                                    item.source_type === 'event'
+                                        ? navigateEventDetail(item.event_id)
+                                        : navigateAppScreen('OrderReceipt', { service: item })
+                                )}
                                 getReportConfig={(item: any) => ({
-                                    label: item.item_type === 'products' ? t('marketplace.tabs.products') : t('marketplace.tabs.services'),
-                                    icon: item.item_type === 'products' ? 'cart' : 'location-sharp',
+                                    label: item.source_type === 'event'
+                                        ? t('navigation.events')
+                                        : (item.item_type === 'products' ? t('marketplace.tabs.products') : t('marketplace.tabs.services')),
+                                    icon: item.source_type === 'event' ? 'calendar' : (item.item_type === 'products' ? 'cart' : 'location-sharp'),
                                     color: '#E53935',
                                 })}
                                 getReportTypeLabel={getMarketplaceTypeLabel}
@@ -452,9 +558,13 @@ export const MarketplaceScreen = ({ navigation }: any) => {
                                             coordinate={{ latitude: Number(item.latitude), longitude: Number(item.longitude) }}
                                             pinColor="#E53935"
                                             title={item.title}
-                                            description={t('marketplace.map_description', { price: item.price, distance: item.distance || '' })}
+                                            description={t('marketplace.map_description', { price: item.price_label || item.price, distance: item.distance || '' })}
                                         >
-                                            <Callout onPress={() => navigateAppScreen('OrderReceipt', { service: item })}>
+                                            <Callout onPress={() => (
+                                                item.source_type === 'event'
+                                                    ? navigateEventDetail(item.event_id)
+                                                    : navigateAppScreen('OrderReceipt', { service: item })
+                                            )}>
                                                 <View style={styles.callout}>
                                                     <Text style={styles.calloutTitle}>{item.title}</Text>
                                                     <Text style={styles.calloutPrice}>
