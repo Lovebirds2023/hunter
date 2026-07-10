@@ -1,6 +1,10 @@
 node_modules/
 .expo/
 dist/
+*-dist/
+dist-*/
+export-check/
+*-export-check/
 web-map-export-check/
 
 .env
