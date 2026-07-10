@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Image, Alert, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -25,6 +25,8 @@ export const DogIdentityScreen = ({ navigation }: any) => {
     const { t } = useTranslation();
     const [permission, requestPermission] = useCameraPermissions();
     const [cameraRef, setCameraRef] = useState<any | null>(null);
+    const registrationRequestId = useRef(`pet-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    const submittingRef = useRef(false);
 
     // Multi-step state
     const [currentStep, setCurrentStep] = useState(0); // 0: Bio, 1: nose, 2: body, 3: mark
@@ -100,6 +102,7 @@ export const DogIdentityScreen = ({ navigation }: any) => {
     };
 
     const takePicture = async () => {
+        if (isSubmitting || submittingRef.current) return;
         if (cameraRef) {
             try {
                 const photo = await cameraRef.takePictureAsync({ quality: 0.7 });
@@ -113,6 +116,7 @@ export const DogIdentityScreen = ({ navigation }: any) => {
     };
 
     const pickImage = async () => {
+        if (isSubmitting || submittingRef.current) return;
         let result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
@@ -126,6 +130,7 @@ export const DogIdentityScreen = ({ navigation }: any) => {
     };
 
     const processCapturedImage = (uri: string) => {
+        if (isSubmitting || submittingRef.current) return;
         const newImages = [...capturedImages, uri];
         setCapturedImages(newImages);
         if (currentStep < 3) {
@@ -136,6 +141,8 @@ export const DogIdentityScreen = ({ navigation }: any) => {
     };
 
     const finishIdentity = async (images: string[]) => {
+        if (submittingRef.current) return;
+        submittingRef.current = true;
         setIsSubmitting(true);
         try {
             const uploadedImages = await uploadImagesToSupabase(images, 'pet-identity', runtimeConfig.storageBuckets.petIdentity);
@@ -151,7 +158,8 @@ export const DogIdentityScreen = ({ navigation }: any) => {
                 bio: description,
                 nose_print_image: uploadedImages[0],
                 body_image: uploadedImages[1],
-                birthmark_image: uploadedImages[2]
+                birthmark_image: uploadedImages[2],
+                client_request_id: registrationRequestId.current,
             };
 
             await client.post('/dogs', payload);
@@ -165,6 +173,7 @@ export const DogIdentityScreen = ({ navigation }: any) => {
             console.error("Registration error", error);
             Alert.alert(t('common.error'), t('dog_identity.failed_register'));
         } finally {
+            submittingRef.current = false;
             setIsSubmitting(false);
         }
     };

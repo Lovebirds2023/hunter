@@ -2214,6 +2214,37 @@ async def delete_user_me(
         logger.error("Account deletion failed for user %s: %s", user_id, exc)
         raise HTTPException(status_code=500, detail="Could not delete account. Please contact support.")
 
+def normalize_pet_request_id(value: Optional[str]) -> Optional[str]:
+    raw = (value or "").strip()
+    if not raw or len(raw) > 80:
+        return None
+    cleaned = "".join(ch for ch in raw if ch.isalnum() or ch in {"-", "_"})
+    return cleaned or None
+
+
+def cleanup_pet_references(db: Session, dog_id: str) -> None:
+    db.query(models.HealthRecord).filter(models.HealthRecord.dog_id == dog_id).delete(synchronize_session=False)
+    db.query(models.Registration).filter(models.Registration.dog_id == dog_id).update(
+        {"dog_id": None},
+        synchronize_session=False,
+    )
+    db.query(models.ProgramJourney).filter(models.ProgramJourney.dog_id == dog_id).update(
+        {"dog_id": None},
+        synchronize_session=False,
+    )
+    db.query(models.CheckInData).filter(models.CheckInData.dog_id == dog_id).update(
+        {"dog_id": None},
+        synchronize_session=False,
+    )
+    db.query(models.LiveObservation).filter(models.LiveObservation.dog_id == dog_id).update(
+        {"dog_id": None},
+        synchronize_session=False,
+    )
+    db.query(models.PetMatchCandidate).filter(models.PetMatchCandidate.matched_dog_id == dog_id).delete(
+        synchronize_session=False,
+    )
+
+
 @app.get("/dogs/{dog_id}", response_model=schemas.DogResponse)
 async def get_dog(
     dog_id: str,
@@ -2245,13 +2276,35 @@ async def update_dog(
     if dog_update.color is not None: dog.color = dog_update.color
     if dog_update.height is not None: dog.height = dog_update.height
     if dog_update.weight is not None: dog.weight = dog_update.weight
+    if dog_update.age is not None: dog.age = dog_update.age
+    if dog_update.pet_type is not None: dog.pet_type = dog_update.pet_type
     if dog_update.body_structure is not None: dog.body_structure = dog_update.body_structure
     if dog_update.bio is not None: dog.bio = dog_update.bio
+    if dog_update.nose_print_image is not None: dog.nose_print_image = dog_update.nose_print_image
     if dog_update.body_image is not None: dog.body_image = dog_update.body_image
+    if dog_update.birthmark_image is not None: dog.birthmark_image = dog_update.birthmark_image
+    if dog_update.vaccination_card_image is not None: dog.vaccination_card_image = dog_update.vaccination_card_image
     
     db.commit()
     db.refresh(dog)
     return dog
+
+@app.delete("/dogs/{dog_id}")
+async def delete_dog(
+    dog_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    dog = db.query(models.Dog).filter(models.Dog.id == dog_id).first()
+    if not dog:
+        raise HTTPException(status_code=404, detail="Dog not found")
+    if dog.owner_id != current_user.id and not is_admin_user(current_user):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    cleanup_pet_references(db, dog_id)
+    db.delete(dog)
+    db.commit()
+    return {"message": "Pet deleted successfully"}
 
 @app.post("/dogs", response_model=schemas.DogResponse)
 async def create_dog(
@@ -2259,13 +2312,33 @@ async def create_dog(
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    request_id = normalize_pet_request_id(dog.client_request_id)
+    if request_id:
+        existing_dog = db.query(models.Dog).filter(models.Dog.id == request_id).first()
+        if existing_dog:
+            if existing_dog.owner_id == current_user.id:
+                return existing_dog
+            raise HTTPException(status_code=409, detail="Pet registration request already exists")
+
+    dog_data = dog.dict(exclude={"client_request_id"})
     new_dog = models.Dog(
-        id=str(uuid.uuid4()),
+        id=request_id or str(uuid.uuid4()),
         owner_id=current_user.id,
-        **dog.dict()
+        **dog_data
     )
     db.add(new_dog)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        if request_id:
+            existing_dog = db.query(models.Dog).filter(
+                models.Dog.id == request_id,
+                models.Dog.owner_id == current_user.id,
+            ).first()
+            if existing_dog:
+                return existing_dog
+        raise HTTPException(status_code=409, detail="Could not register this pet. Please try again.")
     db.refresh(new_dog)
     try:
         add_notification(
@@ -2357,7 +2430,7 @@ def list_services(
     radius: Optional[float] = 50.0, # default 50km
     db: Session = Depends(database.get_db)
 ):
-    query = db.query(models.Service).filter(models.Service.is_published == True, models.Service.admin_approved == True)
+    query = db.query(models.Service).filter(models.Service.is_published == True)
     if item_type:
         query = query.filter(models.Service.item_type == item_type)
     
@@ -2400,6 +2473,7 @@ def create_service(
     location_accuracy = normalize_location_accuracy(service.location_accuracy_meters)
     if latitude is None:
         location_accuracy = None
+    is_published = service.is_published if service.is_published is not None else True
 
     new_service = models.Service(
         id=str(uuid.uuid4()),
@@ -2415,12 +2489,13 @@ def create_service(
         location_accuracy_meters=location_accuracy,
         address=service.address,
         location_landmark=service.location_landmark,
-        is_published=service.is_published,
+        is_published=is_published,
         currency=service.currency,
         stock_count=service.stock_count,
         slots_available=service.slots_available,
         is_busy=service.is_busy,
         images=service.images,
+        admin_approved=True if is_published else is_admin_user(current_user),
     )
     db.add(new_service)
 
@@ -2448,9 +2523,8 @@ def get_service_detail(service_id: str, db: Session = Depends(database.get_db), 
     if not service:
         raise HTTPException(status_code=404, detail="Service not found")
     
-    # Security: If not approved, only provider or admin can view
-    if not service.admin_approved and service.provider_id != current_user.id and current_user.role != models.UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Service pending admin approval")
+    if not service.is_published and service.provider_id != current_user.id and current_user.role != models.UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Service is not published")
         
     return service
 
@@ -3079,7 +3153,7 @@ def create_order(
     if not service:
         raise HTTPException(status_code=404, detail="Service not found")
 
-    if not service.is_published or not service.admin_approved:
+    if not service.is_published:
         raise HTTPException(status_code=400, detail="This marketplace item is not available for purchase")
 
     if service.item_type == "products":
@@ -4534,6 +4608,9 @@ def update_service(
             update_data["location_accuracy_meters"] = None
     if "location_accuracy_meters" in update_data:
         update_data["location_accuracy_meters"] = normalize_location_accuracy(update_data["location_accuracy_meters"])
+    if update_data.get("is_published") is True:
+        update_data["admin_approved"] = True
+        update_data["rejection_reason"] = None
 
     for key, value in update_data.items():
         setattr(service, key, value)
@@ -5605,7 +5682,6 @@ def admin_pinnable_content(db: Session = Depends(database.get_db), admin: models
     events = db.query(models.Event).order_by(models.Event.start_time.desc()).limit(50).all()
     services = db.query(models.Service).filter(
         models.Service.is_published == True,
-        models.Service.admin_approved == True,
     ).order_by(models.Service.title.asc()).limit(50).all()
     cases = db.query(models.CaseReport).filter(
         models.CaseReport.is_approved == True,

@@ -83,7 +83,7 @@ class DogBase(BaseModel):
     bio: Optional[str] = None
 
 class DogCreate(DogBase):
-    pass
+    client_request_id: Optional[str] = None
 
 class DogUpdate(BaseModel):
     name: Optional[str] = None
@@ -95,7 +95,10 @@ class DogUpdate(BaseModel):
     pet_type: Optional[str] = None
     body_structure: Optional[str] = None
     bio: Optional[str] = None
+    nose_print_image: Optional[str] = None
     body_image: Optional[str] = None
+    birthmark_image: Optional[str] = None
+    vaccination_card_image: Optional[str] = None
 
 class DogResponse(DogBase):
     id: str

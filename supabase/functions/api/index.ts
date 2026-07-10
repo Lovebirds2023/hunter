@@ -399,6 +399,12 @@ const serializeDog = (dog: JsonRecord) => ({
   bio: dog.bio ?? null,
 });
 
+const normalizePetRequestId = (value: unknown) => {
+  const raw = cleanString(value);
+  if (!raw || raw.length > 80) return "";
+  return raw.replace(/[^A-Za-z0-9_-]/g, "");
+};
+
 const ensureDogAccess = async (dogId: string, profile: JsonRecord) => {
   const dog = await selectSingle("dogs", dogId, "Dog");
   if (cleanString(dog.owner_id) !== cleanString(profile.id) && !isAdminProfile(profile)) {
@@ -423,8 +429,26 @@ const handleCreateDog = async (request: Request) => {
   const body = await readJson(request);
   const name = cleanString(body.name);
   if (!name) return errorResponse("Dog name is required.");
+  const requestId = normalizePetRequestId(body.client_request_id);
+
+  if (requestId) {
+    const { data: existing, error: existingError } = await supabaseAdmin
+      .from("dogs")
+      .select("*")
+      .eq("id", requestId)
+      .maybeSingle();
+    if (existingError) throw existingError;
+    if (existing) {
+      const dog = existing as JsonRecord;
+      if (cleanString(dog.owner_id) === cleanString(profile.id)) {
+        return jsonResponse(serializeDog(dog));
+      }
+      throw new Response("Pet registration request already exists.", { status: 409 });
+    }
+  }
 
   const payload = {
+    ...(requestId ? { id: requestId } : {}),
     owner_id: cleanString(profile.id),
     name,
     breed: cleanString(body.breed),
@@ -443,7 +467,19 @@ const handleCreateDog = async (request: Request) => {
   };
 
   const { data, error } = await supabaseAdmin.from("dogs").insert(payload).select("*").single();
-  if (error) throw error;
+  if (error) {
+    if (requestId && cleanString(error.code) === "23505") {
+      const { data: existing, error: existingError } = await supabaseAdmin
+        .from("dogs")
+        .select("*")
+        .eq("id", requestId)
+        .eq("owner_id", cleanString(profile.id))
+        .maybeSingle();
+      if (existingError) throw existingError;
+      if (existing) return jsonResponse(serializeDog(existing as JsonRecord));
+    }
+    throw error;
+  }
   try {
     await createNotification(
       profile.id,
@@ -498,6 +534,40 @@ const handleUpdateDog = async (request: Request, dogId: string) => {
     .single();
   if (error) throw error;
   return jsonResponse(serializeDog(data as JsonRecord));
+};
+
+const isMissingRelationError = (error: unknown) => {
+  if (!isRecord(error)) return false;
+  const code = cleanString(error.code);
+  const message = cleanString(error.message).toLowerCase();
+  return code === "42P01" || message.includes("does not exist");
+};
+
+const handleDeleteDog = async (request: Request, dogId: string) => {
+  const { profile } = await requireProfile(request);
+  await ensureDogAccess(dogId, profile);
+
+  const updateDogReference = async (table: string) => {
+    const { error } = await supabaseAdmin.from(table).update({ dog_id: null }).eq("dog_id", dogId);
+    if (error && !isMissingRelationError(error)) throw error;
+  };
+  const deleteDogRows = async (table: string, column = "dog_id") => {
+    const { error } = await supabaseAdmin.from(table).delete().eq(column, dogId);
+    if (error && !isMissingRelationError(error)) throw error;
+  };
+
+  await Promise.all([
+    deleteDogRows("health_records"),
+    deleteDogRows("pet_match_candidates", "matched_dog_id"),
+    updateDogReference("registrations"),
+    updateDogReference("program_journeys"),
+    updateDogReference("checkin_data"),
+    updateDogReference("live_observations"),
+  ]);
+
+  const { error } = await supabaseAdmin.from("dogs").delete().eq("id", dogId);
+  if (error) throw error;
+  return jsonResponse({ message: "Pet deleted successfully" });
 };
 
 const handleDogHealthRecords = async (request: Request, dogId: string) => {
@@ -559,7 +629,6 @@ const handleListServices = async (request: Request) => {
     .from("services")
     .select("*")
     .eq("is_published", true)
-    .eq("admin_approved", true)
     .order("title", { ascending: true });
   if (itemType) query = query.eq("item_type", itemType);
 
@@ -577,6 +646,7 @@ const handleCreateService = async (request: Request) => {
   const body = await readJson(request);
   const title = cleanString(body.title);
   if (!title) return errorResponse("Title is required.");
+  const isPublished = asBoolean(body.is_published, true);
 
   const payload = {
     provider_id: cleanString(profile.id),
@@ -591,13 +661,13 @@ const handleCreateService = async (request: Request) => {
     location_accuracy_meters: asNullableNumber(body.location_accuracy_meters),
     address: body.address ?? null,
     location_landmark: body.location_landmark ?? null,
-    is_published: asBoolean(body.is_published, true),
+    is_published: isPublished,
     currency: cleanString(body.currency) || "KES",
     stock_count: asNullableNumber(body.stock_count),
     slots_available: asNullableNumber(body.slots_available),
     is_busy: asBoolean(body.is_busy, false),
     images: asStringArray(body.images),
-    admin_approved: isAdminProfile(profile),
+    admin_approved: isPublished ? true : isAdminProfile(profile),
     updated_at: nowIso(),
   };
 
@@ -630,8 +700,8 @@ const handleGetService = async (request: Request, serviceId: string) => {
   const service = await selectSingle("services", serviceId, "Service");
   const authUser = await getOptionalAuthUser(request);
   const profile = authUser ? await getProfile(authUser.id) : null;
-  if (!service.admin_approved && cleanString(service.provider_id) !== cleanString(profile?.id) && !isAdminProfile(profile)) {
-    throw new Response("Service pending admin approval", { status: 403 });
+  if (!service.is_published && cleanString(service.provider_id) !== cleanString(profile?.id) && !isAdminProfile(profile)) {
+    throw new Response("Service is not published", { status: 403 });
   }
   const pins = await getActivePins();
   return jsonResponse(await serializeService(service, pins.get(`service:${serviceId}`)));
@@ -665,6 +735,10 @@ const handleUpdateService = async (request: Request, serviceId: string) => {
   ];
   const updates: JsonRecord = { updated_at: nowIso() };
   for (const key of allowed) if (key in body) updates[key] = key === "images" ? asStringArray(body[key]) : body[key];
+  if (asBoolean(updates.is_published, false)) {
+    updates.admin_approved = true;
+    updates.rejection_reason = null;
+  }
 
   const { data, error } = await supabaseAdmin
     .from("services")
@@ -2249,7 +2323,7 @@ const handleCreateOrder = async (request: Request) => {
   const body = await readJson(request);
   const serviceId = cleanString(body.service_id);
   const service = await selectSingle("services", serviceId, "Service");
-  if (!service.is_published || !service.admin_approved) return errorResponse("This marketplace item is not available for purchase.");
+  if (!service.is_published) return errorResponse("This marketplace item is not available for purchase.");
   if (cleanString(service.item_type) === "products") {
     if (service.stock_count !== null && service.stock_count !== undefined && asNumber(service.stock_count) <= 0) {
       return errorResponse("This product is out of stock");
@@ -2582,9 +2656,9 @@ const isPinTargetVisible = async (pin: JsonRecord) => {
   }
 
   if (targetType === "service") {
-    const { data, error } = await supabaseAdmin.from("services").select("is_published,admin_approved").eq("id", targetId).maybeSingle();
+    const { data, error } = await supabaseAdmin.from("services").select("is_published").eq("id", targetId).maybeSingle();
     if (error) throw error;
-    return Boolean((data as JsonRecord | null)?.is_published) && Boolean((data as JsonRecord | null)?.admin_approved);
+    return Boolean((data as JsonRecord | null)?.is_published);
   }
 
   if (targetType === "case") {
@@ -4912,7 +4986,7 @@ const handlePinnableContent = async (request: Request) => {
     ...pinMetadata(pins.get(`${type}:${cleanString(item.id)}`)),
   });
   const publishedEvents = events.filter((item) => asNumber(item.is_public, 1) === 1);
-  const publishedServices = services.filter((item) => Boolean(item.is_published) && Boolean(item.admin_approved));
+  const publishedServices = services.filter((item) => Boolean(item.is_published));
   const publishedCases = cases.filter((item) => Boolean(item.is_approved));
   const visibleCommunity = community.filter((item) => !Boolean(item.is_hidden));
   return jsonResponse({
@@ -5403,6 +5477,7 @@ const routeRequest = async (request: Request) => {
   }
   if (method === "GET" && /^\/dogs\/[^/]+$/.test(path)) return handleGetDog(request, firstPathMatch(path, /^\/dogs\/([^/]+)$/));
   if (method === "PUT" && /^\/dogs\/[^/]+$/.test(path)) return handleUpdateDog(request, firstPathMatch(path, /^\/dogs\/([^/]+)$/));
+  if (method === "DELETE" && /^\/dogs\/[^/]+$/.test(path)) return handleDeleteDog(request, firstPathMatch(path, /^\/dogs\/([^/]+)$/));
 
   if (method === "GET" && path === "/services") return handleListServices(request);
   if (method === "POST" && path === "/services") return handleCreateService(request);

@@ -273,7 +273,7 @@ export const ProfileScreen = ({ navigation }) => {
     };
 
     const renderPetItem = ({ item }) => (
-        <TouchableOpacity style={styles.petCard} onPress={() => navigation.navigate('WellnessHub')}>
+        <TouchableOpacity style={styles.petCard} onPress={() => navigation.navigate('DogDetails', { dog: item })}>
             <Image source={item.body_image ? { uri: item.body_image } : require('../../assets/dog_placeholder.png')} style={styles.petCardImg} />
             <View style={styles.petCardInfo}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -349,7 +349,7 @@ export const ProfileScreen = ({ navigation }) => {
                     </LinearGradient>
 
                     <View style={styles.statsContainer}>
-                        <TouchableOpacity style={styles.statBox} onPress={() => navigation.navigate('DogIdentity')}>
+                        <TouchableOpacity style={styles.statBox} onPress={() => navigation.navigate('DogRegistration')}>
                             <Text style={styles.statNumber}>{statValue(dashboardStats.dogs)}</Text>
                             <Text style={styles.statLabel}>{t('profile_screen.dogs_stat')}</Text>
                         </TouchableOpacity>
@@ -404,7 +404,7 @@ export const ProfileScreen = ({ navigation }) => {
                             </TouchableOpacity>
                         </View>
                     ) : (
-                        <TouchableOpacity style={styles.emptyCard} onPress={() => navigation.navigate('WellnessHub')}>
+                        <TouchableOpacity style={styles.emptyCard} onPress={() => navigation.navigate('DogRegistration')}>
                             <Ionicons name="add-circle" size={44} color={COLORS.accent} />
                             <Text style={[styles.emptyText, { color: COLORS.primaryDark, fontWeight: 'bold', fontSize: 16 }]}>{t('profile_screen.register_pet')}</Text>
                             <Text style={{ color: COLORS.gray, fontSize: 12, textAlign: 'center', marginTop: 6 }}>{t('profile_screen.register_pet_desc')}</Text>
