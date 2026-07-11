@@ -30,6 +30,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
     const [selectedTicketTierId, setSelectedTicketTierId] = useState(null);
     const [selectedBookingSlotId, setSelectedBookingSlotId] = useState(null);
     const [attendeeTypeJustification, setAttendeeTypeJustification] = useState('');
+    const [accessCode, setAccessCode] = useState('');
     const [photoConsent, setPhotoConsent] = useState(null);
 
     const [myRegistration, setMyRegistration] = useState(null);
@@ -219,6 +220,13 @@ export const EventDetailScreen = ({ route, navigation }) => {
                 Alert.alert('Justification required', 'Briefly explain why this registration type applies to you.');
                 return;
             }
+            const selectedTierPrice = Number(selectedTier.price || 0);
+            const requiresAccessCode = selectedTier.requires_access_code === true ||
+                (selectedTier.requires_access_code !== false && selectedTierPrice <= 0);
+            if (requiresAccessCode && (accessCode || '').trim().length < 3) {
+                Alert.alert('Sponsor code required', 'Enter the sponsor/access code shared with you for this free registration category.');
+                return;
+            }
         }
 
         if (photoConsent === null) {
@@ -256,6 +264,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
                 share_phone: sharePhone,
                 ticket_tier_id: selectedTier?.id || null,
                 attendee_type_justification: ticketTiers.length > 0 ? attendeeTypeJustification.trim() : null,
+                access_code: ticketTiers.length > 0 ? accessCode.trim() : null,
                 photo_consent: photoConsent,
                 booking_slot_id: selectedBookingSlot?.id || null,
                 form_responses: formattedResponses
@@ -292,6 +301,10 @@ export const EventDetailScreen = ({ route, navigation }) => {
     const selectedPriceLabel = selectedTicketPrice > 0
         ? `${selectedTicketCurrency} ${selectedTicketPrice.toLocaleString()}`
         : 'Free';
+    const selectedTierRequiresAccessCode = Boolean(selectedTicketTier) && (
+        selectedTicketTier.requires_access_code === true ||
+        (selectedTicketTier.requires_access_code !== false && selectedTicketPrice <= 0)
+    );
     const availableSlots = Array.isArray(event.available_slots) ? event.available_slots : [];
     const hasAvailableSlots = availableSlots.length > 0;
     const formatSlotTime = (slot) => {
@@ -544,6 +557,23 @@ export const EventDetailScreen = ({ route, navigation }) => {
                                         value={attendeeTypeJustification}
                                         onChangeText={setAttendeeTypeJustification}
                                     />
+                                    {selectedTierRequiresAccessCode && (
+                                        <View style={styles.accessCodeBox}>
+                                            <Text style={styles.questionLabel}>
+                                                Sponsor/access code <Text style={{ color: 'red' }}>*</Text>
+                                            </Text>
+                                            <TextInput
+                                                style={styles.textInput}
+                                                placeholder="Enter code from your sponsor"
+                                                value={accessCode}
+                                                autoCapitalize="characters"
+                                                onChangeText={(value) => setAccessCode(value.toUpperCase())}
+                                            />
+                                            <Text style={styles.accessCodeHelp}>
+                                                This code is one-use and confirms your sponsor-approved free registration.
+                                            </Text>
+                                        </View>
+                                    )}
                                 </View>
                             )}
 
@@ -808,6 +838,15 @@ const styles = StyleSheet.create({
     tierDescription: { fontSize: 12, color: '#666', marginTop: 3, lineHeight: 17 },
     tierPrice: { fontSize: 13, fontWeight: '900', color: '#0f7a39' },
     selectedTierText: { color: '#fff' },
+    accessCodeBox: {
+        marginTop: 14,
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#d9e9ff',
+        backgroundColor: '#f8fbff'
+    },
+    accessCodeHelp: { marginTop: 6, color: '#666', fontSize: 12, lineHeight: 17 },
     slotOption: {
         flexDirection: 'row',
         alignItems: 'center',

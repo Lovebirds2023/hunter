@@ -51,6 +51,7 @@ const newEventForm = () => {
         paid_tier_description: 'Paid registration for organizations, teams, companies, or sponsored participants.',
         paid_ticket_price: '0',
         attendee_type_question: 'Briefly explain why this registration category applies to you.',
+        free_tier_requires_code: true,
         schedule_enabled: false,
         available_slots: [],
         scorecard_title: 'Community Impact Assessment',
@@ -358,6 +359,10 @@ const generatedSlotLabel = (baseLabel, dateKey, count) => (
     count > 1 ? `${baseLabel} - ${formatShortDate(dateKey)}` : baseLabel
 );
 
+const generatedCohortLabel = (baseLabel, startDateKey, endDateKey, count) => (
+    count > 1 ? `${baseLabel} - ${formatShortDate(startDateKey)}-${formatShortDate(endDateKey)}` : baseLabel
+);
+
 const generateScheduleSlots = ({
     mode,
     startDateKey,
@@ -376,6 +381,27 @@ const generateScheduleSlots = ({
     const baseLabel = label.trim() || 'Available slot';
     const selectedWeekdays = new Set(weekdays);
     const targetMonthlyDay = Number(normalizeMonthDay(monthlyDay, 1));
+    if (mode === 'weekend_cohorts') {
+        const weekendStarts = rangeDateKeys(startDateKey, endDateKey)
+            .filter((dateKey) => {
+                const date = parseDateKey(dateKey);
+                const cohortEnd = addDays(date, 1);
+                return date.getDay() === 6 && cohortEnd <= parseDateKey(endDateKey);
+            });
+
+        return weekendStarts.map((dateKey, index) => {
+            const endDate = toLocalDateKey(addDays(parseDateKey(dateKey), 1));
+            return {
+                id: `slot_${Date.now()}_${index + 1}`,
+                label: generatedCohortLabel(baseLabel, dateKey, endDate, weekendStarts.length),
+                start_time: `${dateKey}T${normalizedStart}`,
+                end_time: `${endDate}T${normalizedEnd}`,
+                capacity,
+                location,
+                notes: notes || 'Multi-day cohort. Participants register once and attend both days.',
+            };
+        });
+    }
 
     const dates = rangeDateKeys(startDateKey, endDateKey).filter((dateKey) => {
         const date = parseDateKey(dateKey);
@@ -435,7 +461,10 @@ const ScheduleGenerator = ({
     const rangeIsBackwards = parseDateKey(rangeEnd) < parseDateKey(rangeStart);
     const normalizedStart = normalizeClockTime(startTime, '09:00');
     const normalizedEnd = normalizeClockTime(endTime, '10:00');
-    const hasInvalidTime = parseDateTimeValue(`${rangeStart}T${normalizedEnd}`) <= parseDateTimeValue(`${rangeStart}T${normalizedStart}`);
+    const validationEndDateKey = mode === 'weekend_cohorts'
+        ? toLocalDateKey(addDays(parseDateKey(rangeStart), 1))
+        : rangeStart;
+    const hasInvalidTime = parseDateTimeValue(`${validationEndDateKey}T${normalizedEnd}`) <= parseDateTimeValue(`${rangeStart}T${normalizedStart}`);
 
     const toggleWeekday = (weekday) => {
         setWeekdays(prev => (
@@ -502,6 +531,66 @@ const ScheduleGenerator = ({
 
     const quickSelectWeekdays = (nextWeekdays) => setWeekdays(nextWeekdays);
 
+    const applyWeekendSlotsPreset = () => {
+        setMode('weekly');
+        setWeekdays([0, 6]);
+        setRangeEnd(endOfYearDateKey(rangeStart));
+        setStartTime('09:00');
+        setEndTime('16:00');
+        if (!capacity) setCapacity('30');
+        if (label === 'Available slot') setLabel('Weekend slot');
+    };
+
+    const applyWeekendCohortPreset = () => {
+        setMode('weekend_cohorts');
+        setRangeEnd(endOfYearDateKey(rangeStart));
+        setStartTime('09:00');
+        setEndTime('16:00');
+        if (!capacity) setCapacity('30');
+        if (label === 'Available slot' || label === 'Weekend slot') setLabel('Weekend cohort');
+        if (!notes) setNotes('Participants attend both Saturday and Sunday.');
+    };
+
+    const addPodcastSlots = () => {
+        if (rangeIsBackwards) {
+            validateGeneratedSlots();
+            return;
+        }
+        const dates = rangeDateKeys(rangeStart, rangeEnd).filter((dateKey) => {
+            const date = parseDateKey(dateKey);
+            if (mode === 'weekly') return weekdays.includes(date.getDay());
+            if (mode === 'monthly') return date.getDate() === Number(normalizeMonthDay(monthlyDay, 1));
+            if (mode === 'weekend_cohorts') return date.getDay() === 6;
+            return true;
+        });
+        if (!dates.length) {
+            Alert.alert('No dates generated', 'Change the date range or recurrence settings to generate podcast slots.');
+            return;
+        }
+        const base = label.trim() && label !== 'Available slot' ? label.trim() : 'Mbwa Rafiki podcast';
+        const podcastSlots = dates.flatMap((dateKey, dateIndex) => ([
+            {
+                id: `slot_${Date.now()}_${dateIndex + 1}_am`,
+                label: `${base} - 9:00 AM`,
+                start_time: `${dateKey}T09:00`,
+                end_time: `${dateKey}T10:00`,
+                capacity: capacity || '3',
+                location,
+                notes,
+            },
+            {
+                id: `slot_${Date.now()}_${dateIndex + 1}_midday`,
+                label: `${base} - 12:00 PM`,
+                start_time: `${dateKey}T12:00`,
+                end_time: `${dateKey}T13:00`,
+                capacity: capacity || '3',
+                location,
+                notes,
+            },
+        ]));
+        onAddSlots(podcastSlots);
+    };
+
     return (
         <View style={{ backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: ADMIN_COLORS.surfaceBorder }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
@@ -518,6 +607,7 @@ const ScheduleGenerator = ({
                 {[
                     ['range', 'Every day'],
                     ['weekly', 'Selected weekdays'],
+                    ['weekend_cohorts', 'Weekend cohorts'],
                     ['monthly', 'Monthly'],
                 ].map(([key, title]) => (
                     <TouchableOpacity
@@ -539,6 +629,14 @@ const ScheduleGenerator = ({
                 <TouchableOpacity style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg }]} onPress={() => setRangeEnd(endOfYearDateKey(rangeStart))}>
                     <Ionicons name="calendar-outline" size={14} color={ADMIN_COLORS.info} />
                     <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>Until Dec 31</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg }]} onPress={applyWeekendSlotsPreset}>
+                    <Ionicons name="calendar-number-outline" size={14} color={ADMIN_COLORS.info} />
+                    <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>Weekend slots</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.successBg }]} onPress={applyWeekendCohortPreset}>
+                    <Ionicons name="people-circle-outline" size={14} color={ADMIN_COLORS.success} />
+                    <Text style={[s.actionBtnText, { color: ADMIN_COLORS.success }]}>Sat-Sun cohorts</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                     style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.successBg }]}
@@ -687,6 +785,10 @@ const ScheduleGenerator = ({
                     <Ionicons name="swap-horizontal-outline" size={15} color={ADMIN_COLORS.warning} />
                     <Text style={[s.actionBtnText, { color: ADMIN_COLORS.warning }]}>Replace schedule</Text>
                 </TouchableOpacity>
+                <TouchableOpacity style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg }]} onPress={addPodcastSlots}>
+                    <Ionicons name="mic-outline" size={15} color={ADMIN_COLORS.info} />
+                    <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>Add podcast blocks</Text>
+                </TouchableOpacity>
                 {onApplyEventRange && (
                     <TouchableOpacity style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg }]} onPress={applyEventRange}>
                         <Ionicons name="time-outline" size={15} color={ADMIN_COLORS.info} />
@@ -831,6 +933,7 @@ const hasAdminEventDraftContent = (draft) => {
         String(form.capacity || '0') !== '0' ||
         String(form.ticket_price || '0') !== '0' ||
         Boolean(form.tiered_ticketing) ||
+        form.free_tier_requires_code === false ||
         Boolean(form.schedule_enabled) ||
         (Array.isArray(form.available_slots) && form.available_slots.length > 0) ||
         String(form.scorecard_title || defaultScorecardTitle) !== defaultScorecardTitle ||
@@ -885,6 +988,27 @@ const toSlotPayload = (slots = []) => {
     return payload;
 };
 
+const getSlotDateRange = (slots = []) => {
+    let earliest = null;
+    let latest = null;
+    slots.forEach((slot) => {
+        const start = new Date(slot.start_time);
+        const end = new Date(slot.end_time);
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return;
+        if (!earliest || start < earliest) earliest = start;
+        if (!latest || end > latest) latest = end;
+    });
+    return { earliest, latest };
+};
+
+const expandEventRangeWithSlots = (start, end, slots = []) => {
+    const { earliest, latest } = getSlotDateRange(slots);
+    return {
+        start: earliest && (Number.isNaN(start.getTime()) || earliest < start) ? earliest : start,
+        end: latest && (Number.isNaN(end.getTime()) || latest > end) ? latest : end,
+    };
+};
+
 const normalizeSlotsForForm = (slots, startTime, endTime) => {
     if (Array.isArray(slots) && slots.length > 0) {
         return slots.map((slot, index) => ({
@@ -925,6 +1049,7 @@ const eventToForm = (event) => {
         paid_tier_description: paidTier?.description || defaultPaidTierDescription,
         paid_ticket_price: String(paidTier?.price ?? event.ticket_price ?? 0),
         attendee_type_question: event.attendee_type_question || defaultTierQuestion,
+        free_tier_requires_code: freeTier?.requires_access_code !== undefined ? Boolean(freeTier.requires_access_code) : true,
         schedule_enabled: hasSlots,
         available_slots: hasSlots ? normalizeSlotsForForm(event.available_slots, event.start_time, event.end_time) : [],
         scorecard_title: event.scorecard_title || defaultScorecardTitle,
@@ -948,6 +1073,14 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
     const [pinningId, setPinningId] = useState(null);
     const [ticketingEvent, setTicketingEvent] = useState(null);
     const [savingTicketing, setSavingTicketing] = useState(false);
+    const [accessCodes, setAccessCodes] = useState([]);
+    const [loadingAccessCodes, setLoadingAccessCodes] = useState(false);
+    const [generatingAccessCodes, setGeneratingAccessCodes] = useState(false);
+    const [accessCodeForm, setAccessCodeForm] = useState({
+        sponsor_name: '',
+        count: '30',
+        prefix: '',
+    });
     const [ticketingForm, setTicketingForm] = useState({
         enabled: false,
         free_tier_label: defaultFreeTierLabel,
@@ -958,6 +1091,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
         standard_ticket_price: '0',
         currency: 'KES',
         attendee_type_question: defaultTierQuestion,
+        free_tier_requires_code: true,
     });
     const [scorecardEvent, setScorecardEvent] = useState(null);
     const [savingScorecard, setSavingScorecard] = useState(false);
@@ -1069,6 +1203,20 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
 
     useEffect(() => { fetchEvents(); }, [fetchEvents]);
 
+    const fetchAccessCodes = useCallback(async (eventId) => {
+        if (!eventId) return;
+        setLoadingAccessCodes(true);
+        try {
+            const res = await client.get(`/admin/events/${eventId}/access-codes`);
+            setAccessCodes(Array.isArray(res.data) ? res.data : []);
+        } catch (error) {
+            console.error('Access codes fetch error:', error);
+            setAccessCodes([]);
+        } finally {
+            setLoadingAccessCodes(false);
+        }
+    }, []);
+
     const pickPoster = async () => {
         try {
             const result = await ImagePicker.launchImageLibraryAsync({
@@ -1095,6 +1243,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                 currency: sourceForm.currency || 'KES',
                 description: sourceForm.free_tier_description.trim(),
                 requires_justification: true,
+                requires_access_code: sourceForm.free_tier_requires_code !== false,
             },
             {
                 id: 'paid',
@@ -1132,11 +1281,6 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
         if (!sourceForm.title.trim()) {
             return { message: 'Add an event title.' };
         }
-        const start = parseDateTimeValue(sourceForm.start_time);
-        const end = parseDateTimeValue(sourceForm.end_time);
-        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
-            return { message: 'Use valid start and end times, with the end after the start.', title: 'Check dates' };
-        }
         let availableSlots = [];
         if (sourceForm.schedule_enabled) {
             try {
@@ -1147,6 +1291,12 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
             if (availableSlots.length === 0) {
                 return { message: 'Add at least one available date/time slot, or turn booking schedule off.', title: 'Add dates' };
             }
+        }
+        const parsedStart = parseDateTimeValue(sourceForm.start_time);
+        const parsedEnd = parseDateTimeValue(sourceForm.end_time);
+        const { start, end } = expandEventRangeWithSlots(parsedStart, parsedEnd, availableSlots);
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+            return { message: 'Use valid start and end times, with the end after the start.', title: 'Check dates' };
         }
         if (sourceForm.tiered_ticketing) {
             if (!sourceForm.free_tier_label.trim() || !sourceForm.paid_tier_label.trim()) {
@@ -1258,7 +1408,11 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
             standard_ticket_price: String(item.ticket_price || 0),
             currency: item.currency || 'KES',
             attendee_type_question: item.attendee_type_question || defaultTierQuestion,
+            free_tier_requires_code: freeTier?.requires_access_code !== undefined ? Boolean(freeTier.requires_access_code) : true,
         });
+        setAccessCodeForm({ sponsor_name: '', count: '30', prefix: '' });
+        setAccessCodes([]);
+        fetchAccessCodes(item.id);
         setShowCreate(false);
         setScorecardEvent(null);
         setScheduleEvent(null);
@@ -1291,6 +1445,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                     currency: ticketingForm.currency || 'KES',
                     description: ticketingForm.free_tier_description.trim(),
                     requires_justification: true,
+                    requires_access_code: ticketingForm.free_tier_requires_code !== false,
                 },
                 {
                     id: 'paid',
@@ -1314,6 +1469,31 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
             Alert.alert('Error', e.response?.data?.detail || 'Failed to update ticketing.');
         } finally {
             setSavingTicketing(false);
+        }
+    };
+
+    const handleGenerateAccessCodes = async () => {
+        if (!ticketingEvent) return;
+        const count = Math.max(1, Math.min(200, Math.floor(Number(accessCodeForm.count || 1))));
+        if (!Number.isFinite(count)) {
+            Alert.alert('Check quantity', 'Enter how many one-use codes to generate.');
+            return;
+        }
+        setGeneratingAccessCodes(true);
+        try {
+            const res = await client.post(`/admin/events/${ticketingEvent.id}/access-codes`, {
+                sponsor_name: accessCodeForm.sponsor_name.trim(),
+                prefix: accessCodeForm.prefix.trim(),
+                count,
+                ticket_tier_id: 'free',
+            });
+            setAccessCodes(Array.isArray(res.data) ? res.data : []);
+            setAccessCodeForm(prev => ({ ...prev, count: String(count) }));
+            Alert.alert('Codes generated', `${count} one-use sponsor code${count === 1 ? '' : 's'} added.`);
+        } catch (error) {
+            Alert.alert('Error', getApiErrorMessage(error, 'Could not generate sponsor codes.'));
+        } finally {
+            setGeneratingAccessCodes(false);
         }
     };
 
@@ -1762,6 +1942,16 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                                     value={form.free_tier_description}
                                     onChangeText={(value) => setForm(prev => ({ ...prev, free_tier_description: value }))}
                                 />
+                                <View style={{ backgroundColor: ADMIN_COLORS.infoBg, borderRadius: 10, padding: 10, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <View style={{ flex: 1, paddingRight: 10 }}>
+                                        <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800' }}>Require sponsor code for free category</Text>
+                                        <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 11, marginTop: 3 }}>Only users with an unused code can complete this free registration.</Text>
+                                    </View>
+                                    <Switch
+                                        value={form.free_tier_requires_code !== false}
+                                        onValueChange={(value) => setForm(prev => ({ ...prev, free_tier_requires_code: value }))}
+                                    />
+                                </View>
                                 <Text style={s.inputLabel}>Paid category name</Text>
                                 <TextInput
                                     style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
@@ -1891,6 +2081,16 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                                     value={ticketingForm.free_tier_description}
                                     onChangeText={(value) => setTicketingForm(prev => ({ ...prev, free_tier_description: value }))}
                                 />
+                                <View style={{ backgroundColor: ADMIN_COLORS.infoBg, borderRadius: 10, padding: 10, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <View style={{ flex: 1, paddingRight: 10 }}>
+                                        <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800' }}>Require sponsor code for free category</Text>
+                                        <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 11, marginTop: 3 }}>Generate one-use codes below and share them with sponsors.</Text>
+                                    </View>
+                                    <Switch
+                                        value={ticketingForm.free_tier_requires_code !== false}
+                                        onValueChange={(value) => setTicketingForm(prev => ({ ...prev, free_tier_requires_code: value }))}
+                                    />
+                                </View>
                                 <Text style={s.inputLabel}>Paid category name</Text>
                                 <TextInput
                                     style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
@@ -1938,6 +2138,94 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                             </View>
                         )}
                     </View>
+
+                    {ticketingForm.enabled && ticketingForm.free_tier_requires_code !== false && (
+                        <View style={{ backgroundColor: ADMIN_COLORS.surface, borderRadius: 12, padding: 12, marginTop: 12 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                <Ionicons name="key-outline" size={17} color={ADMIN_COLORS.info} />
+                                <Text style={{ marginLeft: 6, color: ADMIN_COLORS.textPrimary, fontWeight: '900' }}>Sponsor access codes</Text>
+                            </View>
+                            <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 11, lineHeight: 16 }}>
+                                Generate one-use codes for sponsors to share with approved free participants. Used codes cannot register another user.
+                            </Text>
+                            <Text style={s.inputLabel}>Sponsor / partner name</Text>
+                            <TextInput
+                                style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
+                                placeholder="Example: County Partner"
+                                placeholderTextColor={ADMIN_COLORS.textMuted}
+                                value={accessCodeForm.sponsor_name}
+                                onChangeText={(value) => setAccessCodeForm(prev => ({ ...prev, sponsor_name: value }))}
+                            />
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={s.inputLabel}>Quantity</Text>
+                                    <TextInput
+                                        style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
+                                        keyboardType="numeric"
+                                        value={accessCodeForm.count}
+                                        onChangeText={(value) => setAccessCodeForm(prev => ({ ...prev, count: value }))}
+                                    />
+                                </View>
+                                <View style={{ flex: 2 }}>
+                                    <Text style={s.inputLabel}>Prefix</Text>
+                                    <TextInput
+                                        style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
+                                        placeholder="Optional"
+                                        placeholderTextColor={ADMIN_COLORS.textMuted}
+                                        value={accessCodeForm.prefix}
+                                        autoCapitalize="characters"
+                                        onChangeText={(value) => setAccessCodeForm(prev => ({ ...prev, prefix: value.toUpperCase() }))}
+                                    />
+                                </View>
+                            </View>
+                            <TouchableOpacity
+                                style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg, alignSelf: 'flex-start', marginTop: 4 }]}
+                                onPress={handleGenerateAccessCodes}
+                                disabled={generatingAccessCodes}
+                            >
+                                {generatingAccessCodes ? (
+                                    <ActivityIndicator size="small" color={ADMIN_COLORS.info} />
+                                ) : (
+                                    <Ionicons name="sparkles-outline" size={15} color={ADMIN_COLORS.info} />
+                                )}
+                                <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>
+                                    {generatingAccessCodes ? 'Generating...' : 'Generate codes'}
+                                </Text>
+                            </TouchableOpacity>
+
+                            <View style={{ marginTop: 12 }}>
+                                <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800', marginBottom: 6 }}>
+                                    Codes ({accessCodes.length})
+                                </Text>
+                                {loadingAccessCodes ? (
+                                    <ActivityIndicator color={ADMIN_COLORS.info} />
+                                ) : accessCodes.length === 0 ? (
+                                    <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 12 }}>No sponsor codes generated yet.</Text>
+                                ) : (
+                                    accessCodes.slice(0, 60).map((code) => (
+                                        <View key={code.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderTopWidth: 1, borderTopColor: ADMIN_COLORS.surfaceBorder }}>
+                                            <View style={{ flex: 1, paddingRight: 8 }}>
+                                                <Text selectable style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '900', letterSpacing: 1 }}>{code.code}</Text>
+                                                <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 11, marginTop: 2 }}>
+                                                    {code.sponsor_name || 'No sponsor'}{code.used_by_name ? ` - ${code.used_by_name}` : ''}
+                                                </Text>
+                                            </View>
+                                            <View style={[s.badge, { backgroundColor: code.is_used ? ADMIN_COLORS.successBg : ADMIN_COLORS.surfaceBorder }]}>
+                                                <Text style={[s.badgeText, { color: code.is_used ? ADMIN_COLORS.success : ADMIN_COLORS.textSecondary }]}>
+                                                    {code.is_used ? 'USED' : 'UNUSED'}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    ))
+                                )}
+                                {accessCodes.length > 60 && (
+                                    <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 11, marginTop: 6 }}>
+                                        Showing latest 60 codes.
+                                    </Text>
+                                )}
+                            </View>
+                        </View>
+                    )}
 
                     <TouchableOpacity style={s.primaryButton} onPress={handleSaveTicketing} disabled={savingTicketing}>
                         {savingTicketing ? <ActivityIndicator color={ADMIN_COLORS.bg} /> : <Ionicons name="save-outline" size={18} color={ADMIN_COLORS.bg} />}

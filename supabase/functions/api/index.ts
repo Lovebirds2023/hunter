@@ -133,6 +133,66 @@ const safeFileSlug = (value: unknown) => (
 const uniqueStrings = (values: unknown[]) => (
   [...new Set(values.map((value) => cleanString(value)).filter(Boolean))]
 );
+const normalizeAccessCode = (value: unknown) => (
+  cleanString(value)
+    .toUpperCase()
+    .replace(/\s+/g, "")
+    .replace(/[^A-Z0-9-]/g, "")
+);
+const accessCodePrefix = (value: unknown) => (
+  normalizeAccessCode(value)
+    .replace(/-/g, "")
+    .slice(0, 8) || "LD360"
+);
+const generateAccessCode = (seed: unknown) => (
+  `${accessCodePrefix(seed)}-${crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase()}`
+);
+const parseDateValue = (value: unknown) => {
+  const text = cleanString(value);
+  if (!text) return null;
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+const slotDateRange = (slots: JsonRecord[]) => {
+  let start: Date | null = null;
+  let end: Date | null = null;
+  for (const slot of slots) {
+    const slotStart = parseDateValue(slot.start_time);
+    const slotEnd = parseDateValue(slot.end_time);
+    if (!slotStart || !slotEnd) continue;
+    if (!start || slotStart < start) start = slotStart;
+    if (!end || slotEnd > end) end = slotEnd;
+  }
+  return { start, end };
+};
+const expandRangeWithSlots = (start: Date | null, end: Date | null, slots: JsonRecord[]) => {
+  const range = slotDateRange(slots);
+  return {
+    start: range.start && (!start || range.start < start) ? range.start : start,
+    end: range.end && (!end || range.end > end) ? range.end : end,
+  };
+};
+const normalizeEventSlots = (value: unknown) => asArray(value).filter(isRecord).map((slot, index) => {
+  const start = parseDateValue(slot.start_time);
+  const end = parseDateValue(slot.end_time);
+  if (!start || !end || end <= start) {
+    throw new Response("Use valid start and end times for every booking slot.", { status: 400 });
+  }
+  const capacity = Math.max(0, Math.floor(asNumber(slot.capacity)));
+  return {
+    id: cleanString(slot.id) || `slot_${index + 1}`,
+    label: cleanString(slot.label) || `Available slot ${index + 1}`,
+    start_time: start.toISOString(),
+    end_time: end.toISOString(),
+    capacity,
+    location: cleanString(slot.location),
+    notes: cleanString(slot.notes),
+  };
+});
+const tierRequiresAccessCode = (tier: JsonRecord | null) => {
+  if (!tier) return false;
+  return asBoolean(tier.requires_access_code, asNumber(tier.price) <= 0);
+};
 const normalizeHashtag = (value: unknown) => (
   cleanString(value)
     .replace(/^#+/, "")
@@ -1481,6 +1541,11 @@ const handleCreateEvent = async (request: Request) => {
   const body = await readJson(request);
   const title = cleanString(body.title);
   if (!title) return errorResponse("Event title is required.");
+  const availableSlots = normalizeEventSlots(body.available_slots);
+  const range = expandRangeWithSlots(parseDateValue(body.start_time), parseDateValue(body.end_time), availableSlots);
+  if (!range.start || !range.end || range.end <= range.start) {
+    return errorResponse("Use valid start and end times, with the end after the start.");
+  }
 
   const payload = {
     organizer_id: cleanString(profile.id),
@@ -1489,14 +1554,14 @@ const handleCreateEvent = async (request: Request) => {
     location: body.location ?? null,
     poster_url: body.poster_url ?? null,
     images: asStringArray(body.images),
-    start_time: cleanString(body.start_time) || nowIso(),
-    end_time: cleanString(body.end_time) || cleanString(body.start_time) || nowIso(),
+    start_time: range.start.toISOString(),
+    end_time: range.end.toISOString(),
     capacity: asNumber(body.capacity),
     ticket_price: asNumber(body.ticket_price),
     currency: cleanString(body.currency) || "KES",
     ticket_tiers: body.ticket_tiers ?? null,
     attendee_type_question: body.attendee_type_question ?? null,
-    available_slots: body.available_slots ?? null,
+    available_slots: availableSlots.length ? availableSlots : null,
     category: body.category ?? null,
     is_public: Number.isFinite(Number(body.is_public)) ? Number(body.is_public) : 1,
     admin_created: isAdminProfile(profile),
@@ -1586,6 +1651,66 @@ const handleEventFormFields = async (request: Request, eventId: string) => {
   return jsonResponse(data ?? []);
 };
 
+const activeRegistrationStatuses = ["registered", "pending_payment", "checked-in"];
+
+const countActiveEventRegistrations = async (eventId: string, userId: string, bookingSlotId = "") => {
+  let query = supabaseAdmin
+    .from("registrations")
+    .select("id", { count: "exact", head: true })
+    .eq("event_id", eventId)
+    .in("status", activeRegistrationStatuses)
+    .neq("user_id", userId);
+  if (bookingSlotId) query = query.eq("booking_slot_id", bookingSlotId);
+  const { count, error } = await query;
+  if (error) throw error;
+  return count ?? 0;
+};
+
+const resolveAccessCodeForRegistration = async (
+  eventId: string,
+  tier: JsonRecord | null,
+  rawCode: unknown,
+  userId: string,
+) => {
+  if (!tierRequiresAccessCode(tier)) return { accessCodeId: null, accessCode: null };
+
+  const code = normalizeAccessCode(rawCode);
+  if (!code) {
+    return { error: "Enter the sponsor/access code for this free registration category." };
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("event_access_codes")
+    .select("*")
+    .eq("event_id", eventId)
+    .eq("is_active", true)
+    .ilike("code", code)
+    .maybeSingle();
+  if (error) throw error;
+  const accessCode = data as JsonRecord | null;
+  if (!accessCode) return { error: "This sponsor/access code is not valid for this event." };
+
+  const tierId = cleanString(tier?.id);
+  const codeTierId = cleanString(accessCode.ticket_tier_id);
+  if (codeTierId && tierId && codeTierId !== tierId) {
+    return { error: "This sponsor/access code is not valid for the selected registration category." };
+  }
+
+  const { data: uses, error: usesError } = await supabaseAdmin
+    .from("registrations")
+    .select("id,user_id")
+    .eq("access_code_id", cleanString(accessCode.id));
+  if (usesError) throw usesError;
+  const usedByOtherUser = ((uses ?? []) as JsonRecord[])
+    .some((row) => cleanString(row.user_id) !== userId);
+  if (usedByOtherUser) return { error: "This sponsor/access code has already been used." };
+
+  return {
+    accessCodeId: cleanString(accessCode.id),
+    accessCode: cleanString(accessCode.code),
+  };
+};
+
 const handleRegisterEvent = async (request: Request, eventId: string) => {
   const { profile } = await requireProfile(request);
   const event = await selectSingle("events", eventId, "Event");
@@ -1610,12 +1735,30 @@ const handleRegisterEvent = async (request: Request, eventId: string) => {
   if (availableSlots.length > 0 && !selectedSlot) {
     return errorResponse("Choose an available date/time before continuing.");
   }
+  const userId = cleanString(profile.id);
+  const eventCapacity = Math.max(0, Math.floor(asNumber(event.capacity)));
+  if (eventCapacity > 0) {
+    const registeredCount = await countActiveEventRegistrations(eventId, userId);
+    if (registeredCount >= eventCapacity) return errorResponse("This event is already full.");
+  }
+  const selectedSlotIdForCapacity = selectedSlot ? cleanString(selectedSlot.id) : "";
+  const selectedSlotCapacity = selectedSlot ? Math.max(0, Math.floor(asNumber(selectedSlot.capacity))) : 0;
+  if (selectedSlotIdForCapacity && selectedSlotCapacity > 0) {
+    const slotRegistrationCount = await countActiveEventRegistrations(eventId, userId, selectedSlotIdForCapacity);
+    if (slotRegistrationCount >= selectedSlotCapacity) {
+      return errorResponse("This booking slot is already full. Please choose another date/time.");
+    }
+  }
+  const accessCodeResult = await resolveAccessCodeForRegistration(eventId, selectedTier, body.access_code, userId);
+  if ("error" in accessCodeResult && accessCodeResult.error) return errorResponse(accessCodeResult.error);
+  const accessCodeId = "accessCodeId" in accessCodeResult ? accessCodeResult.accessCodeId : null;
+  const accessCode = "accessCode" in accessCodeResult ? accessCodeResult.accessCode : null;
 
   const amount = selectedTier ? Math.max(asNumber(selectedTier.price), 0) : Math.max(asNumber(event.ticket_price), 0);
   const currency = cleanString(selectedTier?.currency) || cleanString(event.currency) || "KES";
   const payload = {
     event_id: eventId,
-    user_id: cleanString(profile.id),
+    user_id: userId,
     dog_id: cleanString(body.dog_id) || null,
     status: amount > 0 ? "pending_payment" : "registered",
     role: cleanString(body.role) || "attendee",
@@ -1631,6 +1774,8 @@ const handleRegisterEvent = async (request: Request, eventId: string) => {
     booking_slot_label: selectedSlot ? cleanString(selectedSlot.label) : null,
     booking_start_time: selectedSlot ? cleanString(selectedSlot.start_time) || null : null,
     booking_end_time: selectedSlot ? cleanString(selectedSlot.end_time) || null : null,
+    access_code_id: accessCodeId,
+    access_code: accessCode,
     updated_at: nowIso(),
   };
 
@@ -1639,7 +1784,12 @@ const handleRegisterEvent = async (request: Request, eventId: string) => {
     .upsert(payload, { onConflict: "event_id,user_id" })
     .select("*")
     .single();
-  if (error) throw error;
+  if (error) {
+    if (cleanString(error.code) === "23505") {
+      return errorResponse("This sponsor/access code has already been used.");
+    }
+    throw error;
+  }
 
   const registrationId = cleanString((data as JsonRecord).id);
   const { error: deleteResponsesError } = await supabaseAdmin
@@ -1740,6 +1890,8 @@ const handleEventResponses = async (request: Request, eventId: string) => {
       booking_slot_label: registration.booking_slot_label,
       booking_start_time: registration.booking_start_time,
       booking_end_time: registration.booking_end_time,
+      access_code_id: registration.access_code_id,
+      access_code: registration.access_code,
       pesapal_tracking_id: registration.pesapal_tracking_id,
       paid_at: registration.paid_at,
       created_at: registration.created_at,
@@ -4861,6 +5013,76 @@ const handleAdminEvents = async (request: Request) => {
   return jsonResponse(await Promise.all((data ?? []).map((event) => adminEventRow(event as JsonRecord, pins))));
 };
 
+const listEventAccessCodes = async (eventId: string) => {
+  const { data: codes, error } = await supabaseAdmin
+    .from("event_access_codes")
+    .select("*")
+    .eq("event_id", eventId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+
+  const codeIds = ((codes ?? []) as JsonRecord[]).map((code) => cleanString(code.id)).filter(Boolean);
+  let registrations: JsonRecord[] = [];
+  if (codeIds.length) {
+    const { data, error: registrationError } = await supabaseAdmin
+      .from("registrations")
+      .select("id,access_code_id,user_id,created_at,user:users(full_name,email)")
+      .in("access_code_id", codeIds);
+    if (registrationError) throw registrationError;
+    registrations = (data ?? []) as JsonRecord[];
+  }
+
+  const registrationsByCode = new Map<string, JsonRecord[]>();
+  for (const registration of registrations) {
+    const codeId = cleanString(registration.access_code_id);
+    if (!registrationsByCode.has(codeId)) registrationsByCode.set(codeId, []);
+    registrationsByCode.get(codeId)?.push(registration);
+  }
+
+  return ((codes ?? []) as JsonRecord[]).map((code) => {
+    const uses = registrationsByCode.get(cleanString(code.id)) ?? [];
+    const firstUse = uses[0] ?? null;
+    const user = isRecord(firstUse?.user) ? firstUse.user : {};
+    return {
+      ...code,
+      used_count: uses.length,
+      is_used: uses.length > 0,
+      used_by_name: cleanString(user.full_name) || null,
+      used_by_email: cleanString(user.email) || null,
+      used_at: firstUse?.created_at ?? null,
+    };
+  });
+};
+
+const handleAdminEventAccessCodes = async (request: Request, eventId: string) => {
+  const { profile } = await requireAdminProfile(request);
+  const event = await selectSingle("events", eventId, "Event");
+  if (request.method === "GET") return jsonResponse(await listEventAccessCodes(eventId));
+
+  const body = await readJson(request);
+  const count = Math.max(1, Math.min(200, Math.floor(asNumber(body.count, 1))));
+  const ticketTierId = cleanString(body.ticket_tier_id) || "free";
+  const tiers = asArray(event.ticket_tiers).filter(isRecord);
+  const selectedTier = tiers.find((tier) => cleanString(tier.id) === ticketTierId) ?? null;
+  const sponsorName = cleanString(body.sponsor_name) || null;
+  const prefixSeed = cleanString(body.prefix) || sponsorName || selectedTier?.label || event.title;
+  const rows = Array.from({ length: count }).map(() => ({
+    event_id: eventId,
+    code: generateAccessCode(prefixSeed),
+    sponsor_name: sponsorName,
+    ticket_tier_id: ticketTierId,
+    ticket_tier_label: cleanString(selectedTier?.label) || (ticketTierId === "free" ? "Free" : ticketTierId),
+    max_uses: 1,
+    is_active: true,
+    created_by_id: cleanString(profile.id),
+    updated_at: nowIso(),
+  }));
+
+  const { error } = await supabaseAdmin.from("event_access_codes").insert(rows);
+  if (error) return errorResponse(`Could not generate access codes: ${readableErrorMessage(error, "Database insert failed.")}`, 400);
+  return jsonResponse(await listEventAccessCodes(eventId), 201);
+};
+
 const refreshEventPinFromEvent = async (eventId: string, event: JsonRecord, adminId: string) => {
   const { data: pin, error } = await supabaseAdmin
     .from("content_pins")
@@ -4903,9 +5125,9 @@ const handleAdminUpdateEvent = async (request: Request, eventId: string, mode: "
     const startTime = cleanString(body.start_time);
     const endTime = cleanString(body.end_time);
     if (!startTime || !endTime) return errorResponse("Start and end times are required.");
-    const start = new Date(startTime);
-    const end = new Date(endTime);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+    const availableSlots = normalizeEventSlots(body.available_slots);
+    const range = expandRangeWithSlots(parseDateValue(startTime), parseDateValue(endTime), availableSlots);
+    if (!range.start || !range.end || range.end <= range.start) {
       return errorResponse("Use valid start and end times, with the end after the start.");
     }
     updates.title = title;
@@ -4913,14 +5135,14 @@ const handleAdminUpdateEvent = async (request: Request, eventId: string, mode: "
     updates.location = body.location ?? null;
     updates.poster_url = body.poster_url ?? null;
     updates.images = asStringArray(body.images);
-    updates.start_time = startTime;
-    updates.end_time = endTime;
+    updates.start_time = range.start.toISOString();
+    updates.end_time = range.end.toISOString();
     updates.capacity = Math.max(0, Math.floor(asNumber(body.capacity)));
     updates.ticket_price = Math.max(0, asNumber(body.ticket_price));
     updates.currency = cleanString(body.currency) || "KES";
     updates.ticket_tiers = body.ticket_tiers ?? null;
     updates.attendee_type_question = body.attendee_type_question ?? null;
-    updates.available_slots = body.available_slots ?? null;
+    updates.available_slots = availableSlots.length ? availableSlots : null;
     updates.category = body.category ?? null;
     updates.is_public = Number.isFinite(Number(body.is_public)) ? Number(body.is_public) : 1;
     updates.scorecard_enabled = asBoolean(body.scorecard_enabled, true);
@@ -4932,7 +5154,16 @@ const handleAdminUpdateEvent = async (request: Request, eventId: string, mode: "
     updates.ticket_tiers = body.ticket_tiers ?? [];
     updates.attendee_type_question = body.attendee_type_question ?? null;
   } else if (mode === "schedule") {
-    updates.available_slots = asArray(body.available_slots);
+    const availableSlots = normalizeEventSlots(body.available_slots);
+    updates.available_slots = availableSlots;
+    if (availableSlots.length) {
+      const event = await selectSingle("events", eventId, "Event");
+      const range = expandRangeWithSlots(parseDateValue(event.start_time), parseDateValue(event.end_time), availableSlots);
+      if (range.start && range.end && range.end > range.start) {
+        updates.start_time = range.start.toISOString();
+        updates.end_time = range.end.toISOString();
+      }
+    }
   } else {
     updates.scorecard_enabled = asBoolean(body.scorecard_enabled, true);
     updates.scorecard_title = body.scorecard_title ?? null;
@@ -5764,6 +5995,9 @@ const routeRequest = async (request: Request) => {
   if (method === "GET" && path === "/admin/dogs") return handleAdminDogs(request);
   if (method === "DELETE" && /^\/admin\/dogs\/[^/]+$/.test(path)) return handleAdminDeleteDog(request, firstPathMatch(path, /^\/admin\/dogs\/([^/]+)$/));
   if (method === "GET" && path === "/admin/events") return handleAdminEvents(request);
+  if (/^\/admin\/events\/[^/]+\/access-codes$/.test(path) && (method === "GET" || method === "POST")) {
+    return handleAdminEventAccessCodes(request, firstPathMatch(path, /^\/admin\/events\/([^/]+)\/access-codes$/));
+  }
   if (method === "DELETE" && /^\/admin\/events\/[^/]+$/.test(path)) return handleAdminDeleteEvent(request, firstPathMatch(path, /^\/admin\/events\/([^/]+)$/));
   if (method === "PUT" && /^\/admin\/events\/[^/]+$/.test(path)) return handleAdminUpdateEvent(request, firstPathMatch(path, /^\/admin\/events\/([^/]+)$/), "details");
   if (method === "PUT" && /^\/admin\/events\/[^/]+\/ticketing$/.test(path)) return handleAdminUpdateEvent(request, firstPathMatch(path, /^\/admin\/events\/([^/]+)\/ticketing$/), "ticketing");
