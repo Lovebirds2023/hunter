@@ -178,16 +178,27 @@ const normalizeEventSlots = (value: unknown) => asArray(value).filter(isRecord).
   if (!start || !end || end <= start) {
     throw new Response("Use valid start and end times for every booking slot.", { status: 400 });
   }
-  const capacity = Math.max(0, Math.floor(asNumber(slot.capacity)));
-  return {
+  const label = cleanString(slot.label) || `Available slot ${index + 1}`;
+  const rawSlotType = cleanString(slot.slot_type).toLowerCase();
+  const slotType = rawSlotType === "podcast" ? "podcast" : "";
+  const rawCapacity = Math.max(0, Math.floor(asNumber(slot.capacity)));
+  const capacity = slotType === "podcast" ? 3 : rawCapacity;
+  const participantCapacity = Math.max(0, Math.floor(asNumber(slot.participant_capacity)));
+  const normalizedSlot: JsonRecord = {
     id: cleanString(slot.id) || `slot_${index + 1}`,
-    label: cleanString(slot.label) || `Available slot ${index + 1}`,
+    label,
     start_time: start.toISOString(),
     end_time: end.toISOString(),
     capacity,
     location: cleanString(slot.location),
     notes: cleanString(slot.notes),
   };
+  if (slotType) {
+    normalizedSlot.slot_type = slotType;
+    normalizedSlot.participant_capacity = participantCapacity || capacity;
+    normalizedSlot.equipment_limit = cleanString(slot.equipment_limit) || "4 microphones available; 3 participant mic seats per podcast slot.";
+  }
+  return normalizedSlot;
 });
 const tierRequiresAccessCode = (tier: JsonRecord | null) => {
   if (!tier) return false;

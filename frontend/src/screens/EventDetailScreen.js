@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View, Text, StyleSheet, Button, ScrollView, Alert, Modal, TouchableOpacity, Image, Linking, Platform, ActivityIndicator } from 'react-native';
 import { COLORS } from '../constants/theme';
@@ -10,6 +10,30 @@ import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { Picker } from '@react-native-picker/picker';
 import { Switch, TextInput } from 'react-native';
+
+const DATE_PREVIEW_LIMIT = 8;
+const LONG_SCHEDULE_DAYS = 31;
+
+const getSlotStartMs = (slot) => {
+    const date = new Date(slot?.start_time);
+    return Number.isNaN(date.getTime()) ? Number.MAX_SAFE_INTEGER : date.getTime();
+};
+
+const getSortedBookingSlots = (slots = []) => (
+    [...slots].sort((a, b) => getSlotStartMs(a) - getSlotStartMs(b))
+);
+
+const scheduleSpansMoreThanMonth = (slots = []) => {
+    if (slots.length < 2) return false;
+    const first = getSlotStartMs(slots[0]);
+    const last = getSlotStartMs(slots[slots.length - 1]);
+    if (!Number.isFinite(first) || !Number.isFinite(last)) return false;
+    return (last - first) / (24 * 60 * 60 * 1000) > LONG_SCHEDULE_DAYS;
+};
+
+const shouldCompactSlots = (slots = []) => (
+    slots.length > DATE_PREVIEW_LIMIT || scheduleSpansMoreThanMonth(slots)
+);
 
 export const EventDetailScreen = ({ route, navigation }) => {
     const { t } = useTranslation();
@@ -33,6 +57,8 @@ export const EventDetailScreen = ({ route, navigation }) => {
     const [accessCode, setAccessCode] = useState('');
     const [discountCode, setDiscountCode] = useState('');
     const [photoConsent, setPhotoConsent] = useState(null);
+    const [showAllDetailSlots, setShowAllDetailSlots] = useState(false);
+    const [showAllModalSlots, setShowAllModalSlots] = useState(false);
 
     const [myRegistration, setMyRegistration] = useState(null);
 
@@ -58,13 +84,19 @@ export const EventDetailScreen = ({ route, navigation }) => {
                 setSelectedTicketTierId(prev => prev || tiers[0].id);
             }
             const slots = Array.isArray(eventData.available_slots) ? eventData.available_slots : [];
-            if (slots.length > 0) {
+            if (slots.length === 1) {
                 setSelectedBookingSlotId(prev => (
                     slots.some(slot => slot.id === prev) ? prev : slots[0].id
+                ));
+            } else if (slots.length > 1) {
+                setSelectedBookingSlotId(prev => (
+                    slots.some(slot => slot.id === prev) ? prev : null
                 ));
             } else {
                 setSelectedBookingSlotId(null);
             }
+            setShowAllDetailSlots(false);
+            setShowAllModalSlots(false);
 
             // Check if saved
             const savedItem = savedData?.find(s => s.event_id === eventId);
@@ -293,6 +325,19 @@ export const EventDetailScreen = ({ route, navigation }) => {
         }
     };
 
+    const availableSlots = useMemo(() => (
+        getSortedBookingSlots(Array.isArray(event?.available_slots) ? event.available_slots : [])
+    ), [event?.available_slots]);
+    const compactAvailableSlots = shouldCompactSlots(availableSlots);
+    const detailSlotsToShow = compactAvailableSlots && !showAllDetailSlots
+        ? availableSlots.slice(0, DATE_PREVIEW_LIMIT)
+        : availableSlots;
+    const modalSlotsToShow = compactAvailableSlots && !showAllModalSlots
+        ? availableSlots.slice(0, DATE_PREVIEW_LIMIT)
+        : availableSlots;
+    const detailHasHiddenSlots = detailSlotsToShow.length < availableSlots.length;
+    const modalHasHiddenSlots = modalSlotsToShow.length < availableSlots.length;
+
     if (loading || !event) return <View style={styles.center}><Text>{t('common.loading')}</Text></View>;
 
     const ticketTiers = Array.isArray(event.ticket_tiers) ? event.ticket_tiers : [];
@@ -311,7 +356,6 @@ export const EventDetailScreen = ({ route, navigation }) => {
         selectedTicketTier.requires_access_code === true ||
         (selectedTicketTier.requires_access_code !== false && selectedTicketPrice <= 0)
     );
-    const availableSlots = Array.isArray(event.available_slots) ? event.available_slots : [];
     const hasAvailableSlots = availableSlots.length > 0;
     const formatSlotTime = (slot) => {
         if (!slot?.start_time) return '';
@@ -368,21 +412,51 @@ export const EventDetailScreen = ({ route, navigation }) => {
                             <Ionicons name="calendar-number-outline" size={20} color={COLORS.primary} />
                             <Text style={styles.scheduleTitle}>Available booking dates</Text>
                         </View>
-                        {availableSlots.map(slot => (
-                            <View key={slot.id} style={styles.scheduleItem}>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.scheduleItemTitle}>{slot.label}</Text>
-                                    <Text style={styles.scheduleItemTime}>{formatSlotTime(slot)}</Text>
-                                    {!!slot.location && <Text style={styles.scheduleItemMeta}>{slot.location}</Text>}
-                                    {!!slot.notes && <Text style={styles.scheduleItemMeta}>{slot.notes}</Text>}
-                                </View>
-                                {Number(slot.capacity || 0) > 0 && (
-                                    <View style={styles.scheduleCapacityPill}>
-                                        <Text style={styles.scheduleCapacityText}>{slot.capacity} spots</Text>
+                        <Text style={styles.scheduleHelpText}>
+                            Select the date/time you want before registering.
+                        </Text>
+                        {detailSlotsToShow.map(slot => {
+                            const isSelected = selectedBookingSlotId === slot.id;
+                            return (
+                                <TouchableOpacity
+                                    key={slot.id}
+                                    style={[styles.scheduleItem, isSelected && styles.selectedScheduleItem]}
+                                    onPress={() => setSelectedBookingSlotId(slot.id)}
+                                >
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={[styles.scheduleItemTitle, isSelected && styles.selectedScheduleText]}>{slot.label}</Text>
+                                        <Text style={[styles.scheduleItemTime, isSelected && styles.selectedScheduleText]}>{formatSlotTime(slot)}</Text>
+                                        {!!slot.location && <Text style={[styles.scheduleItemMeta, isSelected && styles.selectedScheduleText]}>{slot.location}</Text>}
+                                        {!!slot.notes && <Text style={[styles.scheduleItemMeta, isSelected && styles.selectedScheduleText]}>{slot.notes}</Text>}
                                     </View>
-                                )}
-                            </View>
-                        ))}
+                                    <View style={styles.scheduleItemRight}>
+                                        {Number(slot.capacity || 0) > 0 && (
+                                            <View style={[styles.scheduleCapacityPill, isSelected && styles.selectedScheduleCapacityPill]}>
+                                                <Text style={[styles.scheduleCapacityText, isSelected && styles.selectedScheduleCapacityText]}>{slot.capacity} spots</Text>
+                                            </View>
+                                        )}
+                                        <Ionicons
+                                            name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
+                                            size={22}
+                                            color={isSelected ? '#fff' : COLORS.primary}
+                                        />
+                                    </View>
+                                </TouchableOpacity>
+                            );
+                        })}
+                        {compactAvailableSlots && (showAllDetailSlots || detailHasHiddenSlots) && (
+                            <TouchableOpacity
+                                style={styles.viewMoreDatesButton}
+                                onPress={() => setShowAllDetailSlots(prev => !prev)}
+                            >
+                                <Ionicons name={showAllDetailSlots ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.primary} />
+                                <Text style={styles.viewMoreDatesText}>
+                                    {showAllDetailSlots
+                                        ? 'View fewer dates'
+                                        : `View more dates (${availableSlots.length - detailSlotsToShow.length} more)`}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 )}
 
@@ -605,7 +679,8 @@ export const EventDetailScreen = ({ route, navigation }) => {
                             {hasAvailableSlots && (
                                 <View style={styles.profileSection}>
                                     <Text style={styles.sectionTitle}>Choose available date/time</Text>
-                                    {availableSlots.map((slot) => {
+                                    <Text style={styles.slotHelpText}>Pick one available date/time for this registration.</Text>
+                                    {modalSlotsToShow.map((slot) => {
                                         const isSelected = selectedBookingSlotId === slot.id;
                                         return (
                                             <TouchableOpacity
@@ -625,6 +700,19 @@ export const EventDetailScreen = ({ route, navigation }) => {
                                             </TouchableOpacity>
                                         );
                                     })}
+                                    {compactAvailableSlots && (showAllModalSlots || modalHasHiddenSlots) && (
+                                        <TouchableOpacity
+                                            style={styles.modalViewMoreDatesButton}
+                                            onPress={() => setShowAllModalSlots(prev => !prev)}
+                                        >
+                                            <Ionicons name={showAllModalSlots ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.primary} />
+                                            <Text style={styles.viewMoreDatesText}>
+                                                {showAllModalSlots
+                                                    ? 'View fewer dates'
+                                                    : `View more dates (${availableSlots.length - modalSlotsToShow.length} more)`}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    )}
                                 </View>
                             )}
 
@@ -796,14 +884,21 @@ const styles = StyleSheet.create({
     },
     scheduleHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
     scheduleTitle: { marginLeft: 8, fontSize: 17, fontWeight: '900', color: COLORS.primary },
+    scheduleHelpText: { color: '#555', fontSize: 13, lineHeight: 18, marginBottom: 10 },
     scheduleItem: {
         flexDirection: 'row',
         alignItems: 'flex-start',
         gap: 10,
-        paddingVertical: 11,
-        borderTopWidth: 1,
-        borderTopColor: '#e8f1ff'
+        padding: 12,
+        borderWidth: 1,
+        borderColor: '#e8f1ff',
+        borderRadius: 12,
+        backgroundColor: '#fff',
+        marginBottom: 10
     },
+    selectedScheduleItem: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+    selectedScheduleText: { color: '#fff' },
+    scheduleItemRight: { alignItems: 'flex-end', gap: 8 },
     scheduleItemTitle: { fontSize: 15, fontWeight: '900', color: '#222' },
     scheduleItemTime: { marginTop: 3, fontSize: 13, color: '#444', lineHeight: 18 },
     scheduleItemMeta: { marginTop: 3, fontSize: 12, color: '#666', lineHeight: 17 },
@@ -816,6 +911,20 @@ const styles = StyleSheet.create({
         borderColor: '#f0d875'
     },
     scheduleCapacityText: { color: COLORS.primary, fontSize: 11, fontWeight: '900' },
+    selectedScheduleCapacityPill: { backgroundColor: 'rgba(255,255,255,0.18)', borderColor: 'rgba(255,255,255,0.42)' },
+    selectedScheduleCapacityText: { color: '#fff' },
+    viewMoreDatesButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#d9e9ff',
+        backgroundColor: '#fff'
+    },
+    viewMoreDatesText: { color: COLORS.primary, fontWeight: '900', fontSize: 13 },
     footer: { marginTop: 30 },
     modalView: {
         margin: 20,
@@ -892,6 +1001,18 @@ const styles = StyleSheet.create({
     slotMeta: { fontSize: 12, color: '#666', marginTop: 3, lineHeight: 17 },
     slotCapacity: { color: COLORS.primary, fontSize: 12, fontWeight: '900' },
     selectedSlotText: { color: '#fff' },
+    slotHelpText: { color: '#666', fontSize: 12, lineHeight: 17, marginBottom: 10 },
+    modalViewMoreDatesButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#d9e9ff',
+        backgroundColor: '#f8fbff'
+    },
     ticketContainer: {
         alignItems: 'center',
         padding: 20,

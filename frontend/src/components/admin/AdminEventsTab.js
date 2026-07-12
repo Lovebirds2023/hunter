@@ -68,6 +68,8 @@ const defaultPaidTierLabel = 'Paid Access';
 const defaultPaidTierDescription = 'Paid registration for organizations, teams, companies, or sponsored participants.';
 const defaultScorecardTitle = 'Community Impact Assessment';
 const defaultScorecardDescription = 'Collect baseline and follow-up data for M&E, outcome tracking, and partner reporting.';
+const PODCAST_PARTICIPANT_CAPACITY = 3;
+const PODCAST_EQUIPMENT_LIMIT = '4 microphones available; 3 participant mic seats per podcast slot.';
 
 const pad2 = (value) => String(value).padStart(2, '0');
 
@@ -551,6 +553,14 @@ const ScheduleGenerator = ({
         if (!notes) setNotes('Participants attend both Saturday and Sunday.');
     };
 
+    const applyPodcastPreset = () => {
+        setStartTime('09:00');
+        setEndTime('10:00');
+        setCapacity(String(PODCAST_PARTICIPANT_CAPACITY));
+        setLabel('Mbwa Rafiki podcast');
+        setNotes(PODCAST_EQUIPMENT_LIMIT);
+    };
+
     const addPodcastSlots = () => {
         if (rangeIsBackwards) {
             validateGeneratedSlots();
@@ -568,24 +578,34 @@ const ScheduleGenerator = ({
             return;
         }
         const base = label.trim() && label !== 'Available slot' ? label.trim() : 'Mbwa Rafiki podcast';
+        const trimmedNotes = notes.trim();
+        const podcastNotes = trimmedNotes
+            ? (trimmedNotes.includes(PODCAST_EQUIPMENT_LIMIT) ? trimmedNotes : `${trimmedNotes} ${PODCAST_EQUIPMENT_LIMIT}`)
+            : PODCAST_EQUIPMENT_LIMIT;
         const podcastSlots = dates.flatMap((dateKey, dateIndex) => ([
             {
                 id: `slot_${Date.now()}_${dateIndex + 1}_am`,
-                label: `${base} - 9:00 AM`,
+                label: `${base}${dates.length > 1 ? ` - ${formatShortDate(dateKey)}` : ''} - 9:00 AM`,
                 start_time: `${dateKey}T09:00`,
                 end_time: `${dateKey}T10:00`,
-                capacity: capacity || '3',
+                capacity: String(PODCAST_PARTICIPANT_CAPACITY),
                 location,
-                notes,
+                notes: podcastNotes,
+                slot_type: 'podcast',
+                participant_capacity: PODCAST_PARTICIPANT_CAPACITY,
+                equipment_limit: PODCAST_EQUIPMENT_LIMIT,
             },
             {
                 id: `slot_${Date.now()}_${dateIndex + 1}_midday`,
-                label: `${base} - 12:00 PM`,
+                label: `${base}${dates.length > 1 ? ` - ${formatShortDate(dateKey)}` : ''} - 12:00 PM`,
                 start_time: `${dateKey}T12:00`,
                 end_time: `${dateKey}T13:00`,
-                capacity: capacity || '3',
+                capacity: String(PODCAST_PARTICIPANT_CAPACITY),
                 location,
-                notes,
+                notes: podcastNotes,
+                slot_type: 'podcast',
+                participant_capacity: PODCAST_PARTICIPANT_CAPACITY,
+                equipment_limit: PODCAST_EQUIPMENT_LIMIT,
             },
         ]));
         onAddSlots(podcastSlots);
@@ -657,6 +677,10 @@ const ScheduleGenerator = ({
                 >
                     <Ionicons name="albums-outline" size={14} color={ADMIN_COLORS.success} />
                     <Text style={[s.actionBtnText, { color: ADMIN_COLORS.success }]}>3-day event</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg }]} onPress={applyPodcastPreset}>
+                    <Ionicons name="mic-outline" size={14} color={ADMIN_COLORS.info} />
+                    <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>Podcast preset</Text>
                 </TouchableOpacity>
             </View>
 
@@ -974,6 +998,7 @@ const toSlotPayload = (slots = []) => {
 
         const capacity = Number(slot.capacity || 0);
         if (Number.isNaN(capacity) || capacity < 0) throw new Error('Invalid slot capacity');
+        const participantCapacity = Number(slot.participant_capacity || 0);
 
         payload.push({
             id: slot.id || `slot_${index + 1}`,
@@ -983,6 +1008,9 @@ const toSlotPayload = (slots = []) => {
             capacity: Math.floor(capacity),
             location: (slot.location || '').trim(),
             notes: (slot.notes || '').trim(),
+            slot_type: (slot.slot_type || '').trim(),
+            participant_capacity: Number.isFinite(participantCapacity) && participantCapacity > 0 ? Math.floor(participantCapacity) : null,
+            equipment_limit: (slot.equipment_limit || '').trim(),
         });
     });
     return payload;
@@ -1019,6 +1047,9 @@ const normalizeSlotsForForm = (slots, startTime, endTime) => {
             capacity: slot.capacity ? String(slot.capacity) : '',
             location: slot.location || '',
             notes: slot.notes || '',
+            slot_type: slot.slot_type || '',
+            participant_capacity: slot.participant_capacity || '',
+            equipment_limit: slot.equipment_limit || '',
         }));
     }
     return [makeSlot(startTime, endTime, 0)];
@@ -1923,12 +1954,13 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                                         />
                                         <View style={{ flexDirection: 'row', gap: 8 }}>
                                             <View style={{ flex: 1 }}>
-                                                <Text style={s.inputLabel}>Slot capacity</Text>
+                                                <Text style={s.inputLabel}>{slot.slot_type === 'podcast' ? 'Slot capacity (podcast fixed)' : 'Slot capacity'}</Text>
                                                 <TextInput
-                                                    style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12 }]}
+                                                    style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12, opacity: slot.slot_type === 'podcast' ? 0.65 : 1 }]}
                                                     keyboardType="numeric"
                                                     value={slot.capacity}
                                                     onChangeText={(value) => updateFormSlot(index, 'capacity', value)}
+                                                    editable={slot.slot_type !== 'podcast'}
                                                 />
                                             </View>
                                             <View style={{ flex: 2 }}>
@@ -1941,6 +1973,11 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                                             </View>
                                         </View>
                                         <Text style={s.inputLabel}>Notes</Text>
+                                        {slot.slot_type === 'podcast' && (
+                                            <Text style={{ color: ADMIN_COLORS.info, fontSize: 11, marginBottom: 6, fontWeight: '800' }}>
+                                                Podcast mic slot: 4 microphones, 3 participant seats.
+                                            </Text>
+                                        )}
                                         <TextInput
                                             style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12, minHeight: 58, textAlignVertical: 'top' }]}
                                             multiline
@@ -2529,12 +2566,13 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                                 />
                                 <View style={{ flexDirection: 'row', gap: 8 }}>
                                     <View style={{ flex: 1 }}>
-                                        <Text style={s.inputLabel}>Capacity</Text>
+                                        <Text style={s.inputLabel}>{slot.slot_type === 'podcast' ? 'Capacity (podcast fixed)' : 'Capacity'}</Text>
                                         <TextInput
-                                            style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12 }]}
+                                            style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12, opacity: slot.slot_type === 'podcast' ? 0.65 : 1 }]}
                                             keyboardType="numeric"
                                             value={slot.capacity}
                                             onChangeText={(value) => updateScheduleSlot(index, 'capacity', value)}
+                                            editable={slot.slot_type !== 'podcast'}
                                         />
                                     </View>
                                     <View style={{ flex: 2 }}>
@@ -2547,6 +2585,11 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                                     </View>
                                 </View>
                                 <Text style={s.inputLabel}>Notes</Text>
+                                {slot.slot_type === 'podcast' && (
+                                    <Text style={{ color: ADMIN_COLORS.info, fontSize: 11, marginBottom: 6, fontWeight: '800' }}>
+                                        Podcast mic slot: 4 microphones, 3 participant seats.
+                                    </Text>
+                                )}
                                 <TextInput
                                     style={[s.textInput, { backgroundColor: ADMIN_COLORS.surface, borderRadius: 10, paddingHorizontal: 12, minHeight: 58, textAlignVertical: 'top' }]}
                                     multiline
