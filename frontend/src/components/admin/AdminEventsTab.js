@@ -1076,10 +1076,20 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
     const [accessCodes, setAccessCodes] = useState([]);
     const [loadingAccessCodes, setLoadingAccessCodes] = useState(false);
     const [generatingAccessCodes, setGeneratingAccessCodes] = useState(false);
+    const [generatingDiscountCodes, setGeneratingDiscountCodes] = useState(false);
+    const [deletingCodeId, setDeletingCodeId] = useState(null);
     const [accessCodeForm, setAccessCodeForm] = useState({
         sponsor_name: '',
         count: '30',
         prefix: '',
+    });
+    const [discountCodeForm, setDiscountCodeForm] = useState({
+        sponsor_name: '',
+        count: '30',
+        prefix: '',
+        discount_type: 'percent',
+        discount_value: '10',
+        expires_at: '',
     });
     const [ticketingForm, setTicketingForm] = useState({
         enabled: false,
@@ -1411,6 +1421,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
             free_tier_requires_code: freeTier?.requires_access_code !== undefined ? Boolean(freeTier.requires_access_code) : true,
         });
         setAccessCodeForm({ sponsor_name: '', count: '30', prefix: '' });
+        setDiscountCodeForm({ sponsor_name: '', count: '30', prefix: '', discount_type: 'percent', discount_value: '10', expires_at: '' });
         setAccessCodes([]);
         fetchAccessCodes(item.id);
         setShowCreate(false);
@@ -1485,6 +1496,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                 sponsor_name: accessCodeForm.sponsor_name.trim(),
                 prefix: accessCodeForm.prefix.trim(),
                 count,
+                code_type: 'access',
                 ticket_tier_id: 'free',
             });
             setAccessCodes(Array.isArray(res.data) ? res.data : []);
@@ -1495,6 +1507,72 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
         } finally {
             setGeneratingAccessCodes(false);
         }
+    };
+
+    const handleGenerateDiscountCodes = async () => {
+        if (!ticketingEvent) return;
+        const count = Math.max(1, Math.min(200, Math.floor(Number(discountCodeForm.count || 1))));
+        const discountValue = Number(discountCodeForm.discount_value || 0);
+        if (!Number.isFinite(count)) {
+            Alert.alert('Check quantity', 'Enter how many one-use discount codes to generate.');
+            return;
+        }
+        if (!Number.isFinite(discountValue) || discountValue <= 0) {
+            Alert.alert('Check discount', 'Enter a discount value greater than zero.');
+            return;
+        }
+        if (discountCodeForm.discount_type === 'percent' && discountValue > 100) {
+            Alert.alert('Check discount', 'Percentage discounts cannot be greater than 100%.');
+            return;
+        }
+        setGeneratingDiscountCodes(true);
+        try {
+            const res = await client.post(`/admin/events/${ticketingEvent.id}/access-codes`, {
+                sponsor_name: discountCodeForm.sponsor_name.trim(),
+                prefix: discountCodeForm.prefix.trim(),
+                count,
+                code_type: 'discount',
+                ticket_tier_id: ticketingForm.enabled ? 'paid' : null,
+                discount_type: discountCodeForm.discount_type,
+                discount_value: discountValue,
+                expires_at: discountCodeForm.expires_at.trim() || null,
+            });
+            setAccessCodes(Array.isArray(res.data) ? res.data : []);
+            setDiscountCodeForm(prev => ({ ...prev, count: String(count) }));
+            Alert.alert('Codes generated', `${count} one-use discount code${count === 1 ? '' : 's'} added.`);
+        } catch (error) {
+            Alert.alert('Error', getApiErrorMessage(error, 'Could not generate discount codes.'));
+        } finally {
+            setGeneratingDiscountCodes(false);
+        }
+    };
+
+    const handleDeleteAccessCode = (code) => {
+        if (!ticketingEvent || !code?.id) return;
+        Alert.alert(
+            'Delete code',
+            `Delete ${code.code}? This prevents it from being used again.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        setDeletingCodeId(code.id);
+                        try {
+                            await client.delete(`/admin/events/${ticketingEvent.id}/access-codes/${code.id}`, {
+                                data: { reason: 'Deleted from admin ticketing panel' },
+                            });
+                            await fetchAccessCodes(ticketingEvent.id);
+                        } catch (error) {
+                            Alert.alert('Error', getApiErrorMessage(error, 'Could not delete code.'));
+                        } finally {
+                            setDeletingCodeId(null);
+                        }
+                    },
+                },
+            ],
+        );
     };
 
     const openScorecardEditor = (item) => {
@@ -2139,59 +2217,150 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                         )}
                     </View>
 
-                    {ticketingForm.enabled && ticketingForm.free_tier_requires_code !== false && (
+                    {(ticketingForm.enabled || Number(ticketingForm.standard_ticket_price || 0) > 0) && (
                         <View style={{ backgroundColor: ADMIN_COLORS.surface, borderRadius: 12, padding: 12, marginTop: 12 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                                 <Ionicons name="key-outline" size={17} color={ADMIN_COLORS.info} />
-                                <Text style={{ marginLeft: 6, color: ADMIN_COLORS.textPrimary, fontWeight: '900' }}>Sponsor access codes</Text>
+                                <Text style={{ marginLeft: 6, color: ADMIN_COLORS.textPrimary, fontWeight: '900' }}>Registration codes</Text>
                             </View>
                             <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 11, lineHeight: 16 }}>
-                                Generate one-use codes for sponsors to share with approved free participants. Used codes cannot register another user.
+                                Generate one-use sponsor codes for free seats and paid discount codes for self-sponsored participants.
                             </Text>
-                            <Text style={s.inputLabel}>Sponsor / partner name</Text>
-                            <TextInput
-                                style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
-                                placeholder="Example: County Partner"
-                                placeholderTextColor={ADMIN_COLORS.textMuted}
-                                value={accessCodeForm.sponsor_name}
-                                onChangeText={(value) => setAccessCodeForm(prev => ({ ...prev, sponsor_name: value }))}
-                            />
-                            <View style={{ flexDirection: 'row', gap: 8 }}>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={s.inputLabel}>Quantity</Text>
+
+                            {ticketingForm.enabled && ticketingForm.free_tier_requires_code !== false && (
+                                <View style={{ backgroundColor: ADMIN_COLORS.infoBg, borderRadius: 12, padding: 10, marginTop: 10 }}>
+                                    <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '900' }}>Free/sponsored access codes</Text>
+                                    <Text style={s.inputLabel}>Sponsor / partner name</Text>
                                     <TextInput
                                         style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
-                                        keyboardType="numeric"
-                                        value={accessCodeForm.count}
-                                        onChangeText={(value) => setAccessCodeForm(prev => ({ ...prev, count: value }))}
-                                    />
-                                </View>
-                                <View style={{ flex: 2 }}>
-                                    <Text style={s.inputLabel}>Prefix</Text>
-                                    <TextInput
-                                        style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
-                                        placeholder="Optional"
+                                        placeholder="Example: County Partner"
                                         placeholderTextColor={ADMIN_COLORS.textMuted}
-                                        value={accessCodeForm.prefix}
-                                        autoCapitalize="characters"
-                                        onChangeText={(value) => setAccessCodeForm(prev => ({ ...prev, prefix: value.toUpperCase() }))}
+                                        value={accessCodeForm.sponsor_name}
+                                        onChangeText={(value) => setAccessCodeForm(prev => ({ ...prev, sponsor_name: value }))}
                                     />
+                                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={s.inputLabel}>Quantity</Text>
+                                            <TextInput
+                                                style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
+                                                keyboardType="numeric"
+                                                value={accessCodeForm.count}
+                                                onChangeText={(value) => setAccessCodeForm(prev => ({ ...prev, count: value }))}
+                                            />
+                                        </View>
+                                        <View style={{ flex: 2 }}>
+                                            <Text style={s.inputLabel}>Prefix</Text>
+                                            <TextInput
+                                                style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
+                                                placeholder="Optional"
+                                                placeholderTextColor={ADMIN_COLORS.textMuted}
+                                                value={accessCodeForm.prefix}
+                                                autoCapitalize="characters"
+                                                onChangeText={(value) => setAccessCodeForm(prev => ({ ...prev, prefix: value.toUpperCase() }))}
+                                            />
+                                        </View>
+                                    </View>
+                                    <TouchableOpacity
+                                        style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg, alignSelf: 'flex-start', marginTop: 4 }]}
+                                        onPress={handleGenerateAccessCodes}
+                                        disabled={generatingAccessCodes}
+                                    >
+                                        {generatingAccessCodes ? (
+                                            <ActivityIndicator size="small" color={ADMIN_COLORS.info} />
+                                        ) : (
+                                            <Ionicons name="sparkles-outline" size={15} color={ADMIN_COLORS.info} />
+                                        )}
+                                        <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>
+                                            {generatingAccessCodes ? 'Generating...' : 'Generate free codes'}
+                                        </Text>
+                                    </TouchableOpacity>
                                 </View>
-                            </View>
-                            <TouchableOpacity
-                                style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg, alignSelf: 'flex-start', marginTop: 4 }]}
-                                onPress={handleGenerateAccessCodes}
-                                disabled={generatingAccessCodes}
-                            >
-                                {generatingAccessCodes ? (
-                                    <ActivityIndicator size="small" color={ADMIN_COLORS.info} />
-                                ) : (
-                                    <Ionicons name="sparkles-outline" size={15} color={ADMIN_COLORS.info} />
-                                )}
-                                <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>
-                                    {generatingAccessCodes ? 'Generating...' : 'Generate codes'}
-                                </Text>
-                            </TouchableOpacity>
+                            )}
+
+                            {Number((ticketingForm.enabled ? ticketingForm.paid_ticket_price : ticketingForm.standard_ticket_price) || 0) > 0 && (
+                                <View style={{ backgroundColor: ADMIN_COLORS.successBg, borderRadius: 12, padding: 10, marginTop: 10 }}>
+                                    <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '900' }}>Paid/self-sponsored discount codes</Text>
+                                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                                        <View style={{ flex: 2 }}>
+                                            <Text style={s.inputLabel}>Partner / campaign</Text>
+                                            <TextInput
+                                                style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
+                                                placeholder="Optional"
+                                                placeholderTextColor={ADMIN_COLORS.textMuted}
+                                                value={discountCodeForm.sponsor_name}
+                                                onChangeText={(value) => setDiscountCodeForm(prev => ({ ...prev, sponsor_name: value }))}
+                                            />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={s.inputLabel}>Quantity</Text>
+                                            <TextInput
+                                                style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
+                                                keyboardType="numeric"
+                                                value={discountCodeForm.count}
+                                                onChangeText={(value) => setDiscountCodeForm(prev => ({ ...prev, count: value }))}
+                                            />
+                                        </View>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                                        {[
+                                            ['percent', 'Percent'],
+                                            ['fixed', ticketingForm.currency || 'KES'],
+                                        ].map(([value, label]) => (
+                                            <TouchableOpacity
+                                                key={value}
+                                                style={[s.filterChip, discountCodeForm.discount_type === value && s.filterChipActive]}
+                                                onPress={() => setDiscountCodeForm(prev => ({ ...prev, discount_type: value }))}
+                                            >
+                                                <Text style={[s.filterChipText, discountCodeForm.discount_type === value && s.filterChipTextActive]}>{label}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={s.inputLabel}>Discount</Text>
+                                            <TextInput
+                                                style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
+                                                keyboardType="numeric"
+                                                value={discountCodeForm.discount_value}
+                                                onChangeText={(value) => setDiscountCodeForm(prev => ({ ...prev, discount_value: value }))}
+                                            />
+                                        </View>
+                                        <View style={{ flex: 2 }}>
+                                            <Text style={s.inputLabel}>Prefix</Text>
+                                            <TextInput
+                                                style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
+                                                placeholder="Optional"
+                                                placeholderTextColor={ADMIN_COLORS.textMuted}
+                                                value={discountCodeForm.prefix}
+                                                autoCapitalize="characters"
+                                                onChangeText={(value) => setDiscountCodeForm(prev => ({ ...prev, prefix: value.toUpperCase() }))}
+                                            />
+                                        </View>
+                                    </View>
+                                    <Text style={s.inputLabel}>Expires at</Text>
+                                    <TextInput
+                                        style={[s.textInput, { backgroundColor: ADMIN_COLORS.surfaceLight, borderRadius: 10, paddingHorizontal: 12 }]}
+                                        placeholder="Optional: 2026-12-31T23:59"
+                                        placeholderTextColor={ADMIN_COLORS.textMuted}
+                                        value={discountCodeForm.expires_at}
+                                        onChangeText={(value) => setDiscountCodeForm(prev => ({ ...prev, expires_at: value }))}
+                                    />
+                                    <TouchableOpacity
+                                        style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.successBg, alignSelf: 'flex-start', marginTop: 4 }]}
+                                        onPress={handleGenerateDiscountCodes}
+                                        disabled={generatingDiscountCodes}
+                                    >
+                                        {generatingDiscountCodes ? (
+                                            <ActivityIndicator size="small" color={ADMIN_COLORS.success} />
+                                        ) : (
+                                            <Ionicons name="pricetag-outline" size={15} color={ADMIN_COLORS.success} />
+                                        )}
+                                        <Text style={[s.actionBtnText, { color: ADMIN_COLORS.success }]}>
+                                            {generatingDiscountCodes ? 'Generating...' : 'Generate discount codes'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
 
                             <View style={{ marginTop: 12 }}>
                                 <Text style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '800', marginBottom: 6 }}>
@@ -2202,25 +2371,45 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                                 ) : accessCodes.length === 0 ? (
                                     <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 12 }}>No sponsor codes generated yet.</Text>
                                 ) : (
-                                    accessCodes.slice(0, 60).map((code) => (
+                                    accessCodes.slice(0, 80).map((code) => {
+                                        const isDeleted = Boolean(code.deleted_at);
+                                        const isDiscount = code.code_type === 'discount';
+                                        const discountText = isDiscount
+                                            ? (code.discount_type === 'percent'
+                                                ? `${Number(code.discount_value || 0)}% off`
+                                                : `${ticketingForm.currency || code.currency || 'KES'} ${Number(code.discount_value || 0).toLocaleString()} off`)
+                                            : 'Free access';
+                                        return (
                                         <View key={code.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderTopWidth: 1, borderTopColor: ADMIN_COLORS.surfaceBorder }}>
                                             <View style={{ flex: 1, paddingRight: 8 }}>
                                                 <Text selectable style={{ color: ADMIN_COLORS.textPrimary, fontWeight: '900', letterSpacing: 1 }}>{code.code}</Text>
                                                 <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 11, marginTop: 2 }}>
-                                                    {code.sponsor_name || 'No sponsor'}{code.used_by_name ? ` - ${code.used_by_name}` : ''}
+                                                    {discountText} - {code.sponsor_name || 'No partner'}{code.used_by_name ? ` - ${code.used_by_name}` : ''}
                                                 </Text>
                                             </View>
-                                            <View style={[s.badge, { backgroundColor: code.is_used ? ADMIN_COLORS.successBg : ADMIN_COLORS.surfaceBorder }]}>
-                                                <Text style={[s.badgeText, { color: code.is_used ? ADMIN_COLORS.success : ADMIN_COLORS.textSecondary }]}>
-                                                    {code.is_used ? 'USED' : 'UNUSED'}
+                                            <View style={[s.badge, { backgroundColor: isDeleted ? ADMIN_COLORS.dangerBg : (code.is_used ? ADMIN_COLORS.successBg : ADMIN_COLORS.surfaceBorder), marginRight: 8 }]}>
+                                                <Text style={[s.badgeText, { color: isDeleted ? ADMIN_COLORS.danger : (code.is_used ? ADMIN_COLORS.success : ADMIN_COLORS.textSecondary) }]}>
+                                                    {isDeleted ? 'DELETED' : (code.is_used ? 'USED' : 'UNUSED')}
                                                 </Text>
                                             </View>
+                                            {!isDeleted && (
+                                                <TouchableOpacity
+                                                    onPress={() => handleDeleteAccessCode(code)}
+                                                    disabled={deletingCodeId === code.id}
+                                                    style={{ padding: 6 }}
+                                                >
+                                                    {deletingCodeId === code.id
+                                                        ? <ActivityIndicator size="small" color={ADMIN_COLORS.danger} />
+                                                        : <Ionicons name="trash-outline" size={16} color={ADMIN_COLORS.danger} />}
+                                                </TouchableOpacity>
+                                            )}
                                         </View>
-                                    ))
+                                        );
+                                    })
                                 )}
-                                {accessCodes.length > 60 && (
+                                {accessCodes.length > 80 && (
                                     <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 11, marginTop: 6 }}>
-                                        Showing latest 60 codes.
+                                        Showing latest 80 codes.
                                     </Text>
                                 )}
                             </View>

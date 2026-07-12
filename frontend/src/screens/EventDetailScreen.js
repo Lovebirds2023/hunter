@@ -31,6 +31,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
     const [selectedBookingSlotId, setSelectedBookingSlotId] = useState(null);
     const [attendeeTypeJustification, setAttendeeTypeJustification] = useState('');
     const [accessCode, setAccessCode] = useState('');
+    const [discountCode, setDiscountCode] = useState('');
     const [photoConsent, setPhotoConsent] = useState(null);
 
     const [myRegistration, setMyRegistration] = useState(null);
@@ -245,6 +246,10 @@ export const EventDetailScreen = ({ route, navigation }) => {
         const selectedAmount = selectedTier
             ? Number(selectedTier.price || 0)
             : Number(event?.ticket_price || 0);
+        if (selectedAmount <= 0 && (discountCode || '').trim()) {
+            Alert.alert('Discount not needed', 'Discount codes can only be used with paid registration categories.');
+            return;
+        }
         let checkoutWindow = null;
         if (selectedAmount > 0) {
             checkoutWindow = openCheckoutWindow();
@@ -265,6 +270,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
                 ticket_tier_id: selectedTier?.id || null,
                 attendee_type_justification: ticketTiers.length > 0 ? attendeeTypeJustification.trim() : null,
                 access_code: ticketTiers.length > 0 ? accessCode.trim() : null,
+                discount_code: selectedAmount > 0 ? discountCode.trim() : null,
                 photo_consent: photoConsent,
                 booking_slot_id: selectedBookingSlot?.id || null,
                 form_responses: formattedResponses
@@ -574,6 +580,25 @@ export const EventDetailScreen = ({ route, navigation }) => {
                                             </Text>
                                         </View>
                                     )}
+                                </View>
+                            )}
+
+                            {selectedTicketPrice > 0 && (
+                                <View style={styles.profileSection}>
+                                    <Text style={styles.sectionTitle}>Discount code</Text>
+                                    <View style={styles.accessCodeBox}>
+                                        <Text style={styles.questionLabel}>Paid/self-sponsored discount code</Text>
+                                        <TextInput
+                                            style={styles.textInput}
+                                            placeholder="Optional"
+                                            value={discountCode}
+                                            autoCapitalize="characters"
+                                            onChangeText={(value) => setDiscountCode(value.toUpperCase())}
+                                        />
+                                        <Text style={styles.accessCodeHelp}>
+                                            If the code is valid, the discount is applied before Pesapal payment opens.
+                                        </Text>
+                                    </View>
                                 </View>
                             )}
 

@@ -193,6 +193,15 @@ const tierRequiresAccessCode = (tier: JsonRecord | null) => {
   if (!tier) return false;
   return asBoolean(tier.requires_access_code, asNumber(tier.price) <= 0);
 };
+const normalizeDiscountType = (value: unknown) => {
+  const type = cleanString(value).toLowerCase();
+  return type === "percent" ? "percent" : "fixed";
+};
+const calculateEventDiscountAmount = (amount: number, type: string, value: number) => {
+  if (amount <= 0 || value <= 0) return 0;
+  const rawDiscount = type === "percent" ? amount * Math.min(value, 100) / 100 : value;
+  return Math.round(Math.min(amount, Math.max(rawDiscount, 0)) * 100) / 100;
+};
 const normalizeHashtag = (value: unknown) => (
   cleanString(value)
     .replace(/^#+/, "")
@@ -1683,7 +1692,9 @@ const resolveAccessCodeForRegistration = async (
     .from("event_access_codes")
     .select("*")
     .eq("event_id", eventId)
+    .eq("code_type", "access")
     .eq("is_active", true)
+    .is("deleted_at", null)
     .ilike("code", code)
     .maybeSingle();
   if (error) throw error;
@@ -1708,6 +1719,72 @@ const resolveAccessCodeForRegistration = async (
   return {
     accessCodeId: cleanString(accessCode.id),
     accessCode: cleanString(accessCode.code),
+  };
+};
+
+const resolveDiscountCodeForRegistration = async (
+  eventId: string,
+  tier: JsonRecord | null,
+  rawCode: unknown,
+  userId: string,
+  originalAmount: number,
+) => {
+  const code = normalizeAccessCode(rawCode);
+  if (!code) {
+    return {
+      discountCodeId: null,
+      discountCode: null,
+      discountAmount: 0,
+      finalAmount: originalAmount,
+    };
+  }
+  if (originalAmount <= 0) {
+    return { error: "Discount codes can only be used with paid registration categories." };
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("event_access_codes")
+    .select("*")
+    .eq("event_id", eventId)
+    .eq("code_type", "discount")
+    .eq("is_active", true)
+    .is("deleted_at", null)
+    .ilike("code", code)
+    .maybeSingle();
+  if (error) throw error;
+  const discountCode = data as JsonRecord | null;
+  if (!discountCode) return { error: "This discount code is not valid for this event." };
+
+  const expiresAt = cleanString(discountCode.expires_at);
+  if (expiresAt && Date.parse(expiresAt) <= Date.now()) {
+    return { error: "This discount code has expired." };
+  }
+
+  const tierId = cleanString(tier?.id);
+  const codeTierId = cleanString(discountCode.ticket_tier_id);
+  if (codeTierId && tierId && codeTierId !== tierId) {
+    return { error: "This discount code is not valid for the selected registration category." };
+  }
+
+  const { data: uses, error: usesError } = await supabaseAdmin
+    .from("registrations")
+    .select("id,user_id")
+    .eq("discount_code_id", cleanString(discountCode.id));
+  if (usesError) throw usesError;
+  const usedByOtherUser = ((uses ?? []) as JsonRecord[])
+    .some((row) => cleanString(row.user_id) !== userId);
+  if (usedByOtherUser) return { error: "This discount code has already been used." };
+
+  const discountType = normalizeDiscountType(discountCode.discount_type);
+  const discountAmount = calculateEventDiscountAmount(originalAmount, discountType, asNumber(discountCode.discount_value));
+  if (discountAmount <= 0) return { error: "This discount code does not reduce the selected ticket price." };
+  const finalAmount = Math.round(Math.max(originalAmount - discountAmount, 0) * 100) / 100;
+
+  return {
+    discountCodeId: cleanString(discountCode.id),
+    discountCode: cleanString(discountCode.code),
+    discountAmount,
+    finalAmount,
   };
 };
 
@@ -1754,7 +1831,13 @@ const handleRegisterEvent = async (request: Request, eventId: string) => {
   const accessCodeId = "accessCodeId" in accessCodeResult ? accessCodeResult.accessCodeId : null;
   const accessCode = "accessCode" in accessCodeResult ? accessCodeResult.accessCode : null;
 
-  const amount = selectedTier ? Math.max(asNumber(selectedTier.price), 0) : Math.max(asNumber(event.ticket_price), 0);
+  const originalAmount = selectedTier ? Math.max(asNumber(selectedTier.price), 0) : Math.max(asNumber(event.ticket_price), 0);
+  const discountResult = await resolveDiscountCodeForRegistration(eventId, selectedTier, body.discount_code, userId, originalAmount);
+  if ("error" in discountResult && discountResult.error) return errorResponse(discountResult.error);
+  const discountCodeId = "discountCodeId" in discountResult ? discountResult.discountCodeId : null;
+  const discountCode = "discountCode" in discountResult ? discountResult.discountCode : null;
+  const discountAmount = "discountAmount" in discountResult ? discountResult.discountAmount : 0;
+  const amount = "finalAmount" in discountResult ? discountResult.finalAmount : originalAmount;
   const currency = cleanString(selectedTier?.currency) || cleanString(event.currency) || "KES";
   const payload = {
     event_id: eventId,
@@ -1764,6 +1847,8 @@ const handleRegisterEvent = async (request: Request, eventId: string) => {
     role: cleanString(body.role) || "attendee",
     share_phone: asBoolean(body.share_phone, false),
     amount,
+    original_amount: originalAmount,
+    discount_amount: discountAmount,
     currency,
     payment_status: amount > 0 ? "pending" : "free",
     ticket_tier_id: selectedTier ? cleanString(selectedTier.id) : null,
@@ -1776,6 +1861,8 @@ const handleRegisterEvent = async (request: Request, eventId: string) => {
     booking_end_time: selectedSlot ? cleanString(selectedSlot.end_time) || null : null,
     access_code_id: accessCodeId,
     access_code: accessCode,
+    discount_code_id: discountCodeId,
+    discount_code: discountCode,
     updated_at: nowIso(),
   };
 
@@ -1786,7 +1873,7 @@ const handleRegisterEvent = async (request: Request, eventId: string) => {
     .single();
   if (error) {
     if (cleanString(error.code) === "23505") {
-      return errorResponse("This sponsor/access code has already been used.");
+      return errorResponse("This sponsor/access or discount code has already been used.");
     }
     throw error;
   }
@@ -1879,7 +1966,9 @@ const handleEventResponses = async (request: Request, eventId: string) => {
       status: registration.status,
       role: registration.role,
       share_phone: registration.share_phone,
+      original_amount: registration.original_amount ?? registration.amount,
       amount: registration.amount,
+      discount_amount: registration.discount_amount ?? 0,
       currency: registration.currency,
       payment_status: registration.payment_status,
       ticket_tier_id: registration.ticket_tier_id,
@@ -1892,6 +1981,8 @@ const handleEventResponses = async (request: Request, eventId: string) => {
       booking_end_time: registration.booking_end_time,
       access_code_id: registration.access_code_id,
       access_code: registration.access_code,
+      discount_code_id: registration.discount_code_id,
+      discount_code: registration.discount_code,
       pesapal_tracking_id: registration.pesapal_tracking_id,
       paid_at: registration.paid_at,
       created_at: registration.created_at,
@@ -5026,17 +5117,20 @@ const listEventAccessCodes = async (eventId: string) => {
   if (codeIds.length) {
     const { data, error: registrationError } = await supabaseAdmin
       .from("registrations")
-      .select("id,access_code_id,user_id,created_at,user:users(full_name,email)")
-      .in("access_code_id", codeIds);
+      .select("id,access_code_id,discount_code_id,user_id,created_at,user:users(full_name,email)")
+      .or(`access_code_id.in.(${codeIds.join(",")}),discount_code_id.in.(${codeIds.join(",")})`);
     if (registrationError) throw registrationError;
     registrations = (data ?? []) as JsonRecord[];
   }
 
   const registrationsByCode = new Map<string, JsonRecord[]>();
   for (const registration of registrations) {
-    const codeId = cleanString(registration.access_code_id);
-    if (!registrationsByCode.has(codeId)) registrationsByCode.set(codeId, []);
-    registrationsByCode.get(codeId)?.push(registration);
+    [registration.access_code_id, registration.discount_code_id].forEach((value) => {
+      const codeId = cleanString(value);
+      if (!codeId) return;
+      if (!registrationsByCode.has(codeId)) registrationsByCode.set(codeId, []);
+      registrationsByCode.get(codeId)?.push(registration);
+    });
   }
 
   return ((codes ?? []) as JsonRecord[]).map((code) => {
@@ -5061,17 +5155,30 @@ const handleAdminEventAccessCodes = async (request: Request, eventId: string) =>
 
   const body = await readJson(request);
   const count = Math.max(1, Math.min(200, Math.floor(asNumber(body.count, 1))));
-  const ticketTierId = cleanString(body.ticket_tier_id) || "free";
+  const codeType = cleanString(body.code_type) === "discount" ? "discount" : "access";
+  const ticketTierId = cleanString(body.ticket_tier_id) || (codeType === "discount" ? "" : "free");
   const tiers = asArray(event.ticket_tiers).filter(isRecord);
   const selectedTier = tiers.find((tier) => cleanString(tier.id) === ticketTierId) ?? null;
   const sponsorName = cleanString(body.sponsor_name) || null;
   const prefixSeed = cleanString(body.prefix) || sponsorName || selectedTier?.label || event.title;
+  const discountType = normalizeDiscountType(body.discount_type);
+  const discountValue = Math.max(0, asNumber(body.discount_value));
+  if (codeType === "discount" && discountValue <= 0) {
+    return errorResponse("Discount value must be greater than zero.");
+  }
+  if (codeType === "discount" && discountType === "percent" && discountValue > 100) {
+    return errorResponse("Percentage discounts cannot be greater than 100%.");
+  }
   const rows = Array.from({ length: count }).map(() => ({
     event_id: eventId,
     code: generateAccessCode(prefixSeed),
+    code_type: codeType,
     sponsor_name: sponsorName,
     ticket_tier_id: ticketTierId,
     ticket_tier_label: cleanString(selectedTier?.label) || (ticketTierId === "free" ? "Free" : ticketTierId),
+    discount_type: codeType === "discount" ? discountType : null,
+    discount_value: codeType === "discount" ? discountValue : 0,
+    expires_at: cleanString(body.expires_at) || null,
     max_uses: 1,
     is_active: true,
     created_by_id: cleanString(profile.id),
@@ -5081,6 +5188,33 @@ const handleAdminEventAccessCodes = async (request: Request, eventId: string) =>
   const { error } = await supabaseAdmin.from("event_access_codes").insert(rows);
   if (error) return errorResponse(`Could not generate access codes: ${readableErrorMessage(error, "Database insert failed.")}`, 400);
   return jsonResponse(await listEventAccessCodes(eventId), 201);
+};
+
+const handleAdminDeleteEventAccessCode = async (request: Request, eventId: string, codeId: string) => {
+  const { profile } = await requireAdminProfile(request);
+  const body = await readJson(request);
+  await selectSingle("events", eventId, "Event");
+  const { data: code, error: codeError } = await supabaseAdmin
+    .from("event_access_codes")
+    .select("*")
+    .eq("id", codeId)
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (codeError) throw codeError;
+  if (!code) return notFound("Code");
+
+  const { error } = await supabaseAdmin
+    .from("event_access_codes")
+    .update({
+      is_active: false,
+      deleted_at: nowIso(),
+      deleted_by_id: cleanString(profile.id),
+      delete_reason: cleanString(body.reason) || "Deleted by admin",
+      updated_at: nowIso(),
+    })
+    .eq("id", codeId);
+  if (error) return errorResponse(`Could not delete code: ${readableErrorMessage(error, "Database update failed.")}`, 400);
+  return jsonResponse({ message: "Code deleted", code_id: codeId });
 };
 
 const refreshEventPinFromEvent = async (eventId: string, event: JsonRecord, adminId: string) => {
@@ -5997,6 +6131,10 @@ const routeRequest = async (request: Request) => {
   if (method === "GET" && path === "/admin/events") return handleAdminEvents(request);
   if (/^\/admin\/events\/[^/]+\/access-codes$/.test(path) && (method === "GET" || method === "POST")) {
     return handleAdminEventAccessCodes(request, firstPathMatch(path, /^\/admin\/events\/([^/]+)\/access-codes$/));
+  }
+  if (method === "DELETE" && /^\/admin\/events\/[^/]+\/access-codes\/[^/]+$/.test(path)) {
+    const match = path.match(/^\/admin\/events\/([^/]+)\/access-codes\/([^/]+)$/);
+    return handleAdminDeleteEventAccessCode(request, match?.[1] ?? "", match?.[2] ?? "");
   }
   if (method === "DELETE" && /^\/admin\/events\/[^/]+$/.test(path)) return handleAdminDeleteEvent(request, firstPathMatch(path, /^\/admin\/events\/([^/]+)$/));
   if (method === "PUT" && /^\/admin\/events\/[^/]+$/.test(path)) return handleAdminUpdateEvent(request, firstPathMatch(path, /^\/admin\/events\/([^/]+)$/), "details");
