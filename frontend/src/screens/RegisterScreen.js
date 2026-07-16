@@ -353,6 +353,9 @@ const RegisterScreen = ({ navigation }) => {
                                     />
                                 </TouchableOpacity>
                             </View>
+                            {password.length > 0 && password.length < 8 && (
+                                <Text style={styles.validationText}>{t('register.weak_password_msg')}</Text>
+                            )}
 
                             <View style={{ marginTop: 25 }}>
                                 <Button title={t('register.next_step')} onPress={() => {
@@ -826,6 +829,14 @@ const styles = StyleSheet.create({
         borderRadius: SIZES.radius,
         backgroundColor: 'rgba(255,255,255,0.12)',
         marginBottom: SPACING.md,
+    },
+    validationText: {
+        color: '#FFB4A8',
+        fontSize: 13,
+        fontWeight: '700',
+        marginTop: -8,
+        marginBottom: SPACING.sm,
+        marginLeft: 5,
     },
     eyeIcon: {
         paddingHorizontal: 15,
