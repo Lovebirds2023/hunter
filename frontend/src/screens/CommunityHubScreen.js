@@ -5,6 +5,7 @@ import { COLORS, SPACING, SHADOWS } from '../constants/theme';
 import client from '../api/client';
 import { AuthContext } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
+import { getActionableErrorMessage } from '../utils/apiErrors';
 
 export const CommunityHubScreen = ({ navigation }) => {
     const { t } = useTranslation();
@@ -88,7 +89,7 @@ export const CommunityHubScreen = ({ navigation }) => {
             setIsPollMode(false);
             fetchData();
         } catch (error) {
-            Alert.alert(t('common.error'), t('community_hub.send_error'));
+            Alert.alert(t('common.error'), getActionableErrorMessage(error, t('community_hub.send_error')));
         } finally {
             setIsSending(false);
         }

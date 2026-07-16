@@ -10,6 +10,7 @@ import client from '../api/client';
 import { getBreedsForPetType, getColorsForPetType } from '../constants/data';
 import { uploadImagesToSupabase } from '../utils/uploadImages';
 import { runtimeConfig } from '../config/runtimeConfig';
+import { getActionableErrorMessage, getUploadErrorMessage } from '../utils/apiErrors';
 
 // Only import CameraView for native platforms
 let CameraView: any = null;
@@ -145,7 +146,13 @@ export const DogIdentityScreen = ({ navigation }: any) => {
         submittingRef.current = true;
         setIsSubmitting(true);
         try {
-            const uploadedImages = await uploadImagesToSupabase(images, 'pet-identity', runtimeConfig.storageBuckets.petIdentity);
+            let uploadedImages: string[] = [];
+            try {
+                uploadedImages = await uploadImagesToSupabase(images, 'pet-identity', runtimeConfig.storageBuckets.petIdentity);
+            } catch (uploadError) {
+                Alert.alert(t('common.error'), getUploadErrorMessage(uploadError, 'Photo upload failed. Could not upload pet identity photos.'));
+                return;
+            }
             const payload = {
                 name: dogName,
                 breed: breed === 'Other' ? customBreed : breed,
@@ -171,7 +178,7 @@ export const DogIdentityScreen = ({ navigation }: any) => {
             );
         } catch (error) {
             console.error("Registration error", error);
-            Alert.alert(t('common.error'), t('dog_identity.failed_register'));
+            Alert.alert(t('common.error'), getActionableErrorMessage(error, t('dog_identity.failed_register')));
         } finally {
             submittingRef.current = false;
             setIsSubmitting(false);

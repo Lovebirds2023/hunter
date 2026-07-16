@@ -7,6 +7,7 @@ import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 import client from '../api/client';
 import { COLORS, SPACING } from '../constants/theme';
+import { getActionableErrorMessage } from '../utils/apiErrors';
 
 const USER_TYPES = [
     'dog owner',
@@ -138,7 +139,7 @@ export const ScorecardSurveyScreen = ({ route, navigation }) => {
                 [{ text: 'OK', onPress: () => navigation.goBack() }]
             );
         } catch (error) {
-            Alert.alert('Error', error.response?.data?.detail || 'Could not submit the impact assessment.');
+            Alert.alert('Error', getActionableErrorMessage(error, 'Could not submit the impact assessment.'));
         } finally {
             setSubmitting(false);
         }

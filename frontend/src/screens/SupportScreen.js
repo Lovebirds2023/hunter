@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Alert, SafeAreaView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Alert, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SHADOWS } from '../constants/theme';
 import client from '../api/client';
 import { useTranslation } from 'react-i18next';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
-import { decode } from 'base64-arraybuffer';
-import { supabase } from '../../supabase';
 import { runtimeConfig } from '../config/runtimeConfig';
 import { Image } from 'react-native';
+import { uploadImagesToSupabase } from '../utils/uploadImages';
+import { getActionableErrorMessage, getUploadErrorMessage } from '../utils/apiErrors';
 
 export const SupportScreen = ({ navigation }) => {
     const { t } = useTranslation();
@@ -82,33 +81,12 @@ export const SupportScreen = ({ navigation }) => {
 
     const uploadImages = async () => {
         setUploading(true);
-        const uploadedUrls = [];
 
         try {
-            for (const uri of images) {
-                const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
-                const filePath = `support/${fileName}`;
-
-                const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-                const { data, error } = await supabase.storage
-                    .from(runtimeConfig.storageBuckets.supportAttachments)
-                    .upload(filePath, decode(base64), {
-                        contentType: 'image/jpeg',
-                        upsert: true
-                    });
-
-                if (error) throw error;
-
-                const { data: { publicUrl } } = supabase.storage
-                    .from(runtimeConfig.storageBuckets.supportAttachments)
-                    .getPublicUrl(filePath);
-
-                uploadedUrls.push(publicUrl);
-            }
-            return uploadedUrls;
+            return await uploadImagesToSupabase(images, 'support', runtimeConfig.storageBuckets.supportAttachments);
         } catch (error) {
             console.error('Upload error:', error);
-            Alert.alert(t('support.upload_failed'), t('support.upload_failed_msg'));
+            Alert.alert(t('support.upload_failed'), getUploadErrorMessage(error, t('support.upload_failed_msg')));
             return null;
         } finally {
             setUploading(false);
@@ -141,7 +119,7 @@ export const SupportScreen = ({ navigation }) => {
             setShowForm(false);
             fetchTickets();
         } catch (e) {
-            Alert.alert(t('common.error'), t('support.error_msg'));
+            Alert.alert(t('common.error'), getActionableErrorMessage(e, t('support.error_msg')));
         } finally {
             setSubmitting(false);
         }

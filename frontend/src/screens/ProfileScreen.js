@@ -20,6 +20,7 @@ import {
     isValidCountryCode,
 } from '../constants/countryCodes';
 import { PRIVACY_POLICY_URL } from '../constants/legal';
+import { getActionableErrorMessage } from '../utils/apiErrors';
 
 const LANGUAGES = [
     { label: "English", value: "en" },
@@ -216,7 +217,7 @@ export const ProfileScreen = ({ navigation }) => {
             fetchWalletSummary();
             Alert.alert(t('common.success'), t('profile_screen.success_msg'));
         } catch (error) {
-            Alert.alert(t('common.error'), t('profile_screen.error_msg'));
+            Alert.alert(t('common.error'), getActionableErrorMessage(error, t('profile_screen.error_msg')));
         }
     };
 

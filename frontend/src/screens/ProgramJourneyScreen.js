@@ -4,6 +4,7 @@ import { COLORS } from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { SyncContext } from '../context/SyncContext';
 import client from '../api/client';
+import { getActionableErrorMessage } from '../utils/apiErrors';
 
 const WHO5_QUESTIONS = [
     "I have felt cheerful and in good spirits",
@@ -132,7 +133,7 @@ export const ProgramJourneyScreen = ({ route, navigation }) => {
             }));
             
         } catch (error) {
-            Alert.alert("Error", "Failed to save check-in");
+            Alert.alert("Error", getActionableErrorMessage(error, "Failed to save check-in"));
         }
     };
 

@@ -10,6 +10,7 @@ import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { Picker } from '@react-native-picker/picker';
 import { Switch, TextInput } from 'react-native';
+import { getActionableErrorMessage } from '../utils/apiErrors';
 
 const DATE_PREVIEW_LIMIT = 8;
 const LONG_SCHEDULE_DAYS = 31;
@@ -197,7 +198,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
             }
         } catch (error) {
             closeCheckoutWindow(checkoutWindow);
-            Alert.alert('Payment failed', error.response?.data?.detail || 'Could not start payment.');
+            Alert.alert('Payment failed', getActionableErrorMessage(error, 'Could not start payment.'));
         } finally {
             setPaymentLoading(false);
         }
@@ -220,7 +221,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
                 Alert.alert('Not confirmed yet', 'If you just paid, wait a moment and try again.');
             }
         } catch (error) {
-            Alert.alert('Payment check failed', error.response?.data?.detail || 'Could not verify payment.');
+            Alert.alert('Payment check failed', getActionableErrorMessage(error, 'Could not verify payment.'));
         } finally {
             setPaymentLoading(false);
         }
@@ -319,7 +320,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
             await loadData(); // Refresh to show Check-in button
         } catch (error) {
             closeCheckoutWindow(checkoutWindow);
-            Alert.alert(t('common.error'), error.response?.data?.detail || t('event_detail.registration_failed'));
+            Alert.alert(t('common.error'), getActionableErrorMessage(error, t('event_detail.registration_failed')));
         } finally {
             setRegistrationLoading(false);
         }

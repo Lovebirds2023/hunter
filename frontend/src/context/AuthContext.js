@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import client, { subscribeToSessionExpired } from '../api/client';
 import { Alert, Platform } from 'react-native';
 import { setAppLanguage } from '../i18n';
+import { getActionableErrorMessage } from '../utils/apiErrors';
 
 const Storage = {
     getItemAsync: async (key) => Platform.OS === 'web' ? localStorage.getItem(key) : await SecureStore.getItemAsync(key),
@@ -258,7 +259,7 @@ export const AuthProvider = ({ children }) => {
         } catch (e) {
             if (__DEV__) console.log('Update profile error', e);
             if (!silent) {
-                Alert.alert("Error", "Failed to update profile.");
+                Alert.alert("Error", getActionableErrorMessage(e, "Failed to update profile."));
             }
             return false;
         }

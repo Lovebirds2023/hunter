@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Switch, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getEventFormFields, saveEventFormFields } from '../api/events';
+import { getActionableErrorMessage } from '../utils/apiErrors';
 
 const FIELD_TYPES = [
     { labelKey: 'form_builder.types.short_answer', value: 'short_answer' },
@@ -58,7 +59,7 @@ const EventFormBuilderScreen = ({ route, navigation }) => {
             navigation.goBack();
         } catch (error) {
             console.error('Error saving form:', error);
-            Alert.alert(t('common.error'), t('form_builder.save_error'));
+            Alert.alert(t('common.error'), getActionableErrorMessage(error, t('form_builder.save_error')));
         } finally {
             setSaving(false);
         }

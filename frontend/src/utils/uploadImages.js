@@ -20,14 +20,21 @@ export const uploadImagesToSupabase = async (images = [], folder = 'uploads', bu
         const filePath = `${folder}/${fileName}`;
         let body;
 
-        if (Platform.OS === 'web') {
-            const response = await fetch(uri);
-            body = await response.arrayBuffer();
-        } else {
-            const base64 = await FileSystem.readAsStringAsync(uri, {
-                encoding: FileSystem.EncodingType.Base64,
-            });
-            body = decode(base64);
+        try {
+            if (Platform.OS === 'web') {
+                const response = await fetch(uri);
+                if (!response.ok) {
+                    throw new Error(`Could not read selected image. Status: ${response.status}`);
+                }
+                body = await response.arrayBuffer();
+            } else {
+                const base64 = await FileSystem.readAsStringAsync(uri, {
+                    encoding: FileSystem.EncodingType.Base64,
+                });
+                body = decode(base64);
+            }
+        } catch (error) {
+            throw new Error('Could not read the selected image. Choose the photo again or try a smaller JPG/PNG image.');
         }
 
         const { error } = await supabase.storage

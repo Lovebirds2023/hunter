@@ -6,6 +6,7 @@ import { COLORS, SPACING } from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import client from '../api/client';
 import { useFocusEffect } from '@react-navigation/native';
+import { getActionableErrorMessage } from '../utils/apiErrors';
 
 const buildEditForm = (dog = {}) => ({
     name: dog.name || '',
@@ -99,7 +100,7 @@ export const DogDetailsScreen = ({ route, navigation }) => {
             Alert.alert(t('common.success'), t('dog_details.updated', { defaultValue: 'Pet updated successfully.' }));
         } catch (e) {
             if (__DEV__) console.log('Error updating pet', e);
-            Alert.alert(t('common.error'), t('dog_details.update_error', { defaultValue: 'Could not update this pet.' }));
+            Alert.alert(t('common.error'), getActionableErrorMessage(e, t('dog_details.update_error', { defaultValue: 'Could not update this pet.' })));
         } finally {
             setSaving(false);
         }
@@ -115,7 +116,7 @@ export const DogDetailsScreen = ({ route, navigation }) => {
             navigation.goBack();
         } catch (e) {
             if (__DEV__) console.log('Error deleting pet', e);
-            const message = e?.response?.data?.detail || t('dog_details.delete_error', { defaultValue: 'Could not delete this pet.' });
+            const message = getActionableErrorMessage(e, t('dog_details.delete_error', { defaultValue: 'Could not delete this pet.' }));
             Alert.alert(t('common.error'), message);
         } finally {
             setDeleting(false);

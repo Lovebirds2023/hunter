@@ -11,8 +11,15 @@ import { Picker } from '@react-native-picker/picker';
 // Note: DateTimePicker requires extra installation. Using text input for date as YYYY-MM-DD for simplicity in this turn,
 // or we can use a simple library if available. Or just text for now to avoid breaking build with uninstalled deps.
 import * as Notifications from 'expo-notifications';
+import { getActionableErrorMessage } from '../utils/apiErrors';
 
 const RECORD_TYPES = ["vaccination", "deworming", "grooming", "checkup", "diet", "vet_notes", "medication", "surgery"];
+
+const isValidDateInput = (value) => {
+    const text = String(value || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
+    return !Number.isNaN(new Date(text).getTime());
+};
 
 Notifications.setNotificationHandler({
     handleNotification: async () => ({
@@ -65,6 +72,20 @@ export const AddHealthRecordScreen = ({ route, navigation }) => {
             Alert.alert(t('common.error'), t('health.alerts.date_required'));
             return;
         }
+        if (!isValidDateInput(date)) {
+            Alert.alert(
+                t('common.error'),
+                t('health.alerts.invalid_date', { defaultValue: 'Enter the record date as YYYY-MM-DD, for example 2026-07-16.' })
+            );
+            return;
+        }
+        if (nextDueDate && !isValidDateInput(nextDueDate)) {
+            Alert.alert(
+                t('common.error'),
+                t('health.alerts.invalid_due_date', { defaultValue: 'Enter the next due date as YYYY-MM-DD, or leave it blank.' })
+            );
+            return;
+        }
 
         setIsSubmitting(true);
         try {
@@ -106,7 +127,7 @@ export const AddHealthRecordScreen = ({ route, navigation }) => {
             ]);
         } catch (e) {
             if (__DEV__) console.log('Error adding record', e);
-            Alert.alert(t('common.error'), t('health.alerts.error'));
+            Alert.alert(t('common.error'), getActionableErrorMessage(e, t('health.alerts.error')));
         } finally {
             setIsSubmitting(false);
         }

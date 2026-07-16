@@ -8,6 +8,7 @@ import { colors } from '../theme/colors';
 import { getBreedsForPetType, getColorsForPetType } from '../constants/data';
 import { runtimeConfig } from '../config/runtimeConfig';
 import { uploadImagesToSupabase } from '../utils/uploadImages';
+import { getActionableErrorMessage, getUploadErrorMessage } from '../utils/apiErrors';
 
 const LostFoundScreen = () => {
     const { t } = useTranslation();
@@ -75,7 +76,7 @@ const LostFoundScreen = () => {
             }
         } catch (e) {
             if (__DEV__) console.log(e);
-            Alert.alert(t('common.error'), t('lost_found.alerts.error_process'));
+            Alert.alert(t('common.error'), getActionableErrorMessage(e, t('lost_found.alerts.error_process')));
         }
     };
 
@@ -87,21 +88,32 @@ const LostFoundScreen = () => {
             return;
         }
 
-        const uploadedImages = image
-            ? await uploadImagesToSupabase([image], 'cases', runtimeConfig.storageBuckets.caseEvidence)
-            : [];
+        let uploadedImages = [];
+        try {
+            uploadedImages = image
+                ? await uploadImagesToSupabase([image], 'cases', runtimeConfig.storageBuckets.caseEvidence)
+                : [];
+        } catch (uploadError) {
+            Alert.alert(t('common.error'), getUploadErrorMessage(uploadError, 'Photo upload failed. Could not upload the lost pet photo.'));
+            return;
+        }
 
-        await client.post('/cases', {
-            case_type: 'lost_dog',
-            title: `Lost ${finalBreed ? `${finalBreed} ` : ''}${petLabel}`,
-            description: locationText,
-            location: locationText,
-            image_url: uploadedImages[0] || null,
-            images: uploadedImages,
-            breed: finalBreed,
-            color,
-            pet_type: petType,
-        });
+        try {
+            await client.post('/cases', {
+                case_type: 'lost_dog',
+                title: `Lost ${finalBreed ? `${finalBreed} ` : ''}${petLabel}`,
+                description: locationText,
+                location: locationText,
+                image_url: uploadedImages[0] || null,
+                images: uploadedImages,
+                breed: finalBreed,
+                color,
+                pet_type: petType,
+            });
+        } catch (error) {
+            Alert.alert(t('common.error'), getActionableErrorMessage(error, t('lost_found.alerts.error_process')));
+            return;
+        }
 
         setMatchResult(null);
         setDescription("");
@@ -120,7 +132,7 @@ const LostFoundScreen = () => {
             }
         } catch (e) {
             if (__DEV__) console.log(e);
-            Alert.alert(t('common.error'), t('lost_found.alerts.error_process'));
+            Alert.alert(t('common.error'), getActionableErrorMessage(e, t('lost_found.alerts.error_process')));
         } finally {
             setSubmitting(false);
         }

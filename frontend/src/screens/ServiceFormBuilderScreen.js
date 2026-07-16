@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Switch, 
 import { Ionicons } from '@expo/vector-icons';
 import { getServiceFormFields, saveServiceFormFields } from '../api/marketplace';
 import { COLORS, SPACING } from '../constants/theme';
+import { getActionableErrorMessage } from '../utils/apiErrors';
 
 const FIELD_TYPES = [
     { labelKey: 'form_builder.types.short_answer', value: 'short_answer' },
@@ -74,7 +75,7 @@ const ServiceFormBuilderScreen = ({ route, navigation }) => {
             navigation.goBack();
         } catch (error) {
             console.error('Error saving form:', error);
-            Alert.alert(t('common.error'), t('form_builder.save_error'));
+            Alert.alert(t('common.error'), getActionableErrorMessage(error, t('form_builder.save_error')));
         } finally {
             setSaving(false);
         }

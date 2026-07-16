@@ -20,6 +20,7 @@ import {
     getImagePickerAspect,
 } from '../components/ImageFrameGuide';
 import { usePersistentDraft } from '../hooks/usePersistentDraft';
+import { getActionableErrorMessage, getUploadErrorMessage } from '../utils/apiErrors';
 import {
     formatCoordinatePair,
     formatLocationAccuracy,
@@ -269,9 +270,15 @@ const ReportCaseScreen = ({ navigation, route }) => {
 
         setSubmitting(true);
         try {
-            const uploadedImages = images.length > 0
-                ? await uploadImagesToSupabase(images, 'cases', runtimeConfig.storageBuckets.caseEvidence)
-                : [];
+            let uploadedImages = [];
+            try {
+                uploadedImages = images.length > 0
+                    ? await uploadImagesToSupabase(images, 'cases', runtimeConfig.storageBuckets.caseEvidence)
+                    : [];
+            } catch (uploadError) {
+                Alert.alert(t('common.error'), getUploadErrorMessage(uploadError, 'Photo upload failed. Could not upload report photos.'));
+                return;
+            }
 
             const res = await client.post('/cases', {
                 case_type: caseType,
@@ -304,7 +311,7 @@ const ReportCaseScreen = ({ navigation, route }) => {
             ]);
         } catch (e) {
             if (__DEV__) console.log('Submit case error', e);
-            Alert.alert(t('common.error'), t('report.form.alerts.error'));
+            Alert.alert(t('common.error'), getActionableErrorMessage(e, t('report.form.alerts.error')));
         } finally {
             setSubmitting(false);
         }

@@ -10,7 +10,7 @@ import { Button } from '../components/Button';
 import { useCurrency } from '../context/CurrencyContext';
 import { runtimeConfig } from '../config/runtimeConfig';
 import { uploadImagesToSupabase } from '../utils/uploadImages';
-import { getApiErrorMessage } from '../utils/apiErrors';
+import { getActionableErrorMessage, getUploadErrorMessage } from '../utils/apiErrors';
 import {
     ImageFrameGuide,
     getImageFrameAspectRatio,
@@ -290,7 +290,10 @@ const CreateServiceScreen = ({ route, navigation }) => {
                     ? await uploadImagesToSupabase(images, 'services', runtimeConfig.storageBuckets.serviceImages)
                     : [];
             } catch (uploadError) {
-                throw new Error(`Image upload failed. ${getApiErrorMessage(uploadError, 'Could not upload listing images.')}`);
+                const message = getUploadErrorMessage(uploadError, 'Image upload failed. Could not upload listing images.');
+                setSubmitError(message);
+                Alert.alert(t('common.error'), message);
+                return;
             }
             const data = {
                 title,
@@ -343,7 +346,10 @@ const CreateServiceScreen = ({ route, navigation }) => {
             navigation.goBack();
         } catch (error) {
             console.error(error);
-            const message = getApiErrorMessage(error, isEditing ? t('marketplace.create.error_update') : t('marketplace.create.error_create'));
+            const message = getActionableErrorMessage(
+                error,
+                isEditing ? t('marketplace.create.error_update') : t('marketplace.create.error_create')
+            );
             setSubmitError(message);
             Alert.alert(t('common.error'), message);
         } finally {
