@@ -19,6 +19,7 @@ import {
     getImagePickerAspect,
 } from '../ImageFrameGuide';
 import { usePersistentDraft } from '../../hooks/usePersistentDraft';
+import { getUpcomingEventSlots } from '../../utils/eventSlots';
 
 const getEventStatus = (startTime, endTime) => {
     const now = new Date();
@@ -70,6 +71,8 @@ const defaultScorecardTitle = 'Community Impact Assessment';
 const defaultScorecardDescription = 'Collect baseline and follow-up data for M&E, outcome tracking, and partner reporting.';
 const PODCAST_PARTICIPANT_CAPACITY = 3;
 const PODCAST_EQUIPMENT_LIMIT = '4 microphones available; 3 participant mic seats per podcast slot.';
+const PODCAST_SLOT_START = '09:00';
+const PODCAST_SLOT_END = '12:00';
 
 const pad2 = (value) => String(value).padStart(2, '0');
 
@@ -145,6 +148,35 @@ const parseDateTimeValue = (value) => {
     return new Date(value);
 };
 
+const slotEndsInFuture = (slot) => {
+    const end = parseDateTimeValue(slot?.end_time || slot?.start_time);
+    return !Number.isNaN(end.getTime()) && end.getTime() > Date.now();
+};
+
+const slotDedupeKey = (slot) => (
+    [
+        getDatePart(slot?.start_time),
+        normalizeClockTime(getTimePart(slot?.start_time, '09:00'), '09:00'),
+        normalizeClockTime(getTimePart(slot?.end_time, '10:00'), '10:00'),
+        String(slot?.slot_type || '').trim().toLowerCase(),
+    ].join('|')
+);
+
+const mergeSlotsWithoutDuplicates = (existingSlots = [], incomingSlots = []) => {
+    const seen = new Set(existingSlots.map(slotDedupeKey));
+    const uniqueIncoming = [];
+    incomingSlots.forEach((slot) => {
+        const key = slotDedupeKey(slot);
+        if (seen.has(key)) return;
+        seen.add(key);
+        uniqueIncoming.push(slot);
+    });
+    return {
+        slots: [...existingSlots, ...uniqueIncoming],
+        skipped: incomingSlots.length - uniqueIncoming.length,
+    };
+};
+
 const buildMonthCells = (monthDate) => {
     const year = monthDate.getFullYear();
     const month = monthDate.getMonth();
@@ -159,11 +191,12 @@ const buildMonthCells = (monthDate) => {
     return cells;
 };
 
-const DateCalendar = ({ selectedDates = [], onDatePress, multi = false }) => {
+const DateCalendar = ({ selectedDates = [], onDatePress, multi = false, disablePast = false }) => {
     const initialDate = parseDateKey(selectedDates[0] || toLocalDateKey(new Date()));
     const [monthDate, setMonthDate] = useState(new Date(initialDate.getFullYear(), initialDate.getMonth(), 1));
     const selectedSet = useMemo(() => new Set(selectedDates), [selectedDates]);
     const cells = useMemo(() => buildMonthCells(monthDate), [monthDate]);
+    const todayKey = toLocalDateKey(new Date());
 
     const shiftMonth = (delta) => {
         setMonthDate(prev => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
@@ -193,16 +226,19 @@ const DateCalendar = ({ selectedDates = [], onDatePress, multi = false }) => {
                 {cells.map((date, index) => {
                     const dateKey = date ? toLocalDateKey(date) : '';
                     const isSelected = selectedSet.has(dateKey);
+                    const isDisabled = disablePast && dateKey < todayKey;
                     return (
                         <View key={dateKey || `empty-${index}`} style={{ width: `${100 / 7}%`, padding: 3 }}>
                             {date ? (
                                 <TouchableOpacity
                                     onPress={() => onDatePress(dateKey)}
+                                    disabled={isDisabled}
                                     style={{
                                         aspectRatio: 1,
                                         borderRadius: 10,
                                         alignItems: 'center',
                                         justifyContent: 'center',
+                                        opacity: isDisabled ? 0.38 : 1,
                                         backgroundColor: isSelected ? ADMIN_COLORS.info : ADMIN_COLORS.surface,
                                         borderWidth: 1,
                                         borderColor: isSelected ? ADMIN_COLORS.info : ADMIN_COLORS.surfaceBorder,
@@ -226,7 +262,7 @@ const DateCalendar = ({ selectedDates = [], onDatePress, multi = false }) => {
     );
 };
 
-const DateTimeCalendarField = ({ label, value, onChange, fallbackTime = '09:00' }) => {
+const DateTimeCalendarField = ({ label, value, onChange, fallbackTime = '09:00', disablePast = false }) => {
     const [showCalendar, setShowCalendar] = useState(false);
     const dateKey = getDatePart(value);
     const time = getTimePart(value, fallbackTime);
@@ -278,14 +314,14 @@ const DateTimeCalendarField = ({ label, value, onChange, fallbackTime = '09:00' 
             </View>
             {showCalendar && (
                 <View style={{ marginTop: 8 }}>
-                    <DateCalendar selectedDates={[dateKey]} onDatePress={selectDate} />
+                    <DateCalendar selectedDates={[dateKey]} onDatePress={selectDate} disablePast={disablePast} />
                 </View>
             )}
         </View>
     );
 };
 
-const DateCalendarField = ({ label, value, onChange }) => {
+const DateCalendarField = ({ label, value, onChange, disablePast = false }) => {
     const [showCalendar, setShowCalendar] = useState(false);
 
     const selectDate = (nextDateKey) => {
@@ -316,7 +352,7 @@ const DateCalendarField = ({ label, value, onChange }) => {
             </TouchableOpacity>
             {showCalendar && (
                 <View style={{ marginTop: 8 }}>
-                    <DateCalendar selectedDates={[value]} onDatePress={selectDate} />
+                    <DateCalendar selectedDates={[value]} onDatePress={selectDate} disablePast={disablePast} />
                 </View>
             )}
         </View>
@@ -402,7 +438,7 @@ const generateScheduleSlots = ({
                 location,
                 notes: notes || 'Multi-day cohort. Participants register once and attend both days.',
             };
-        });
+        }).filter(slotEndsInFuture);
     }
 
     const dates = rangeDateKeys(startDateKey, endDateKey).filter((dateKey) => {
@@ -420,7 +456,7 @@ const generateScheduleSlots = ({
         capacity,
         location,
         notes,
-    }));
+    })).filter(slotEndsInFuture);
 };
 
 const ScheduleGenerator = ({
@@ -433,9 +469,12 @@ const ScheduleGenerator = ({
 }) => {
     const initialStartDate = getDatePart(startValue);
     const initialEndDate = getDatePart(endValue);
+    const todayKey = toLocalDateKey(new Date());
+    const safeInitialStartDate = initialStartDate < todayKey ? todayKey : initialStartDate;
+    const safeInitialEndDate = initialEndDate < safeInitialStartDate ? safeInitialStartDate : initialEndDate;
     const [mode, setMode] = useState('range');
-    const [rangeStart, setRangeStart] = useState(initialStartDate);
-    const [rangeEnd, setRangeEnd] = useState(initialEndDate < initialStartDate ? initialStartDate : initialEndDate);
+    const [rangeStart, setRangeStart] = useState(safeInitialStartDate);
+    const [rangeEnd, setRangeEnd] = useState(safeInitialEndDate);
     const [startTime, setStartTime] = useState(getTimePart(startValue, '09:00'));
     const [endTime, setEndTime] = useState(getTimePart(endValue, '10:00'));
     const [weekdays, setWeekdays] = useState([parseDateKey(initialStartDate).getDay()]);
@@ -554,8 +593,11 @@ const ScheduleGenerator = ({
     };
 
     const applyPodcastPreset = () => {
-        setStartTime('09:00');
-        setEndTime('10:00');
+        setMode('weekly');
+        setWeekdays([6]);
+        setRangeEnd(endOfYearDateKey(rangeStart));
+        setStartTime(PODCAST_SLOT_START);
+        setEndTime(PODCAST_SLOT_END);
         setCapacity(String(PODCAST_PARTICIPANT_CAPACITY));
         setLabel('Mbwa Rafiki podcast');
         setNotes(PODCAST_EQUIPMENT_LIMIT);
@@ -568,13 +610,12 @@ const ScheduleGenerator = ({
         }
         const dates = rangeDateKeys(rangeStart, rangeEnd).filter((dateKey) => {
             const date = parseDateKey(dateKey);
-            if (mode === 'weekly') return weekdays.includes(date.getDay());
-            if (mode === 'monthly') return date.getDate() === Number(normalizeMonthDay(monthlyDay, 1));
-            if (mode === 'weekend_cohorts') return date.getDay() === 6;
-            return true;
+            if (mode === 'weekly') return weekdays.includes(date.getDay()) && date.getDay() === 6;
+            if (mode === 'monthly') return date.getDate() === Number(normalizeMonthDay(monthlyDay, 1)) && date.getDay() === 6;
+            return date.getDay() === 6;
         });
         if (!dates.length) {
-            Alert.alert('No dates generated', 'Change the date range or recurrence settings to generate podcast slots.');
+            Alert.alert('No Saturdays found', 'Choose a range that includes at least one Saturday for podcast slots.');
             return;
         }
         const base = label.trim() && label !== 'Available slot' ? label.trim() : 'Mbwa Rafiki podcast';
@@ -582,32 +623,24 @@ const ScheduleGenerator = ({
         const podcastNotes = trimmedNotes
             ? (trimmedNotes.includes(PODCAST_EQUIPMENT_LIMIT) ? trimmedNotes : `${trimmedNotes} ${PODCAST_EQUIPMENT_LIMIT}`)
             : PODCAST_EQUIPMENT_LIMIT;
-        const podcastSlots = dates.flatMap((dateKey, dateIndex) => ([
+        const podcastSlots = dates.map((dateKey, dateIndex) => (
             {
-                id: `slot_${Date.now()}_${dateIndex + 1}_am`,
-                label: `${base}${dates.length > 1 ? ` - ${formatShortDate(dateKey)}` : ''} - 9:00 AM`,
-                start_time: `${dateKey}T09:00`,
-                end_time: `${dateKey}T10:00`,
+                id: `slot_${Date.now()}_${dateIndex + 1}_podcast`,
+                label: `${base}${dates.length > 1 ? ` - ${formatShortDate(dateKey)}` : ''} - 9:00 AM-12:00 PM`,
+                start_time: `${dateKey}T${PODCAST_SLOT_START}`,
+                end_time: `${dateKey}T${PODCAST_SLOT_END}`,
                 capacity: String(PODCAST_PARTICIPANT_CAPACITY),
                 location,
                 notes: podcastNotes,
                 slot_type: 'podcast',
                 participant_capacity: PODCAST_PARTICIPANT_CAPACITY,
                 equipment_limit: PODCAST_EQUIPMENT_LIMIT,
-            },
-            {
-                id: `slot_${Date.now()}_${dateIndex + 1}_midday`,
-                label: `${base}${dates.length > 1 ? ` - ${formatShortDate(dateKey)}` : ''} - 12:00 PM`,
-                start_time: `${dateKey}T12:00`,
-                end_time: `${dateKey}T13:00`,
-                capacity: String(PODCAST_PARTICIPANT_CAPACITY),
-                location,
-                notes: podcastNotes,
-                slot_type: 'podcast',
-                participant_capacity: PODCAST_PARTICIPANT_CAPACITY,
-                equipment_limit: PODCAST_EQUIPMENT_LIMIT,
-            },
-        ]));
+            }
+        )).filter(slotEndsInFuture);
+        if (!podcastSlots.length) {
+            Alert.alert('No future podcast slots', 'The selected Saturday podcast times have already passed. Choose a later Saturday or a wider date range.');
+            return;
+        }
         onAddSlots(podcastSlots);
     };
 
@@ -641,14 +674,18 @@ const ScheduleGenerator = ({
             </View>
 
             <View style={{ flexDirection: 'row', gap: 8 }}>
-                <DateCalendarField label="From" value={rangeStart} onChange={setRangeStart} />
-                <DateCalendarField label="To" value={rangeEnd} onChange={setRangeEnd} />
+                <DateCalendarField label="From" value={rangeStart} onChange={setRangeStart} disablePast />
+                <DateCalendarField label="To" value={rangeEnd} onChange={setRangeEnd} disablePast />
             </View>
 
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
                 <TouchableOpacity style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg }]} onPress={() => setRangeEnd(endOfYearDateKey(rangeStart))}>
                     <Ionicons name="calendar-outline" size={14} color={ADMIN_COLORS.info} />
                     <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>Until Dec 31</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg }]} onPress={() => setRangeEnd(rangeStart)}>
+                    <Ionicons name="today-outline" size={14} color={ADMIN_COLORS.info} />
+                    <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>1 day</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg }]} onPress={applyWeekendSlotsPreset}>
                     <Ionicons name="calendar-number-outline" size={14} color={ADMIN_COLORS.info} />
@@ -680,7 +717,7 @@ const ScheduleGenerator = ({
                 </TouchableOpacity>
                 <TouchableOpacity style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg }]} onPress={applyPodcastPreset}>
                     <Ionicons name="mic-outline" size={14} color={ADMIN_COLORS.info} />
-                    <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>Podcast preset</Text>
+                    <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>Saturday podcast</Text>
                 </TouchableOpacity>
             </View>
 
@@ -811,7 +848,7 @@ const ScheduleGenerator = ({
                 </TouchableOpacity>
                 <TouchableOpacity style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg }]} onPress={addPodcastSlots}>
                     <Ionicons name="mic-outline" size={15} color={ADMIN_COLORS.info} />
-                    <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>Add podcast blocks</Text>
+                    <Text style={[s.actionBtnText, { color: ADMIN_COLORS.info }]}>Add Saturday podcasts</Text>
                 </TouchableOpacity>
                 {onApplyEventRange && (
                     <TouchableOpacity style={[s.actionBtn, { backgroundColor: ADMIN_COLORS.infoBg }]} onPress={applyEventRange}>
@@ -825,9 +862,14 @@ const ScheduleGenerator = ({
 };
 
 const MultiDateSlotPicker = ({ startValue, endValue, onAddSlots }) => {
+    const todayKey = toLocalDateKey(new Date());
+    const initialStartDate = getDatePart(startValue);
+    const initialEndDate = getDatePart(endValue);
+    const safeInitialStartDate = initialStartDate < todayKey ? todayKey : initialStartDate;
+    const safeInitialEndDate = initialEndDate < safeInitialStartDate ? safeInitialStartDate : initialEndDate;
     const [selectedDates, setSelectedDates] = useState([]);
-    const [startTime, setStartTime] = useState(getTimePart(startValue, '09:00'));
-    const [endTime, setEndTime] = useState(getTimePart(endValue, '10:00'));
+    const [startTime, setStartTime] = useState(getTimePart(`${safeInitialStartDate}T${getTimePart(startValue, '09:00')}`, '09:00'));
+    const [endTime, setEndTime] = useState(getTimePart(`${safeInitialEndDate}T${getTimePart(endValue, '10:00')}`, '10:00'));
     const [label, setLabel] = useState('Available slot');
     const [capacity, setCapacity] = useState('');
     const [location, setLocation] = useState('');
@@ -865,6 +907,10 @@ const MultiDateSlotPicker = ({ startValue, endValue, onAddSlots }) => {
             Alert.alert('Check times', 'The end time should be after the start time for each selected date.');
             return;
         }
+        if (slots.some(slot => !slotEndsInFuture(slot))) {
+            Alert.alert('Choose future dates', 'Dates/times that have already passed cannot be published as available slots.');
+            return;
+        }
 
         onAddSlots(slots);
         setSelectedDates([]);
@@ -878,7 +924,7 @@ const MultiDateSlotPicker = ({ startValue, endValue, onAddSlots }) => {
                     Add several booking dates
                 </Text>
             </View>
-            <DateCalendar selectedDates={selectedDates} onDatePress={toggleDate} multi />
+            <DateCalendar selectedDates={selectedDates} onDatePress={toggleDate} multi disablePast />
             <Text style={{ color: ADMIN_COLORS.textMuted, fontSize: 11, marginTop: 8 }}>
                 {selectedDates.length > 0
                     ? `${selectedDates.length} date${selectedDates.length === 1 ? '' : 's'} selected`
@@ -995,22 +1041,31 @@ const toSlotPayload = (slots = []) => {
         if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
             throw new Error('Invalid slot time');
         }
+        if (end.getTime() <= Date.now()) return;
 
         const capacity = Number(slot.capacity || 0);
         if (Number.isNaN(capacity) || capacity < 0) throw new Error('Invalid slot capacity');
         const participantCapacity = Number(slot.participant_capacity || 0);
+        const slotType = (slot.slot_type || '').trim().toLowerCase();
+        const normalizedCapacity = slotType === 'podcast'
+            ? PODCAST_PARTICIPANT_CAPACITY
+            : Math.floor(capacity);
 
         payload.push({
             id: slot.id || `slot_${index + 1}`,
             label: (slot.label || `Available slot ${index + 1}`).trim(),
             start_time: start.toISOString(),
             end_time: end.toISOString(),
-            capacity: Math.floor(capacity),
+            capacity: normalizedCapacity,
             location: (slot.location || '').trim(),
             notes: (slot.notes || '').trim(),
-            slot_type: (slot.slot_type || '').trim(),
-            participant_capacity: Number.isFinite(participantCapacity) && participantCapacity > 0 ? Math.floor(participantCapacity) : null,
-            equipment_limit: (slot.equipment_limit || '').trim(),
+            slot_type: slotType,
+            participant_capacity: slotType === 'podcast'
+                ? PODCAST_PARTICIPANT_CAPACITY
+                : (Number.isFinite(participantCapacity) && participantCapacity > 0 ? Math.floor(participantCapacity) : null),
+            equipment_limit: slotType === 'podcast'
+                ? ((slot.equipment_limit || '').trim() || PODCAST_EQUIPMENT_LIMIT)
+                : (slot.equipment_limit || '').trim(),
         });
     });
     return payload;
@@ -1038,8 +1093,9 @@ const expandEventRangeWithSlots = (start, end, slots = []) => {
 };
 
 const normalizeSlotsForForm = (slots, startTime, endTime) => {
-    if (Array.isArray(slots) && slots.length > 0) {
-        return slots.map((slot, index) => ({
+    const upcomingSlots = Array.isArray(slots) ? slots.filter(slotEndsInFuture) : [];
+    if (upcomingSlots.length > 0) {
+        return upcomingSlots.map((slot, index) => ({
             id: slot.id || `slot_${index + 1}`,
             label: slot.label || `Available slot ${index + 1}`,
             start_time: toDatetimeLocal(slot.start_time),
@@ -1052,6 +1108,7 @@ const normalizeSlotsForForm = (slots, startTime, endTime) => {
             equipment_limit: slot.equipment_limit || '',
         }));
     }
+    if (Array.isArray(slots) && slots.length > 0) return [];
     return [makeSlot(startTime, endTime, 0)];
 };
 
@@ -1059,7 +1116,10 @@ const eventToForm = (event) => {
     const tiers = Array.isArray(event.ticket_tiers) ? event.ticket_tiers : [];
     const freeTier = tiers.find(t => t.id === 'free') || tiers.find(t => Number(t.price || 0) === 0);
     const paidTier = tiers.find(t => t.id === 'paid') || tiers.find(t => Number(t.price || 0) > 0);
-    const hasSlots = Array.isArray(event.available_slots) && event.available_slots.length > 0;
+    const formSlots = Array.isArray(event.available_slots) && event.available_slots.length > 0
+        ? normalizeSlotsForForm(event.available_slots, event.start_time, event.end_time)
+        : [];
+    const hasSlots = formSlots.length > 0;
     return {
         ...newEventForm(),
         title: event.title || '',
@@ -1082,7 +1142,7 @@ const eventToForm = (event) => {
         attendee_type_question: event.attendee_type_question || defaultTierQuestion,
         free_tier_requires_code: freeTier?.requires_access_code !== undefined ? Boolean(freeTier.requires_access_code) : true,
         schedule_enabled: hasSlots,
-        available_slots: hasSlots ? normalizeSlotsForForm(event.available_slots, event.start_time, event.end_time) : [],
+        available_slots: hasSlots ? formSlots : [],
         scorecard_title: event.scorecard_title || defaultScorecardTitle,
         scorecard_description: event.scorecard_description || defaultScorecardDescription,
         is_public: Number(event.is_public ?? 1) === 1,
@@ -1663,14 +1723,19 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
     };
 
     const addFormSlots = (slots) => {
-        setForm(prev => ({
-            ...prev,
-            schedule_enabled: true,
-            available_slots: [
-                ...(prev.available_slots || []),
-                ...slots,
-            ],
-        }));
+        setForm(prev => {
+            const result = mergeSlotsWithoutDuplicates(prev.available_slots || [], slots);
+            if (result.skipped > 0) {
+                setTimeout(() => {
+                    Alert.alert('Duplicates skipped', `${result.skipped} matching date/time slot${result.skipped === 1 ? '' : 's'} already existed.`);
+                }, 0);
+            }
+            return {
+                ...prev,
+                schedule_enabled: true,
+                available_slots: result.slots,
+            };
+        });
     };
 
     const replaceFormSlots = (slots) => {
@@ -1718,7 +1783,15 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
     };
 
     const addScheduleSlots = (slots) => {
-        setScheduleSlots(prev => [...prev, ...slots]);
+        setScheduleSlots(prev => {
+            const result = mergeSlotsWithoutDuplicates(prev, slots);
+            if (result.skipped > 0) {
+                setTimeout(() => {
+                    Alert.alert('Duplicates skipped', `${result.skipped} matching date/time slot${result.skipped === 1 ? '' : 's'} already existed.`);
+                }, 0);
+            }
+            return result.slots;
+        });
     };
 
     const replaceScheduleSlots = (slots) => {
@@ -1945,12 +2018,14 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                                             value={slot.start_time}
                                             fallbackTime="09:00"
                                             onChange={(value) => updateFormSlot(index, 'start_time', value)}
+                                            disablePast
                                         />
                                         <DateTimeCalendarField
                                             label="Ends"
                                             value={slot.end_time}
                                             fallbackTime="10:00"
                                             onChange={(value) => updateFormSlot(index, 'end_time', value)}
+                                            disablePast
                                         />
                                         <View style={{ flexDirection: 'row', gap: 8 }}>
                                             <View style={{ flex: 1 }}>
@@ -2557,12 +2632,14 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                                     value={slot.start_time}
                                     fallbackTime="09:00"
                                     onChange={(value) => updateScheduleSlot(index, 'start_time', value)}
+                                    disablePast
                                 />
                                 <DateTimeCalendarField
                                     label="Ends"
                                     value={slot.end_time}
                                     fallbackTime="10:00"
                                     onChange={(value) => updateScheduleSlot(index, 'end_time', value)}
+                                    disablePast
                                 />
                                 <View style={{ flexDirection: 'row', gap: 8 }}>
                                     <View style={{ flex: 1 }}>
@@ -2691,7 +2768,7 @@ export const AdminEventsTab = ({ onBack, navigation, onOpenScorecard }) => {
                         const status = getEventStatus(item.start_time, item.end_time);
                         const capacity = item.capacity || 0;
                         const hasTiers = Array.isArray(item.ticket_tiers) && item.ticket_tiers.length > 0;
-                        const slotCount = Array.isArray(item.available_slots) ? item.available_slots.length : 0;
+                        const slotCount = getUpcomingEventSlots(item.available_slots).length;
                         const priceLabel = hasTiers
                             ? 'FREE + PAID'
                             : (Number(item.ticket_price || 0) > 0 ? `${item.currency || 'KES'} ${Number(item.ticket_price || 0).toLocaleString()}` : 'FREE');

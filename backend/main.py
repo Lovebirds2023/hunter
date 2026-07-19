@@ -264,6 +264,9 @@ KARMA_CASE_COMMENT_REWARD = 2
 MARKETPLACE_MARKUP_RATE = 0.235
 MARKETPLACE_PRICE_MULTIPLIER = 1 + MARKETPLACE_MARKUP_RATE
 MIN_MARKETPLACE_LISTING_PRICE_KES = 500.0
+ACTIVE_EVENT_REGISTRATION_STATUSES = ["registered", "pending_payment", "checked-in"]
+PODCAST_PARTICIPANT_CAPACITY = 3
+PODCAST_EQUIPMENT_LIMIT = "4 microphones available; 3 participant mic seats per podcast slot."
 FALLBACK_EXCHANGE_RATES = {
     "USD": 1.0,
     "KES": 129.0,
@@ -876,6 +879,31 @@ def parse_datetime_value(value):
     if not value:
         return value
     return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+
+
+def datetime_timestamp(value):
+    try:
+        parsed = parse_datetime_value(value)
+    except Exception:
+        return None
+    if not isinstance(parsed, datetime):
+        return None
+    return parsed.timestamp()
+
+
+def slot_ends_in_future(slot: Dict[str, Any], reference_ts: Optional[float] = None) -> bool:
+    if not isinstance(slot, dict):
+        return False
+    end_ts = datetime_timestamp(slot.get("end_time") or slot.get("start_time"))
+    return end_ts is not None and end_ts > (reference_ts or time.time())
+
+
+def event_has_upcoming_availability(event: models.Event, reference_ts: Optional[float] = None) -> bool:
+    slots = getattr(event, "available_slots", None)
+    if isinstance(slots, list) and slots:
+        return len(upcoming_event_available_slots(event, reference_ts)) > 0
+    end_ts = datetime_timestamp(getattr(event, "end_time", None) or getattr(event, "start_time", None))
+    return end_ts is not None and end_ts > (reference_ts or time.time())
 
 
 def get_scorecard_seed_questions():
@@ -2749,6 +2777,7 @@ def sanitize_ticket_tiers(tiers: Optional[List[Dict[str, Any]]], default_currenc
             "currency": str(tier.get("currency") or default_currency or "KES").strip().upper(),
             "description": str(tier.get("description") or "").strip(),
             "requires_justification": bool(tier.get("requires_justification", True)),
+            "requires_access_code": bool(tier.get("requires_access_code", price <= 0)),
         })
     return normalized
 
@@ -2789,8 +2818,11 @@ def sanitize_event_available_slots(slots: Optional[List[Dict[str, Any]]]) -> Lis
             capacity = int(slot.get("capacity") or 0)
         except (TypeError, ValueError):
             capacity = 0
+        slot_type = str(slot.get("slot_type") or "").strip().lower()
+        if slot_type == "podcast":
+            capacity = PODCAST_PARTICIPANT_CAPACITY
 
-        normalized.append({
+        normalized_slot = {
             "id": slot_id,
             "label": label,
             "start_time": start_time.isoformat(),
@@ -2798,7 +2830,12 @@ def sanitize_event_available_slots(slots: Optional[List[Dict[str, Any]]]) -> Lis
             "capacity": max(capacity, 0),
             "location": str(slot.get("location") or "").strip(),
             "notes": str(slot.get("notes") or "").strip(),
-        })
+        }
+        if slot_type == "podcast":
+            normalized_slot["slot_type"] = "podcast"
+            normalized_slot["participant_capacity"] = PODCAST_PARTICIPANT_CAPACITY
+            normalized_slot["equipment_limit"] = str(slot.get("equipment_limit") or PODCAST_EQUIPMENT_LIMIT).strip()
+        normalized.append(normalized_slot)
     return normalized
 
 
@@ -2806,9 +2843,52 @@ def normalize_event_available_slots(event: models.Event) -> List[Dict[str, Any]]
     return sanitize_event_available_slots(getattr(event, "available_slots", None))
 
 
+def upcoming_event_available_slots(event: models.Event, reference_ts: Optional[float] = None) -> List[Dict[str, Any]]:
+    reference = reference_ts or time.time()
+    return sorted(
+        [slot for slot in normalize_event_available_slots(event) if slot_ends_in_future(slot, reference)],
+        key=lambda slot: datetime_timestamp(slot.get("start_time")) or float("inf"),
+    )
+
+
+def sanitize_future_event_available_slots(slots: Optional[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    reference = time.time()
+    return [slot for slot in sanitize_event_available_slots(slots) if slot_ends_in_future(slot, reference)]
+
+
+def slot_range(slots: List[Dict[str, Any]]):
+    earliest = None
+    latest = None
+    for slot in slots:
+        if slot.get("start_time"):
+            earliest = earlier_datetime(earliest, parse_datetime_value(slot["start_time"]))
+        if slot.get("end_time"):
+            latest = later_datetime(latest, parse_datetime_value(slot["end_time"]))
+    return earliest, latest
+
+
+def earlier_datetime(left: Optional[datetime], right: Optional[datetime]) -> Optional[datetime]:
+    if not left:
+        return right
+    if not right:
+        return left
+    return left if (datetime_timestamp(left) or float("inf")) <= (datetime_timestamp(right) or float("inf")) else right
+
+
+def later_datetime(left: Optional[datetime], right: Optional[datetime]) -> Optional[datetime]:
+    if not left:
+        return right
+    if not right:
+        return left
+    return left if (datetime_timestamp(left) or 0) >= (datetime_timestamp(right) or 0) else right
+
+
 def resolve_event_booking_slot(event: models.Event, booking_slot_id: Optional[str]) -> Optional[Dict[str, Any]]:
-    slots = normalize_event_available_slots(event)
+    configured_slots = normalize_event_available_slots(event)
+    slots = upcoming_event_available_slots(event)
     if not slots:
+        if configured_slots:
+            raise HTTPException(status_code=400, detail="No upcoming date/time is available for this event")
         return None
 
     selected_id = str(booking_slot_id or "").strip()
@@ -2820,17 +2900,20 @@ def resolve_event_booking_slot(event: models.Event, booking_slot_id: Optional[st
     raise HTTPException(status_code=400, detail="Invalid event booking slot")
 
 
-def ensure_booking_slot_capacity(db: Session, event_id: str, slot: Optional[Dict[str, Any]]):
+def ensure_booking_slot_capacity(db: Session, event_id: str, slot: Optional[Dict[str, Any]], exclude_user_id: Optional[str] = None):
     if not slot:
         return
     capacity = int(slot.get("capacity") or 0)
     if capacity <= 0:
         return
-    current_count = db.query(models.Registration).filter(
+    query = db.query(models.Registration).filter(
         models.Registration.event_id == event_id,
         models.Registration.booking_slot_id == slot["id"],
-        models.Registration.status.in_(["registered", "checked-in", "pending_payment"]),
-    ).count()
+        models.Registration.status.in_(ACTIVE_EVENT_REGISTRATION_STATUSES),
+    )
+    if exclude_user_id:
+        query = query.filter(models.Registration.user_id != exclude_user_id)
+    current_count = query.count()
     if current_count >= capacity:
         raise HTTPException(status_code=400, detail="This date/time is fully booked")
 
@@ -3797,6 +3880,14 @@ def create_event(
         raise HTTPException(status_code=403, detail="Not authorized to create events")
     admin_created = is_admin_user(current_user)
 
+    available_slots = sanitize_future_event_available_slots(event.available_slots)
+    start_time = parse_datetime_value(event.start_time)
+    end_time = parse_datetime_value(event.end_time)
+    if available_slots:
+        range_start, range_end = slot_range(available_slots)
+        if range_start and range_end and (datetime_timestamp(range_end) or 0) > (datetime_timestamp(range_start) or 0):
+            start_time = earlier_datetime(start_time, range_start)
+            end_time = later_datetime(end_time, range_end)
     new_event = models.Event(
         id=str(uuid.uuid4()),
         organizer_id=current_user.id,
@@ -3805,14 +3896,14 @@ def create_event(
         location=event.location,
         poster_url=event.poster_url,
         images=event.images,
-        start_time=parse_datetime_value(event.start_time),
-        end_time=parse_datetime_value(event.end_time),
+        start_time=start_time,
+        end_time=end_time,
         capacity=event.capacity,
         ticket_price=max(float(event.ticket_price or 0), 0),
         currency=(event.currency or "KES").strip().upper(),
         ticket_tiers=sanitize_ticket_tiers(event.ticket_tiers, event.currency or "KES"),
         attendee_type_question=event.attendee_type_question,
-        available_slots=sanitize_event_available_slots(event.available_slots),
+        available_slots=available_slots,
         category=event.category,
         is_public=event.is_public,
         admin_created=admin_created,
@@ -3841,14 +3932,31 @@ def create_event(
 @app.get("/events", response_model=List[schemas.EventResponse])
 def list_events(skip: int = 0, limit: int = 100, db: Session = Depends(database.get_db)):
     pin_map = get_active_pin_map(db, "event")
-    events = db.query(models.Event).filter(models.Event.is_public == 1).all()
+    reference_ts = time.time()
+    events = [
+        event for event in db.query(models.Event).filter(models.Event.is_public == 1).all()
+        if event_has_upcoming_availability(event, reference_ts)
+    ]
     for event in events:
+        configured_slots = normalize_event_available_slots(event)
+        upcoming_slots = [
+            slot for slot in configured_slots
+            if slot_ends_in_future(slot, reference_ts)
+        ]
         event.registrant_count = db.query(models.Registration).filter(
             models.Registration.event_id == event.id,
-            models.Registration.status.in_(["registered", "checked-in"])
+            models.Registration.status.in_(ACTIVE_EVENT_REGISTRATION_STATUSES)
         ).count()
+        event.available_slots = sorted(
+            upcoming_slots,
+            key=lambda slot: datetime_timestamp(slot.get("start_time")) or float("inf"),
+        )
+        event.available_slot_count = len(event.available_slots)
+        event.has_booking_schedule = len(configured_slots) > 0
     apply_pin_metadata(events, pin_map)
-    events = sort_items_with_pins(events, pin_map, secondary_key=lambda e: e.start_time or datetime.max)
+    events = sort_items_with_pins(events, pin_map, secondary_key=lambda e: (
+        parse_datetime_value(e.available_slots[0]["start_time"]) if getattr(e, "available_slots", None) else e.start_time
+    ) or datetime.max)
     return events[skip:skip + limit]
 
 @app.get("/events/{event_id}", response_model=schemas.EventResponse)
@@ -3859,8 +3967,14 @@ def get_event(event_id: str, db: Session = Depends(database.get_db)):
     
     event.registrant_count = db.query(models.Registration).filter(
         models.Registration.event_id == event.id,
-        models.Registration.status.in_(["registered", "checked-in"])
+        models.Registration.status.in_(ACTIVE_EVENT_REGISTRATION_STATUSES)
     ).count()
+    configured_slots = normalize_event_available_slots(event)
+    event.available_slots = [
+        slot for slot in upcoming_event_available_slots(event)
+    ]
+    event.available_slot_count = len(event.available_slots)
+    event.has_booking_schedule = len(configured_slots) > 0
     pin = get_active_pin_map(db, "event").get(event.id)
     event.is_pinned = pin is not None
     event.pin_priority = pin.priority if pin else None
@@ -3877,9 +3991,16 @@ def register_for_event(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
+    existing = db.query(models.Registration).filter(
+        models.Registration.event_id == event_id,
+        models.Registration.user_id == current_user.id
+    ).first()
+    if existing and existing.status == "checked-in":
+        raise HTTPException(status_code=400, detail="Checked-in registrations can no longer be changed")
+
     selected_tier = resolve_event_ticket_tier(event, registration.ticket_tier_id)
     selected_slot = resolve_event_booking_slot(event, registration.booking_slot_id)
-    ensure_booking_slot_capacity(db, event_id, selected_slot)
+    ensure_booking_slot_capacity(db, event_id, selected_slot, exclude_user_id=current_user.id)
     event_has_tiers = len(normalize_event_ticket_tiers(event)) > 0
     attendee_justification = (registration.attendee_type_justification or "").strip()
     if event_has_tiers and selected_tier.get("requires_justification", True) and len(attendee_justification) < 3:
@@ -3889,23 +4010,75 @@ def register_for_event(
     paid_event = float(selected_tier["price"] or 0) > 0
     status = "pending_payment" if paid_event else "registered"
     if event.capacity > 0:
-        count = db.query(models.Registration).filter(
+        capacity_query = db.query(models.Registration).filter(
             models.Registration.event_id == event_id,
-            models.Registration.status.in_(["registered", "checked-in"]),
-        ).count()
+            models.Registration.status.in_(ACTIVE_EVENT_REGISTRATION_STATUSES),
+        )
+        if existing:
+            capacity_query = capacity_query.filter(models.Registration.user_id != current_user.id)
+        count = capacity_query.count()
         if count >= event.capacity:
             if registration.join_waitlist:
                 status = "waitlisted"
             else:
                 raise HTTPException(status_code=400, detail="Event is full")
-            
-    # Check existing registration
-    existing = db.query(models.Registration).filter(
-        models.Registration.event_id == event_id,
-        models.Registration.user_id == current_user.id
-    ).first()
+
     if existing:
-        raise HTTPException(status_code=400, detail="Already registered for this event")
+        existing_is_paid = str(existing.payment_status or "").lower() == "paid"
+        same_paid_choice = (
+            existing_is_paid
+            and round(float(existing.amount or 0), 2) == round(float(selected_tier["price"] or 0), 2)
+            and str(existing.ticket_tier_id or "") == str(selected_tier["id"] or "")
+        )
+        if existing_is_paid and not same_paid_choice:
+            raise HTTPException(status_code=400, detail="This registration has already been paid. Contact support to change the category or date.")
+
+        existing.dog_id = registration.dog_id
+        existing.role = registration.role or "attendee"
+        existing.share_phone = registration.share_phone
+        existing.amount = float(selected_tier["price"] or 0)
+        existing.currency = (selected_tier.get("currency") or event.currency or "KES").strip().upper()
+        existing.ticket_tier_id = selected_tier["id"]
+        existing.ticket_tier_label = selected_tier["label"]
+        existing.attendee_type_justification = attendee_justification or None
+        existing.booking_slot_id = selected_slot["id"] if selected_slot else None
+        existing.booking_slot_label = selected_slot["label"] if selected_slot else None
+        existing.booking_start_time = parse_datetime_value(selected_slot["start_time"]) if selected_slot else None
+        existing.booking_end_time = parse_datetime_value(selected_slot["end_time"]) if selected_slot else None
+        if same_paid_choice:
+            existing.status = "registered"
+            existing.payment_status = "paid"
+            if not existing.ticket_token:
+                existing.ticket_token = secrets.token_urlsafe(16)
+        elif paid_event:
+            existing.status = "pending_payment"
+            existing.payment_status = "pending"
+            existing.ticket_token = None
+            existing.pesapal_tracking_id = None
+            existing.paid_at = None
+        else:
+            existing.status = status
+            existing.payment_status = "free"
+            if not existing.ticket_token:
+                existing.ticket_token = secrets.token_urlsafe(16)
+            existing.pesapal_tracking_id = None
+            existing.paid_at = None
+
+        if registration.form_responses is not None:
+            db.query(models.RegistrationResponse).filter(
+                models.RegistrationResponse.registration_id == existing.id
+            ).delete()
+            for resp in registration.form_responses:
+                db.add(models.RegistrationResponse(
+                    id=str(uuid.uuid4()),
+                    registration_id=existing.id,
+                    field_id=resp.field_id,
+                    answer_value=resp.answer_value
+                ))
+
+        db.commit()
+        db.refresh(existing)
+        return existing
         
     new_reg = models.Registration(
         id=str(uuid.uuid4()),
@@ -5964,6 +6137,7 @@ def admin_list_events(db: Session = Depends(database.get_db), admin: models.User
             models.Registration.event_id == e.id, models.Registration.status == "checked-in"
         ).count()
         pin = pin_map.get(e.id)
+        upcoming_slots = upcoming_event_available_slots(e)
         result.append({
             "id": e.id, "title": e.title, "description": e.description,
             "poster_url": e.poster_url, "images": e.images or [],
@@ -5972,6 +6146,8 @@ def admin_list_events(db: Session = Depends(database.get_db), admin: models.User
             "ticket_tiers": normalize_event_ticket_tiers(e),
             "attendee_type_question": e.attendee_type_question,
             "available_slots": normalize_event_available_slots(e),
+            "available_slot_count": len(upcoming_slots),
+            "upcoming_slot_count": len(upcoming_slots),
             "category": e.category, "is_public": e.is_public,
             "admin_created": e.admin_created, "scorecard_enabled": e.scorecard_enabled,
             "scorecard_title": get_event_scorecard_title(e),
@@ -6078,7 +6254,12 @@ def admin_update_event_details(
     event.currency = currency
     event.ticket_tiers = tiers
     event.attendee_type_question = event_update.attendee_type_question if tiers else None
-    event.available_slots = sanitize_event_available_slots(event_update.available_slots)
+    event.available_slots = sanitize_future_event_available_slots(event_update.available_slots)
+    if event.available_slots:
+        range_start, range_end = slot_range(event.available_slots)
+        if range_start and range_end and (datetime_timestamp(range_end) or 0) > (datetime_timestamp(range_start) or 0):
+            event.start_time = earlier_datetime(event.start_time, range_start)
+            event.end_time = later_datetime(event.end_time, range_end)
     event.category = event_update.category
     event.is_public = 1 if int(event_update.is_public or 0) == 1 else 0
     event.scorecard_enabled = bool(event_update.scorecard_enabled)
@@ -6174,7 +6355,12 @@ def admin_update_event_schedule(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    event.available_slots = sanitize_event_available_slots(schedule.available_slots)
+    event.available_slots = sanitize_future_event_available_slots(schedule.available_slots)
+    if event.available_slots:
+        range_start, range_end = slot_range(event.available_slots)
+        if range_start and range_end and (datetime_timestamp(range_end) or 0) > (datetime_timestamp(range_start) or 0):
+            event.start_time = range_start
+            event.end_time = range_end
     db.commit()
     db.refresh(event)
     event.registrant_count = db.query(models.Registration).filter(
@@ -6300,7 +6486,7 @@ def admin_notification_target_options(
                 "title": event.title,
                 "start_time": str(event.start_time),
                 "ticket_tiers": normalize_event_ticket_tiers(event),
-                "available_slots": normalize_event_available_slots(event),
+                "available_slots": upcoming_event_available_slots(event),
             }
             for event in events
         ],

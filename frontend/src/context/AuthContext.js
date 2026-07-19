@@ -11,6 +11,9 @@ const Storage = {
     deleteItemAsync: async (key) => Platform.OS === 'web' ? localStorage.removeItem(key) : await SecureStore.deleteItemAsync(key)
 };
 
+const LOGIN_SUCCESS_NOTICE_MS = 650;
+const pause = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 
 
 export const AuthContext = createContext();
@@ -89,7 +92,6 @@ export const AuthProvider = ({ children }) => {
             });
 
             const { access_token } = response.data;
-            setUserToken(access_token);
             await Storage.setItemAsync('userToken', access_token);
 
             // Fetch user details
@@ -100,6 +102,9 @@ export const AuthProvider = ({ children }) => {
             setUserInfo(userRes.data);
             setIsAdmin(userRes.data.role === 'admin' || userRes.data.role === 'super_admin');
             await Storage.setItemAsync('userInfo', JSON.stringify(userRes.data));
+            setAuthNotice({ type: 'success', message: 'Login successful.' });
+            await pause(LOGIN_SUCCESS_NOTICE_MS);
+            setUserToken(access_token);
             return true;
 
         } catch (e) {
@@ -121,12 +126,14 @@ export const AuthProvider = ({ children }) => {
             
             const { access_token, user } = response.data;
             await setAppLanguage(user.language || 'en');
-            setUserToken(access_token);
             setUserInfo(user);
             setIsAdmin(user.role === 'admin' || user.role === 'super_admin');
             
             await Storage.setItemAsync('userToken', access_token);
             await Storage.setItemAsync('userInfo', JSON.stringify(user));
+            setAuthNotice({ type: 'success', message: 'Login successful.' });
+            await pause(LOGIN_SUCCESS_NOTICE_MS);
+            setUserToken(access_token);
             
             return true;
         } catch (e) {
@@ -155,10 +162,12 @@ export const AuthProvider = ({ children }) => {
             });
 
             await setAppLanguage(userRes.data.language || 'en');
-            setUserToken(accessToken);
             setUserInfo(userRes.data);
             setIsAdmin(userRes.data.role === 'admin' || userRes.data.role === 'super_admin');
             await Storage.setItemAsync('userInfo', JSON.stringify(userRes.data));
+            setAuthNotice({ type: 'success', message: 'Login successful.' });
+            await pause(LOGIN_SUCCESS_NOTICE_MS);
+            setUserToken(accessToken);
 
             return true;
         } catch (e) {

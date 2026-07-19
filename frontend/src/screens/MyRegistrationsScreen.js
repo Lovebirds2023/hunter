@@ -25,18 +25,25 @@ export const MyRegistrationsScreen = ({ navigation }) => {
         }
     };
 
-    const renderItem = ({ item }) => (
-        <View style={styles.card}>
-            <Text style={styles.title}>{t('my_registrations.registration_number', { id: item.id.slice(0, 8) })}</Text>
-            <Text style={styles.detail}>{t('my_registrations.event_id', { id: item.event_id })}</Text>
-            <Text style={styles.detail}>{t('my_registrations.status')}: <Text style={{ fontWeight: 'bold', color: item.status === 'registered' ? 'green' : 'gray' }}>{item.status}</Text></Text>
-            <Text style={styles.detail}>{t('my_registrations.role', { role: item.role })}</Text>
-            {item.dog_id && <Text style={styles.detail}>{t('my_registrations.dog_id', { id: item.dog_id.slice(0, 8) })}</Text>}
-            <View style={styles.qrPlaceholder}>
-                <Text style={{ textAlign: 'center', color: '#888' }}>{t('my_registrations.qr_coming_soon')}</Text>
+    const renderItem = ({ item }) => {
+        const eventTitle = item.event?.title || t('my_registrations.event_id', { id: item.event_id });
+        const bookingDate = item.booking_start_time ? new Date(item.booking_start_time) : null;
+        return (
+            <View style={styles.card}>
+                <Text style={styles.title}>{eventTitle}</Text>
+                <Text style={styles.detail}>{t('my_registrations.registration_number', { id: item.id.slice(0, 8) })}</Text>
+                <Text style={styles.detail}>{t('my_registrations.status')}: <Text style={{ fontWeight: 'bold', color: item.status === 'registered' ? 'green' : 'gray' }}>{item.status}</Text></Text>
+                {item.ticket_tier_label && <Text style={styles.detail}>Registration type: {item.ticket_tier_label}</Text>}
+                {item.booking_slot_label && <Text style={styles.detail}>Booking: {item.booking_slot_label}</Text>}
+                {bookingDate && <Text style={styles.detail}>Date/time: {bookingDate.toLocaleString()}</Text>}
+                <Text style={styles.detail}>{t('my_registrations.role', { role: item.role })}</Text>
+                {item.dog_id && <Text style={styles.detail}>{t('my_registrations.dog_id', { id: item.dog_id.slice(0, 8) })}</Text>}
+                <View style={styles.qrPlaceholder}>
+                    <Text style={{ textAlign: 'center', color: '#888' }}>{t('my_registrations.qr_coming_soon')}</Text>
+                </View>
             </View>
-        </View>
-    );
+        );
+    };
 
     if (loading) return <View style={styles.center}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
 

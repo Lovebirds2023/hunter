@@ -4,10 +4,11 @@ import { View, Text, StyleSheet, TouchableOpacity, ImageBackground } from 'react
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, SIZES, SHADOWS } from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { getEventDisplayDate } from '../utils/eventSlots';
 
 export const FeaturedEventCard = ({ item, onPress }) => {
     const { t } = useTranslation();
-    const date = new Date(item.start_time);
+    const date = getEventDisplayDate(item);
     const isFull = item.capacity > 0 && item.registrant_count >= item.capacity;
     const hasTiers = Array.isArray(item.ticket_tiers) && item.ticket_tiers.length > 0;
     const ticketPrice = Number(item.ticket_price || 0);

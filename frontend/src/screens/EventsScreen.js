@@ -10,6 +10,7 @@ import { EventSearchBar } from '../components/EventSearchBar';
 import { EventCategoryFilter } from '../components/EventCategoryFilter';
 import { FeaturedEventCard } from '../components/FeaturedEventCard';
 import { EventCalendarView } from '../components/EventCalendarView';
+import { eventHasFutureAvailability, getEventDisplayDate, getUpcomingEventSlots } from '../utils/eventSlots';
 
 export const EventsScreen = ({ navigation }) => {
     const { t } = useTranslation();
@@ -34,30 +35,34 @@ export const EventsScreen = ({ navigation }) => {
         }
     };
 
-    const categories = ['All', ...new Set(events.map(e => e.category || 'General'))];
+    const bookableEvents = events.filter(eventHasFutureAvailability);
+    const categories = ['All', ...new Set(bookableEvents.map(e => e.category || 'General'))];
 
-    const filteredEvents = events.filter(event => {
+    const filteredEvents = bookableEvents.filter(event => {
         const matchesSearch = event.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                              (event.location && event.location.toLowerCase().includes(searchQuery.toLowerCase()));
         const matchesCategory = selectedCategory === 'All' || (event.category || 'General') === selectedCategory;
         return matchesSearch && matchesCategory;
     });
 
-    const featuredEvents = events.filter(e => e.is_pinned || e.title === "Lovedogs 360 Program" || e.is_featured === true);
+    const featuredEvents = bookableEvents.filter(e => e.is_pinned || e.title === "Lovedogs 360 Program" || e.is_featured === true);
     const sortedEvents = [...filteredEvents].sort((a, b) => {
         if (!!a.is_pinned !== !!b.is_pinned) return a.is_pinned ? -1 : 1;
         if (a.is_pinned && b.is_pinned) return (b.pin_priority || 0) - (a.pin_priority || 0);
-        return new Date(a.start_time) - new Date(b.start_time);
+        return getEventDisplayDate(a) - getEventDisplayDate(b);
     });
 
     const renderEventCard = ({ item }) => {
-        const date = new Date(item.start_time);
+        const date = getEventDisplayDate(item);
+        const upcomingSlots = getUpcomingEventSlots(item.available_slots);
         const isFull = item.capacity > 0 && item.registrant_count >= item.capacity;
         const hasTiers = Array.isArray(item.ticket_tiers) && item.ticket_tiers.length > 0;
         const ticketPrice = Number(item.ticket_price || 0);
         const priceLabel = hasTiers ? 'FREE + PAID' : (ticketPrice > 0 ? `${item.currency || 'KES'} ${ticketPrice.toLocaleString()}` : 'FREE');
-        const slotsText = item.capacity > 0
-            ? `${Math.max(0, item.capacity - (item.registrant_count || 0))} ${t('events.slots_left') || 'left'}`
+        const slotsText = upcomingSlots.length > 0
+            ? `${upcomingSlots.length} date${upcomingSlots.length === 1 ? '' : 's'}`
+            : item.capacity > 0
+            ? t('events.slots_left', { count: Math.max(0, item.capacity - (item.registrant_count || 0)) })
             : 'OPEN';
 
         return (
@@ -214,7 +219,7 @@ export const EventsScreen = ({ navigation }) => {
                 ) : (
                     <ScrollView showsVerticalScrollIndicator={false}>
                         <EventCalendarView 
-                            events={events}
+                            events={bookableEvents}
                             onEventPress={(event) => navigation.navigate('EventDetail', { eventId: event.id })}
                         />
                         <View style={styles.calendarListSection}>

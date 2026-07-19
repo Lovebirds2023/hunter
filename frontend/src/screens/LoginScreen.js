@@ -128,9 +128,9 @@ const LoginScreen = ({ navigation }) => {
                             ]}>
                                 <View style={styles.noticeContent}>
                                     <Text style={styles.noticeIcon}>
-                                        {visibleNotice.type === 'success' && '✓'}
-                                        {visibleNotice.type === 'error' && '✕'}
-                                        {visibleNotice.type === 'info' && 'ℹ'}
+                                        {visibleNotice.type === 'success' && 'OK'}
+                                        {visibleNotice.type === 'error' && 'X'}
+                                        {visibleNotice.type === 'info' && 'i'}
                                     </Text>
                                     <View style={{ flex: 1 }}>
                                         <Text style={styles.noticeText}>{visibleNotice.message}</Text>

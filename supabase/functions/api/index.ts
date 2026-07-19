@@ -153,6 +153,27 @@ const parseDateValue = (value: unknown) => {
   const date = new Date(text);
   return Number.isNaN(date.getTime()) ? null : date;
 };
+const activeRegistrationStatuses = ["registered", "pending_payment", "checked-in"];
+const slotEndsInFuture = (slot: JsonRecord, reference = new Date()) => {
+  const end = parseDateValue(slot.end_time) ?? parseDateValue(slot.start_time);
+  return Boolean(end && end.getTime() > reference.getTime());
+};
+const upcomingEventSlots = (value: unknown, reference = new Date()) => (
+  asArray(value)
+    .filter(isRecord)
+    .filter((slot) => slotEndsInFuture(slot, reference))
+    .sort((a, b) => {
+      const aStart = parseDateValue(a.start_time)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      const bStart = parseDateValue(b.start_time)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      return aStart - bStart;
+    })
+);
+const eventHasUpcomingAvailability = (event: JsonRecord, reference = new Date()) => {
+  const slots = asArray(event.available_slots).filter(isRecord);
+  if (slots.length > 0) return upcomingEventSlots(slots, reference).length > 0;
+  const end = parseDateValue(event.end_time) ?? parseDateValue(event.start_time);
+  return Boolean(end && end.getTime() > reference.getTime());
+};
 const slotDateRange = (slots: JsonRecord[]) => {
   let start: Date | null = null;
   let end: Date | null = null;
@@ -199,7 +220,7 @@ const normalizeEventSlots = (value: unknown) => asArray(value).filter(isRecord).
     normalizedSlot.equipment_limit = cleanString(slot.equipment_limit) || "4 microphones available; 3 participant mic seats per podcast slot.";
   }
   return normalizedSlot;
-});
+}).filter((slot) => slotEndsInFuture(slot));
 const tierRequiresAccessCode = (tier: JsonRecord | null) => {
   if (!tier) return false;
   return asBoolean(tier.requires_access_code, asNumber(tier.price) <= 0);
@@ -450,6 +471,36 @@ const countRows = async (table: string, column: string, value: string) => {
     .eq(column, value);
   if (error) throw error;
   return count ?? 0;
+};
+
+const countEventRegistrationsByStatus = async (eventId: string, statuses = activeRegistrationStatuses) => {
+  const { count, error } = await supabaseAdmin
+    .from("registrations")
+    .select("id", { count: "exact", head: true })
+    .eq("event_id", eventId)
+    .in("status", statuses);
+  if (error) throw error;
+  return count ?? 0;
+};
+
+const countEventPaymentsByStatus = async (eventId: string, paymentStatus: string) => {
+  const { count, error } = await supabaseAdmin
+    .from("registrations")
+    .select("id", { count: "exact", head: true })
+    .eq("event_id", eventId)
+    .eq("payment_status", paymentStatus);
+  if (error) throw error;
+  return count ?? 0;
+};
+
+const eventPaidRevenue = async (eventId: string) => {
+  const { data, error } = await supabaseAdmin
+    .from("registrations")
+    .select("amount")
+    .eq("event_id", eventId)
+    .eq("payment_status", "paid");
+  if (error) throw error;
+  return Math.round(((data ?? []) as JsonRecord[]).reduce((sum, row) => sum + asNumber(row.amount), 0) * 100) / 100;
 };
 
 const notFound = (label: string) => errorResponse(`${label} not found`, 404);
@@ -1543,11 +1594,16 @@ const handleListEvents = async () => {
     .order("start_time", { ascending: true })
     .limit(100);
   if (error) throw error;
-  const events = await Promise.all((data ?? []).map(async (event) => ({
+  const reference = new Date();
+  const visibleEvents = ((data ?? []) as JsonRecord[]).filter((event) => eventHasUpcomingAvailability(event, reference));
+  const events = await Promise.all(visibleEvents.map(async (event) => ({
     ...event,
-    images: asStringArray((event as JsonRecord).images),
-    registrant_count: await countRows("registrations", "event_id", cleanString((event as JsonRecord).id)),
-    ...pinMetadata(pins.get(`event:${cleanString((event as JsonRecord).id)}`)),
+    images: asStringArray(event.images),
+    available_slots: upcomingEventSlots(event.available_slots, reference),
+    available_slot_count: upcomingEventSlots(event.available_slots, reference).length,
+    has_booking_schedule: asArray(event.available_slots).filter(isRecord).length > 0,
+    registrant_count: await countEventRegistrationsByStatus(cleanString(event.id)),
+    ...pinMetadata(pins.get(`event:${cleanString(event.id)}`)),
   })));
   return jsonResponse(events);
 };
@@ -1622,7 +1678,10 @@ const handleGetEvent = async (eventId: string) => {
   return jsonResponse({
     ...event,
     images: asStringArray(event.images),
-    registrant_count: await countRows("registrations", "event_id", eventId),
+    available_slots: upcomingEventSlots(event.available_slots),
+    available_slot_count: upcomingEventSlots(event.available_slots).length,
+    has_booking_schedule: asArray(event.available_slots).filter(isRecord).length > 0,
+    registrant_count: await countEventRegistrationsByStatus(eventId),
     ...pinMetadata(pins.get(`event:${eventId}`)),
   });
 };
@@ -1670,8 +1729,6 @@ const handleEventFormFields = async (request: Request, eventId: string) => {
   if (error) throw error;
   return jsonResponse(data ?? []);
 };
-
-const activeRegistrationStatuses = ["registered", "pending_payment", "checked-in"];
 
 const countActiveEventRegistrations = async (eventId: string, userId: string, bookingSlotId = "") => {
   let query = supabaseAdmin
@@ -1815,15 +1872,31 @@ const handleRegisterEvent = async (request: Request, eventId: string) => {
     return errorResponse("Choose a registration type before continuing.");
   }
 
-  const availableSlots = asArray(event.available_slots).filter(isRecord);
+  const configuredSlots = asArray(event.available_slots).filter(isRecord);
+  const availableSlots = upcomingEventSlots(event.available_slots);
   const selectedSlotId = cleanString(body.booking_slot_id);
   const selectedSlot = selectedSlotId
     ? availableSlots.find((slot) => cleanString(slot.id) === selectedSlotId) ?? null
     : null;
+  if (configuredSlots.length > 0 && availableSlots.length === 0) {
+    return errorResponse("No upcoming date/time is available for this event.");
+  }
   if (availableSlots.length > 0 && !selectedSlot) {
     return errorResponse("Choose an available date/time before continuing.");
   }
   const userId = cleanString(profile.id);
+  const { data: existingRegistrationData, error: existingRegistrationError } = await supabaseAdmin
+    .from("registrations")
+    .select("*")
+    .eq("event_id", eventId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (existingRegistrationError) throw existingRegistrationError;
+  const existingRegistration = existingRegistrationData as JsonRecord | null;
+  if (normalizeStatus(existingRegistration?.status) === "checked-in") {
+    return errorResponse("Checked-in registrations can no longer be changed.");
+  }
+
   const eventCapacity = Math.max(0, Math.floor(asNumber(event.capacity)));
   if (eventCapacity > 0) {
     const registeredCount = await countActiveEventRegistrations(eventId, userId);
@@ -1850,18 +1923,34 @@ const handleRegisterEvent = async (request: Request, eventId: string) => {
   const discountAmount = "discountAmount" in discountResult ? discountResult.discountAmount : 0;
   const amount = "finalAmount" in discountResult ? discountResult.finalAmount : originalAmount;
   const currency = cleanString(selectedTier?.currency) || cleanString(event.currency) || "KES";
+  const selectedTierPayloadId = selectedTier ? cleanString(selectedTier.id) : "";
+  const existingIsPaid = normalizeStatus(existingRegistration?.payment_status) === "paid";
+  const existingAmountCents = Math.round(asNumber(existingRegistration?.amount) * 100);
+  const nextAmountCents = Math.round(amount * 100);
+  const existingTierId = cleanString(existingRegistration?.ticket_tier_id);
+  const keepsConfirmedPayment = existingIsPaid &&
+    existingAmountCents === nextAmountCents &&
+    existingTierId === selectedTierPayloadId;
+  if (existingIsPaid && !keepsConfirmedPayment) {
+    return errorResponse("This registration has already been paid. Contact support to change the category or date.");
+  }
+  const nextPaymentStatus = keepsConfirmedPayment ? "paid" : (amount > 0 ? "pending" : "free");
+  const nextStatus = keepsConfirmedPayment ? "registered" : (amount > 0 ? "pending_payment" : "registered");
+  const nextTicketToken = nextPaymentStatus === "pending"
+    ? null
+    : (cleanString(existingRegistration?.ticket_token) || crypto.randomUUID());
   const payload = {
     event_id: eventId,
     user_id: userId,
     dog_id: cleanString(body.dog_id) || null,
-    status: amount > 0 ? "pending_payment" : "registered",
+    status: nextStatus,
     role: cleanString(body.role) || "attendee",
     share_phone: asBoolean(body.share_phone, false),
     amount,
     original_amount: originalAmount,
     discount_amount: discountAmount,
     currency,
-    payment_status: amount > 0 ? "pending" : "free",
+    payment_status: nextPaymentStatus,
     ticket_tier_id: selectedTier ? cleanString(selectedTier.id) : null,
     ticket_tier_label: selectedTier ? cleanString(selectedTier.label) : null,
     attendee_type_justification: body.attendee_type_justification ?? null,
@@ -1874,6 +1963,9 @@ const handleRegisterEvent = async (request: Request, eventId: string) => {
     access_code: accessCode,
     discount_code_id: discountCodeId,
     discount_code: discountCode,
+    pesapal_tracking_id: keepsConfirmedPayment ? existingRegistration?.pesapal_tracking_id ?? null : null,
+    paid_at: keepsConfirmedPayment ? existingRegistration?.paid_at ?? null : null,
+    ticket_token: nextTicketToken,
     updated_at: nowIso(),
   };
 
@@ -1890,24 +1982,27 @@ const handleRegisterEvent = async (request: Request, eventId: string) => {
   }
 
   const registrationId = cleanString((data as JsonRecord).id);
-  const { error: deleteResponsesError } = await supabaseAdmin
-    .from("registration_responses")
-    .delete()
-    .eq("registration_id", registrationId);
-  if (deleteResponsesError) throw deleteResponsesError;
+  let responseRows: JsonRecord[] = [];
+  if (hasOwn(body, "form_responses")) {
+    const { error: deleteResponsesError } = await supabaseAdmin
+      .from("registration_responses")
+      .delete()
+      .eq("registration_id", registrationId);
+    if (deleteResponsesError) throw deleteResponsesError;
 
-  const formResponses = asArray(body.form_responses);
-  const responseRows = formResponses.map((response) => {
-    const record = isRecord(response) ? response : {};
-    return {
-      registration_id: registrationId,
-      field_id: cleanString(record.field_id),
-      answer_value: record.answer_value ?? null,
-    };
-  }).filter((response) => response.field_id);
-  if (responseRows.length) {
-    const { error: responsesError } = await supabaseAdmin.from("registration_responses").insert(responseRows);
-    if (responsesError) throw responsesError;
+    const formResponses = asArray(body.form_responses);
+    responseRows = formResponses.map((response) => {
+      const record = isRecord(response) ? response : {};
+      return {
+        registration_id: registrationId,
+        field_id: cleanString(record.field_id),
+        answer_value: record.answer_value ?? null,
+      };
+    }).filter((response) => response.field_id);
+    if (responseRows.length) {
+      const { error: responsesError } = await supabaseAdmin.from("registration_responses").insert(responseRows);
+      if (responsesError) throw responsesError;
+    }
   }
 
   return jsonResponse({ ...data, responses: responseRows }, 201);
@@ -5100,12 +5195,43 @@ const handleAdminDeleteDog = async (request: Request, dogId: string) => {
   return jsonResponse({ message: "Pet registry entry deleted" });
 };
 
-const adminEventRow = async (event: JsonRecord, pins?: Map<string, JsonRecord>) => ({
-  ...event,
-  images: asStringArray(event.images),
-  registrant_count: await countRows("registrations", "event_id", cleanString(event.id)),
-  ...pinMetadata(pins?.get(`event:${cleanString(event.id)}`)),
-});
+const adminEventRow = async (event: JsonRecord, pins?: Map<string, JsonRecord>) => {
+  const eventId = cleanString(event.id);
+  const [
+    organizer,
+    registrationCount,
+    allRegistrationCount,
+    paidRegistrationCount,
+    pendingPaymentCount,
+    checkinCount,
+    revenue,
+  ] = await Promise.all([
+    fetchUserFull(event.organizer_id),
+    countEventRegistrationsByStatus(eventId, ["registered", "checked-in"]),
+    countRows("registrations", "event_id", eventId),
+    countEventPaymentsByStatus(eventId, "paid"),
+    countEventPaymentsByStatus(eventId, "pending"),
+    countEventRegistrationsByStatus(eventId, ["checked-in"]),
+    eventPaidRevenue(eventId),
+  ]);
+  const upcomingSlots = upcomingEventSlots(event.available_slots);
+  return {
+    ...event,
+    images: asStringArray(event.images),
+    available_slots: asArray(event.available_slots),
+    available_slot_count: upcomingSlots.length,
+    upcoming_slot_count: upcomingSlots.length,
+    registrant_count: registrationCount,
+    registration_count: registrationCount,
+    all_registration_count: allRegistrationCount,
+    paid_registration_count: paidRegistrationCount,
+    pending_payment_count: pendingPaymentCount,
+    checkin_count: checkinCount,
+    event_revenue: revenue,
+    organizer_name: cleanString(organizer?.full_name) || "Unknown",
+    ...pinMetadata(pins?.get(`event:${eventId}`)),
+  };
+};
 
 const handleAdminEvents = async (request: Request) => {
   await requireAdminProfile(request);
@@ -5632,7 +5758,7 @@ const handleNotificationOptions = async (request: Request) => {
       id: event.id,
       title: event.title,
       ticket_tiers: asArray(event.ticket_tiers),
-      available_slots: asArray(event.available_slots),
+      available_slots: upcomingEventSlots(event.available_slots),
     })),
     case_types: ["lost_dog", "found_dog", "rabies_bite", "vehicle_hit", "injured_stray", "abuse", "other"],
     case_statuses: ["open", "resolved", "closed"],

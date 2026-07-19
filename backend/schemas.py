@@ -245,6 +245,8 @@ class EventResponse(EventBase):
     follow_up_requested_at: Optional[datetime.datetime] = None
     is_pinned: Optional[bool] = False
     pin_priority: Optional[int] = None
+    available_slot_count: Optional[int] = 0
+    has_booking_schedule: Optional[bool] = False
     class Config:
         from_attributes = True
 
@@ -278,8 +280,11 @@ class RegistrationCreate(BaseModel):
     share_phone: Optional[bool] = False
     ticket_tier_id: Optional[str] = None
     attendee_type_justification: Optional[str] = None
+    access_code: Optional[str] = None
+    discount_code: Optional[str] = None
+    photo_consent: Optional[bool] = None
     booking_slot_id: Optional[str] = None
-    form_responses: Optional[List[FormResponseItem]] = []
+    form_responses: Optional[List[FormResponseItem]] = None
 
 class RegistrationResponse(BaseModel):
     id: str

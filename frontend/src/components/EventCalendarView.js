@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { COLORS, SPACING, SIZES } from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { getUpcomingEventSlots } from '../utils/eventSlots';
 
 export const EventCalendarView = ({ events, onEventPress }) => {
     const { t, i18n } = useTranslation();
@@ -28,8 +29,17 @@ export const EventCalendarView = ({ events, onEventPress }) => {
         }
 
         for (let d = 1; d <= daysInMonth; d++) {
-            const dateStr = `${viewDate.getFullYear()}-${String(viewDate.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
             const dayEvents = events.filter(e => {
+                const upcomingSlots = getUpcomingEventSlots(e.available_slots);
+                if (upcomingSlots.length > 0) {
+                    return upcomingSlots.some(slot => {
+                        const slotDate = new Date(slot.start_time);
+                        return slotDate.getFullYear() === viewDate.getFullYear() &&
+                               slotDate.getMonth() === viewDate.getMonth() &&
+                               slotDate.getDate() === d;
+                    });
+                }
+
                 const eDate = new Date(e.start_time);
                 return eDate.getFullYear() === viewDate.getFullYear() &&
                        eDate.getMonth() === viewDate.getMonth() &&

@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { Picker } from '@react-native-picker/picker';
 import { Switch, TextInput } from 'react-native';
 import { getActionableErrorMessage } from '../utils/apiErrors';
+import { eventHasFutureAvailability, getEventDisplayDate, getUpcomingEventSlots } from '../utils/eventSlots';
 
 const DATE_PREVIEW_LIMIT = 8;
 const LONG_SCHEDULE_DAYS = 31;
@@ -19,10 +20,6 @@ const getSlotStartMs = (slot) => {
     const date = new Date(slot?.start_time);
     return Number.isNaN(date.getTime()) ? Number.MAX_SAFE_INTEGER : date.getTime();
 };
-
-const getSortedBookingSlots = (slots = []) => (
-    [...slots].sort((a, b) => getSlotStartMs(a) - getSlotStartMs(b))
-);
 
 const scheduleSpansMoreThanMonth = (slots = []) => {
     if (slots.length < 2) return false;
@@ -80,25 +77,6 @@ export const EventDetailScreen = ({ route, navigation }) => {
             setEvent(eventData);
             setDogs(dogsData);
             setFormFields(fieldsData || []);
-            const tiers = Array.isArray(eventData.ticket_tiers) ? eventData.ticket_tiers : [];
-            if (tiers.length > 0) {
-                setSelectedTicketTierId(prev => prev || tiers[0].id);
-            }
-            const slots = Array.isArray(eventData.available_slots) ? eventData.available_slots : [];
-            if (slots.length === 1) {
-                setSelectedBookingSlotId(prev => (
-                    slots.some(slot => slot.id === prev) ? prev : slots[0].id
-                ));
-            } else if (slots.length > 1) {
-                setSelectedBookingSlotId(prev => (
-                    slots.some(slot => slot.id === prev) ? prev : null
-                ));
-            } else {
-                setSelectedBookingSlotId(null);
-            }
-            setShowAllDetailSlots(false);
-            setShowAllModalSlots(false);
-
             // Check if saved
             const savedItem = savedData?.find(s => s.event_id === eventId);
             setIsSaved(!!savedItem);
@@ -107,6 +85,29 @@ export const EventDetailScreen = ({ route, navigation }) => {
             const reg = myRegs.find(r => r.event_id === eventId);
             setMyRegistration(reg);
             setPaymentTrackingId(reg?.pesapal_tracking_id || null);
+            const tiers = Array.isArray(eventData.ticket_tiers) ? eventData.ticket_tiers : [];
+            setSelectedTicketTierId(prev => {
+                if (reg?.ticket_tier_id && tiers.some(tier => tier.id === reg.ticket_tier_id)) return reg.ticket_tier_id;
+                if (prev && tiers.some(tier => tier.id === prev)) return prev;
+                return tiers[0]?.id || null;
+            });
+            const slots = getUpcomingEventSlots(eventData.available_slots);
+            setSelectedBookingSlotId(prev => {
+                if (reg?.booking_slot_id && slots.some(slot => slot.id === reg.booking_slot_id)) return reg.booking_slot_id;
+                if (slots.length === 1) return slots[0].id;
+                if (prev && slots.some(slot => slot.id === prev)) return prev;
+                return null;
+            });
+            if (reg) {
+                setSharePhone(Boolean(reg.share_phone));
+                setAttendeeTypeJustification(reg.attendee_type_justification || '');
+                setPhotoConsent(typeof reg.photo_consent === 'boolean' ? reg.photo_consent : null);
+                setSelectedDog(dogsData.find(dog => dog.id === reg.dog_id) || null);
+                setAccessCode(reg.access_code || '');
+                setDiscountCode(reg.discount_code || '');
+            }
+            setShowAllDetailSlots(false);
+            setShowAllModalSlots(false);
 
         } catch (error) {
             console.error(error);
@@ -234,7 +235,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
 
         const ticketTiers = Array.isArray(event?.ticket_tiers) ? event.ticket_tiers : [];
         const selectedTier = ticketTiers.find(tier => tier.id === selectedTicketTierId);
-        const availableSlots = Array.isArray(event?.available_slots) ? event.available_slots : [];
+        const availableSlots = getUpcomingEventSlots(event?.available_slots);
         const selectedBookingSlot = availableSlots.find(slot => slot.id === selectedBookingSlotId);
         if (availableSlots.length > 0 && !selectedBookingSlot) {
             Alert.alert('Choose a date', 'Select one available date/time before continuing.');
@@ -268,9 +269,9 @@ export const EventDetailScreen = ({ route, navigation }) => {
             return;
         }
 
-        // Validate custom fields
+        const isUpdatingRegistration = Boolean(myRegistration);
         for (const field of formFields) {
-            if (field.is_required && !formResponses[field.id]) {
+            if (!isUpdatingRegistration && field.is_required && !formResponses[field.id]) {
                 Alert.alert(t('event_detail.validation_error'), t('event_detail.required_question', { label: field.label }));
                 return;
             }
@@ -295,7 +296,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
                 answer_value: formResponses[fieldId]
             }));
 
-            const registration = await registerForEvent(eventId, {
+            const registrationPayload = {
                 event_id: eventId,
                 dog_id: selectedDog ? selectedDog.id : null,
                 role: 'attendee',
@@ -306,8 +307,12 @@ export const EventDetailScreen = ({ route, navigation }) => {
                 discount_code: selectedAmount > 0 ? discountCode.trim() : null,
                 photo_consent: photoConsent,
                 booking_slot_id: selectedBookingSlot?.id || null,
-                form_responses: formattedResponses
-            });
+            };
+            if (!isUpdatingRegistration || formattedResponses.length > 0) {
+                registrationPayload.form_responses = formattedResponses;
+            }
+
+            const registration = await registerForEvent(eventId, registrationPayload);
             setModalVisible(false);
             if (registration.payment_status === 'pending') {
                 setMyRegistration(registration);
@@ -315,7 +320,10 @@ export const EventDetailScreen = ({ route, navigation }) => {
                 checkoutWindow = null;
             } else {
                 closeCheckoutWindow(checkoutWindow);
-                Alert.alert(t('common.success'), t('event_detail.register_success'));
+                Alert.alert(
+                    t('common.success'),
+                    isUpdatingRegistration ? 'Your registration has been updated.' : t('event_detail.register_success')
+                );
             }
             await loadData(); // Refresh to show Check-in button
         } catch (error) {
@@ -327,7 +335,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
     };
 
     const availableSlots = useMemo(() => (
-        getSortedBookingSlots(Array.isArray(event?.available_slots) ? event.available_slots : [])
+        getUpcomingEventSlots(Array.isArray(event?.available_slots) ? event.available_slots : [])
     ), [event?.available_slots]);
     const compactAvailableSlots = shouldCompactSlots(availableSlots);
     const detailSlotsToShow = compactAvailableSlots && !showAllDetailSlots
@@ -372,6 +380,31 @@ export const EventDetailScreen = ({ route, navigation }) => {
         String(myRegistration.payment_status || '').toLowerCase() === 'pending' ||
         myRegistration.status === 'pending_payment'
     );
+    const eventDisplayDate = getEventDisplayDate(event);
+    const hasConfiguredSchedule = Boolean(event.has_booking_schedule) || availableSlots.length > 0;
+    const canRegisterForEvent = eventHasFutureAvailability(event) && (!hasConfiguredSchedule || availableSlots.length > 0);
+    const openRegistrationModal = () => {
+        if (myRegistration) {
+            if (myRegistration.ticket_tier_id && ticketTiers.some(tier => tier.id === myRegistration.ticket_tier_id)) {
+                setSelectedTicketTierId(myRegistration.ticket_tier_id);
+            }
+            if (myRegistration.booking_slot_id && availableSlots.some(slot => slot.id === myRegistration.booking_slot_id)) {
+                setSelectedBookingSlotId(myRegistration.booking_slot_id);
+            } else if (availableSlots.length === 1) {
+                setSelectedBookingSlotId(availableSlots[0].id);
+            }
+            setAttendeeTypeJustification(myRegistration.attendee_type_justification || '');
+            setSharePhone(Boolean(myRegistration.share_phone));
+            setPhotoConsent(typeof myRegistration.photo_consent === 'boolean' ? myRegistration.photo_consent : null);
+            setSelectedDog(dogs.find(dog => dog.id === myRegistration.dog_id) || null);
+            setAccessCode(myRegistration.access_code || '');
+            setDiscountCode(myRegistration.discount_code || '');
+        }
+        setModalVisible(true);
+    };
+    const submitRegistrationText = myRegistration
+        ? (selectedTicketPrice > 0 ? `Save changes and pay (${selectedPriceLabel})` : 'Save registration changes')
+        : (selectedTicketPrice > 0 ? `Continue to Pesapal payment (${selectedPriceLabel})` : t('event_detail.complete_registration'));
     const scorecardTitle = event.scorecard_title || 'Community Impact Assessment';
     const scorecardDescription = event.scorecard_description || 'Share baseline or follow-up feedback for M&E, outcome tracking, and partner reporting.';
 
@@ -403,7 +436,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
                         </View>
                     )}
                 </View>
-                <Text style={styles.time}>{new Date(event.start_time).toLocaleString()}</Text>
+                <Text style={styles.time}>{eventDisplayDate.toLocaleString()}</Text>
                 <Text style={styles.location}>{event.location}</Text>
                 <Text style={styles.description}>{event.description}</Text>
 
@@ -506,6 +539,9 @@ export const EventDetailScreen = ({ route, navigation }) => {
                                 <Ionicons name="card-outline" size={30} color={COLORS.primary} />
                                 <Text style={styles.paymentTitle}>Complete payment to receive your ticket</Text>
                                 <Text style={styles.paymentAmount}>{myRegistration.currency || event.currency || 'KES'} {Number(myRegistration.amount || ticketPrice || 0).toLocaleString()}</Text>
+                                {myRegistration.ticket_tier_label && (
+                                    <Text style={styles.paymentCopy}>Registration type: {myRegistration.ticket_tier_label}</Text>
+                                )}
                                 {myRegistration.booking_slot_label && (
                                     <Text style={styles.paymentCopy}>
                                         Booking: {myRegistration.booking_slot_label} {myRegistration.booking_start_time ? `| ${new Date(myRegistration.booking_start_time).toLocaleString()}` : ''}
@@ -528,6 +564,12 @@ export const EventDetailScreen = ({ route, navigation }) => {
                                         <Text style={styles.verifyBtnText}>Confirm payment</Text>
                                     </TouchableOpacity>
                                 </View>
+                                {canRegisterForEvent && (
+                                    <TouchableOpacity style={styles.changeRegistrationBtn} onPress={openRegistrationModal}>
+                                        <Ionicons name="create-outline" size={16} color={COLORS.primary} />
+                                        <Text style={styles.changeRegistrationText}>Change registration type/date</Text>
+                                    </TouchableOpacity>
+                                )}
                             </View>
                         ) : (
                             <View style={styles.ticketContainer}>
@@ -558,19 +600,35 @@ export const EventDetailScreen = ({ route, navigation }) => {
                                 <Text style={styles.ticketStatus}>
                                     {t('event_detail.status')}: {myRegistration.status === 'checked-in' ? t('event_detail.checked_in') : t('event_detail.valid')}
                                 </Text>
+                                {myRegistration.ticket_tier_label && (
+                                    <Text style={styles.ticketSlot}>Registration type: {myRegistration.ticket_tier_label}</Text>
+                                )}
                                 {myRegistration.booking_slot_label && (
                                     <Text style={styles.ticketSlot}>
                                         {myRegistration.booking_slot_label} {myRegistration.booking_start_time ? `| ${new Date(myRegistration.booking_start_time).toLocaleString()}` : ''}
                                     </Text>
                                 )}
+                                {canRegisterForEvent && myRegistration.status !== 'checked-in' && (
+                                    <TouchableOpacity style={styles.changeRegistrationBtn} onPress={openRegistrationModal}>
+                                        <Ionicons name="create-outline" size={16} color={COLORS.primary} />
+                                        <Text style={styles.changeRegistrationText}>Change registration type/date</Text>
+                                    </TouchableOpacity>
+                                )}
                             </View>
                         )
                     ) : (
-                        <Button
-                            title={hasTicketTiers ? 'Choose registration type' : (ticketPrice > 0 ? `Register and pay ${priceLabel}` : t('event_detail.register_now'))}
-                            onPress={() => setModalVisible(true)}
-                            color={COLORS.primary}
-                        />
+                        canRegisterForEvent ? (
+                            <Button
+                                title={hasTicketTiers ? 'Choose registration type' : (ticketPrice > 0 ? `Register and pay ${priceLabel}` : t('event_detail.register_now'))}
+                                onPress={openRegistrationModal}
+                                color={COLORS.primary}
+                            />
+                        ) : (
+                            <View style={styles.closedNotice}>
+                                <Ionicons name="calendar-clear-outline" size={20} color="#8a4b00" />
+                                <Text style={styles.closedNoticeText}>No upcoming booking dates are available for this event.</Text>
+                            </View>
+                        )
                     )}
                 </View>
 
@@ -599,7 +657,9 @@ export const EventDetailScreen = ({ route, navigation }) => {
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalView}>
                         <ScrollView showsVerticalScrollIndicator={false} style={{ width: '100%' }}>
-                            <Text style={styles.modalTitle}>{t('event_detail.registration_title')}</Text>
+                            <Text style={styles.modalTitle}>
+                                {myRegistration ? 'Update registration' : t('event_detail.registration_title')}
+                            </Text>
                             <View style={styles.modalPriceBox}>
                                 <Text style={styles.modalPriceLabel}>{hasTicketTiers ? 'Registration type' : 'Ticket'}</Text>
                                 <Text style={styles.modalPriceValue}>{hasTicketTiers ? selectedPriceLabel : priceLabel}</Text>
@@ -834,7 +894,7 @@ export const EventDetailScreen = ({ route, navigation }) => {
                                 >
                                     {(registrationLoading || paymentLoading)
                                         ? <ActivityIndicator color="#fff" />
-                                        : <Text style={styles.submitBtnText}>{selectedTicketPrice > 0 ? `Continue to Pesapal payment (${selectedPriceLabel})` : t('event_detail.complete_registration')}</Text>}
+                                        : <Text style={styles.submitBtnText}>{submitRegistrationText}</Text>}
                                 </TouchableOpacity>
                                 <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
                                     <Text style={styles.cancelBtnText}>{t('common.cancel')}</Text>
@@ -927,6 +987,31 @@ const styles = StyleSheet.create({
     },
     viewMoreDatesText: { color: COLORS.primary, fontWeight: '900', fontSize: 13 },
     footer: { marginTop: 30 },
+    changeRegistrationBtn: {
+        marginTop: 14,
+        minHeight: 44,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#d9e9ff',
+        backgroundColor: '#f8fbff',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        paddingHorizontal: 12,
+    },
+    changeRegistrationText: { color: COLORS.primary, fontWeight: '900', fontSize: 13 },
+    closedNotice: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        padding: 14,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#f0d875',
+        backgroundColor: '#fff8dc',
+    },
+    closedNoticeText: { flex: 1, color: '#8a4b00', fontSize: 13, lineHeight: 18, fontWeight: '700' },
     modalView: {
         margin: 20,
         marginTop: 100,
