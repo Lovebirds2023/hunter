@@ -1,11 +1,25 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, Alert, Share } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, Alert, Share, Image } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, SHADOWS } from '../constants/theme';
 import client from '../api/client';
 // import * as Print from 'expo-print'; // Optional: Use if available in environment
+
+const getPetPassportImageUri = (pet: any) => {
+    const candidates = [
+        pet?.body_image,
+        pet?.image_url,
+        pet?.profile_image,
+        pet?.photo_url,
+        pet?.birthmark_image,
+        pet?.nose_print_image,
+        Array.isArray(pet?.images) ? pet.images[0] : null,
+    ];
+    const imageUri = candidates.find((candidate) => typeof candidate === 'string' && candidate.trim().length > 0);
+    return typeof imageUri === 'string' ? imageUri.trim() : null;
+};
 
 export const HealthPassportScreen = ({ route, navigation }: any) => {
     const { t } = useTranslation();
@@ -13,6 +27,7 @@ export const HealthPassportScreen = ({ route, navigation }: any) => {
     const [loading, setLoading] = useState(true);
     const [dog, setDog] = useState<any>(null);
     const [records, setRecords] = useState<any[]>([]);
+    const [petImageLoadFailed, setPetImageLoadFailed] = useState(false);
 
     useEffect(() => {
         fetchPassportData();
@@ -21,6 +36,7 @@ export const HealthPassportScreen = ({ route, navigation }: any) => {
     const fetchPassportData = async () => {
         try {
             setLoading(true);
+            setPetImageLoadFailed(false);
             const [dogRes, recordsRes] = await Promise.all([
                 client.get(`/dogs/${dogId}`),
                 client.get(`/dogs/${dogId}/health-records`)
@@ -105,6 +121,7 @@ export const HealthPassportScreen = ({ route, navigation }: any) => {
 
     const healthStatus = getHealthStatus();
     const nextDueDates = getNextDueDates();
+    const passportImageUri = getPetPassportImageUri(dog);
 
     return (
         <SafeAreaView style={styles.safeArea}>
@@ -123,7 +140,16 @@ export const HealthPassportScreen = ({ route, navigation }: any) => {
                 <View style={styles.idCard}>
                     <View style={styles.idHeader}>
                         <View style={styles.profileCircle}>
-                            <Ionicons name="paw" size={40} color={COLORS.white} />
+                            {passportImageUri && !petImageLoadFailed ? (
+                                <Image
+                                    source={{ uri: passportImageUri }}
+                                    style={styles.profileImage}
+                                    resizeMode="cover"
+                                    onError={() => setPetImageLoadFailed(true)}
+                                />
+                            ) : (
+                                <Ionicons name="paw" size={40} color={COLORS.white} />
+                            )}
                         </View>
                         <View style={styles.idMeta}>
                             <Text style={styles.dogName}>{dog.name}</Text>
@@ -203,7 +229,8 @@ const styles = StyleSheet.create({
     content: { padding: SPACING.lg },
     idCard: { backgroundColor: COLORS.primary, borderRadius: 20, padding: 24, ...SHADOWS.medium, marginBottom: 25 },
     idHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-    profileCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: COLORS.accent },
+    profileCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: COLORS.accent, overflow: 'hidden' },
+    profileImage: { width: '100%', height: '100%' },
     idMeta: { marginLeft: 20 },
     dogName: { fontSize: 24, fontWeight: 'bold', color: COLORS.white },
     dogBreed: { fontSize: 16, color: COLORS.white, opacity: 0.8 },

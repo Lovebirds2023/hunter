@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#4B0082"
+      "backgroundColor": "#FFFFFF"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -30,7 +30,7 @@
       "versionCode": 11,
       "adaptiveIcon": {
         "foregroundImage": "./assets/app-adaptive-foreground.png",
-        "backgroundColor": "#4B0082"
+        "backgroundColor": "#FFFFFF"
       },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
